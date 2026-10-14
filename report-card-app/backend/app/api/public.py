@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 from app.db import batches as repo
 from app.db.database import session
 from app.integrations.sharing import get_student_id_for_token
-from app.reports.card_render import render_report_page
+from app.reports.parent_report import render_parent_report_page
 
 router = APIRouter(prefix="/public", tags=["public"])
 
@@ -32,5 +32,5 @@ def get_public_report(token: str):
         if not selected:
             raise HTTPException(404, "This report link is invalid or has expired.")
         settings = repo.settings_from_row(batch_row)
-        html = render_report_page(selected, all_students, json.loads(batch_row["exam_order"]), settings, batch_row["school_name"], title=batch_row["name"])
+        html = render_parent_report_page(selected[0], all_students, json.loads(batch_row["exam_order"]), settings, batch_row["school_name"], title=batch_row["name"])
         return HTMLResponse(content=html)
