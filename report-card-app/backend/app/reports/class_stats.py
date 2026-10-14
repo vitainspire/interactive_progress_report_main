@@ -76,7 +76,7 @@ def compute_class_stats(all_students: list[dict], exam_defs: list[dict], setting
             continue
         ranked.append({"id": s["id"], "name": s["name"], "rank": e["rank"], "total_marks": e["total_marks"], "grade": e["total_grade"]})
     ranked.sort(key=lambda r: r["rank"])
-    top_students = ranked[:5]
+    top_students = [r for r in ranked if r["grade"] != "D2"][:5]
 
     attention_students = []
     seen_ids: set[int] = set()
