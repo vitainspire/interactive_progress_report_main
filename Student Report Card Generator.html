@@ -1,0 +1,191 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Student Report Card Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+:root{--bg:#f4f6f9;--fg:#1c2430;--pn:#fff;--bd:#d5dbe3;--ac:#1d4ed8;--mu:#5b6675;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161c;--fg:#e6eaf0;--pn:#1b212a;--bd:#323b48;--ac:#6ea0ff;--mu:#9aa6b6}}
+:root[data-theme="dark"]{--bg:#12161c;--fg:#e6eaf0;--pn:#1b212a;--bd:#323b48;--ac:#6ea0ff;--mu:#9aa6b6}
+html,body{margin:0}body{background:var(--bg);color:var(--fg);font:15px/1.5 'Noto Sans','Noto Sans Telugu',system-ui,sans-serif}
+*{box-sizing:border-box}
+header{padding:14px 16px;border-bottom:1px solid var(--bd);background:var(--pn)}h1{font-size:18px;margin:0}
+.tabs{display:flex;gap:6px;padding:10px 16px 0}.tabs button{border:1px solid var(--bd);border-bottom:0;background:var(--pn);color:var(--fg);padding:8px 16px;border-radius:8px 8px 0 0;font:inherit;cursor:pointer}.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+main{padding:14px 16px;max-width:1000px;margin:auto}
+.panel{background:var(--pn);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+label{display:block;font-size:13px;color:var(--mu);margin-bottom:3px}
+input[type=text],input[type=number]{width:100%;padding:9px;border:1px solid var(--bd);border-radius:7px;background:var(--bg);color:var(--fg);font:inherit}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.drop{display:block;border:2px dashed var(--ac);border-radius:10px;padding:22px;text-align:center;cursor:pointer;color:var(--fg)}
+.btn{background:var(--ac);color:#fff;border:0;border-radius:7px;padding:9px 14px;font:inherit;cursor:pointer}.btn.s{background:var(--pn);color:var(--fg);border:1px solid var(--bd)}
+#err{color:#b91c1c;background:#fee2e2;border-radius:8px;padding:10px;margin-top:10px;display:none}#ok{color:var(--mu);margin-top:10px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+details{position:relative}summary{list-style:none}.pick{position:absolute;z-index:5;background:var(--pn);border:1px solid var(--bd);border-radius:8px;padding:8px;max-height:260px;overflow:auto;min-width:230px}.pick label{display:flex;gap:6px;color:var(--fg);font-size:14px}
+#pvw{overflow-x:auto}#pv{zoom:var(--z,1);width:210mm;margin:auto}
+/* ---------- report card ---------- */
+.card{--fs:10px;font-size:var(--fs);position:relative;width:210mm;height:296mm;background:radial-gradient(circle at 0 0,#e8f0ff 0,transparent 40%),radial-gradient(circle at 100% 100%,#fff3d1 0,transparent 38%),#fff;color:#111;box-shadow:0 2px 12px rgba(0,0,0,.25);padding:11mm 11mm 10mm;margin:0 auto 14px;overflow:hidden;display:flex;flex-direction:column;gap:2.8mm;page-break-after:always;break-after:page;font-family:'Noto Sans','Noto Sans Telugu',sans-serif;line-height:1.35}
+.card:last-child{page-break-after:auto;break-after:auto}.card>*{flex:none}.card>.grow{flex:1 0 auto}.card::before{content:"";position:absolute;inset:5mm;border:.5mm solid #1e3a8a;border-radius:2.5mm;pointer-events:none;box-shadow:0 0 0 .5mm #fff,0 0 0 1mm #e9a400}
+.card h2{margin:0;text-align:center;font-size:1.8em;letter-spacing:.6px;background:linear-gradient(120deg,#1e3a8a,#2563eb 55%,#0e7490);color:#fff;border-radius:2mm;padding:.35em .5em;box-shadow:0 .6mm 1.6mm rgba(30,58,138,.3);text-shadow:0 1px 2px rgba(0,0,0,.3)}
+.card h3{margin:-1mm auto 0;text-align:center;font-size:1.05em;background:linear-gradient(90deg,#f5b700,#e9a400);color:#1b1b1b;border-radius:99px;width:56%;padding:.2em;letter-spacing:2px;box-shadow:0 .4mm 1.2mm rgba(233,164,0,.35)}
+.info{display:grid;grid-template-columns:1.6fr .9fr .9fr 1.5fr;gap:1.8mm}.info>div{background:#fff;border:1px solid #c7d6f5;border-top:.8mm solid #2563eb;border-radius:1.5mm;padding:.3em .6em}.info small{display:block;font-size:.72em;color:#64748b;letter-spacing:.8px;text-transform:uppercase}.info b{font-size:1em;color:#0f172a}
+.blk{display:flex;flex-direction:column;gap:1.3mm}
+.sec{display:flex;align-items:center;gap:.6em;font-weight:700;font-size:1em;color:#1e3a8a;letter-spacing:.8px}.sec::before{content:"";flex:none;width:.95em;height:.95em;border-radius:.25em;background:linear-gradient(135deg,#f5b700,#e9a400);box-shadow:0 0 0 .5mm #fff3d1}.sec::after{content:"";flex:1;height:.35mm;background:linear-gradient(90deg,#9db4e8,transparent)}.sec small{font-weight:600;color:#64748b;letter-spacing:0;font-size:.85em}
+.tw{border:1px solid #9db4e8;border-radius:1.8mm;overflow:hidden;background:#fff;box-shadow:0 .4mm 1.2mm rgba(30,58,138,.1)}
+.card table{width:100%;border-collapse:collapse;border-style:hidden;text-align:center;table-layout:auto}.card th,.card td{border:1px solid #c7d6f5;padding:.2em .25em;font-size:.88em}.card th{background:linear-gradient(#2a4fb5,#1e3a8a);color:#fff;border-color:#4466c4}.card th.fa{background:linear-gradient(#14a3b3,#0e7490)}.card th.sa{background:linear-gradient(#8b5cf6,#6d28d9)}.card td.l,.card th.l{text-align:left;padding-left:.6em}.card td.l{font-weight:600;color:#1e3a8a}.card tr:nth-child(even) td{background:#f3f7ff}
+.card .t,.card tr.t td{font-weight:700;background:#fff1c9}.f,.pass{color:#fff;border-radius:99px;padding:0 .7em;font-weight:700}.f{background:#dc2626}.pass{background:#16a34a}.gr{display:inline-block;min-width:2.1em;border-radius:99px;padding:0 .3em;color:#fff;font-weight:700}.ga{background:#16a34a}.gb{background:#2563eb}.gc{background:#d97706}.gd{background:#ea580c}.gf{background:#dc2626}
+.rk{display:inline-block;font-size:1.2em;font-weight:700;color:#1e3a8a;min-width:2em;border-radius:99px;padding:0 .5em}.rk.m1,.rk.m2,.rk.m3{color:#fff}.rk.m1{background:linear-gradient(#fcd34d,#d97706)}.rk.m2{background:linear-gradient(#cbd5e1,#64748b)}.rk.m3{background:linear-gradient(#fdba74,#b45309)}
+.ai{flex:1 1 auto;display:flex;flex-direction:column;border:1px solid #9fd3de;border-radius:1.8mm;overflow:hidden;line-height:1.55;background:linear-gradient(#f0fafc,#fff);box-shadow:0 .4mm 1.2mm rgba(14,116,144,.1)}.ab{flex:1;display:flex;flex-direction:column;gap:.6em;padding:.7em .8em}.ai p{margin:0}
+.ai p.in{font-size:.95em;color:#1e3a8a;font-weight:700;padding-bottom:.35em;border-bottom:1px dashed #9db4e8}
+.ai p.pt{flex:1 1 auto;display:flex;align-items:center;gap:.75em;padding:.45em .85em;font-size:.98em;font-weight:700;color:#1f2937;background:#fff;border:1px solid #cfe7ee;border-left:1.1mm solid #0e7490;border-radius:1.4mm;box-shadow:0 .3mm .8mm rgba(14,116,144,.08)}
+.ai p.pt:nth-child(odd){background:#f5fbfd;border-left-color:#2563eb}.ai p.pt:nth-child(odd) i{background:linear-gradient(#3b82f6,#1e3a8a)}
+.ai p.pt i{flex:none;font-style:normal;width:1.8em;height:1.8em;border-radius:50%;background:linear-gradient(#14a3b3,#0e7490);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;line-height:1;box-shadow:0 .3mm .8mm rgba(0,0,0,.2)}
+.sig{display:flex;justify-content:space-between;padding-top:9mm;font-weight:700;font-size:.95em;color:#1e3a8a}.sig span{border-top:1.2px solid #1e3a8a;width:28%;text-align:center;padding-top:.3em;letter-spacing:.5px}
+body.out .card{margin:0;box-shadow:none}body.out #pv{zoom:1}
+@page{size:A4;margin:0}
+@media print{body{background:#fff}header,.tabs,#setup,.bar{display:none!important}main{padding:0;max-width:none}#pvw{overflow:visible}#pv{zoom:1;margin:0}.card{margin:0;box-shadow:none}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+<header><h1>Student Report Card Generator</h1></header>
+<div class="tabs"><button id="t1" class="on">1 · Upload</button><button id="t2">2 · Preview &amp; Print</button></div>
+<main>
+<section id="setup">
+ <div class="panel"><label for="school">School name (shown on every card)</label><input type="text" id="school" placeholder="e.g. S.P.P. High School, Gurajanapalli"></div>
+ <div class="panel"><label class="drop"><input type="file" id="file" accept=".xlsx,.xls,.csv" hidden><b>Tap to choose a file</b><br><span style="color:var(--mu)">Excel (.xlsx / .xls) or CSV / Google Sheet export</span></label>
+  <div id="err"></div><div id="ok"></div></div>
+ <div class="panel"><b>Settings</b>
+  <div class="g" style="margin-top:8px">
+   <div><label>Class strength</label><input type="number" id="str" min="0" placeholder="auto (students in file)"></div>
+   <div><label>FA exam total</label><input type="number" id="faT" value="350"></div>
+   <div><label>SA / other exam total</label><input type="number" id="saT" value="600"></div>
+   <div><label>FA marks per subject</label><input type="number" id="faM" value="50"></div>
+   <div><label>SA / other marks per subject</label><input type="number" id="saM" value="100"></div>
+  </div>
+  <p style="color:var(--mu);font-size:13px;margin:8px 0 0">Expected layout: 3 header rows (exam names / subjects / MARKS-GRADE), one row per student, a RANK column per exam and an ATTENDANCE block with month columns. Grades A1–D1 = pass, D2 = fail.</p></div>
+</section>
+<section id="prev" hidden>
+ <div class="bar">
+  <details id="dd"><summary class="btn s">Select students ▾</summary><div class="pick" id="pick"></div></details>
+  <button class="btn" id="bp">Print</button><button class="btn" id="bd">Download PDF</button><span id="cnt" style="color:var(--mu)"></span>
+ </div>
+ <div id="pvw"><div id="pv"></div></div>
+</section>
+</main>
+<script>
+const $=s=>document.querySelector(s),cl=v=>String(v==null?'':v).replace(/\s+/g,' ').trim();
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S=[],E=[],sel=new Set();
+const cfg=()=>({faT:+$('#faT').value||350,saT:+$('#saT').value||600,faM:+$('#faM').value||50,saM:+$('#saM').value||100,n:+$('#str').value||S.length});
+function mk(v){if(typeof v==='number')return v;const t=cl(v);if(/^(ab|absent)$/i.test(t))return'AB';return t!==''&&!isNaN(t)?+t:'-'}
+const gr=v=>cl(v).toUpperCase()||'-',isN=v=>typeof v==='number';
+function parse(rows){
+ const h=rows.findIndex(r=>r&&r.some(c=>/student\s*name/i.test(cl(c))));
+ if(h<0)throw new Error('Required column "STUDENT NAME" was not found. Check that the header rows are intact.');
+ const r0=rows[h],r1=rows[h+1]||[],r2=rows[h+2]||[],W=Math.max(r0.length,r1.length,r2.length);
+ const col=re=>r0.findIndex(c=>re.test(cl(c)));
+ const cN=col(/student\s*name/i),cC=col(/section|class/i),cR=col(/^s\.?\s*no|roll/i),cF=col(/father/i);
+ const base=Math.max(cN,cF,col(/mother|gender/i)),st=[];
+ for(let i=base+1;i<W;i++)if(cl(r0[i]))st.push(i);
+ const ex=[];let att=null;
+ st.forEach((s,k)=>{const e=st[k+1]||W,lab=cl(r0[s]);
+  if(/attend/i.test(lab)){const ms=[];let tc=-1,tw=+((lab.match(/(\d+)\s*$/)||[0,0])[1]);for(let j=s;j<e;j++){const t=cl(r1[j]);if(/total/i.test(t)){tc=j;tw=tw||+((t.match(/(\d+)\s*$/)||[0,0])[1])}else if(t)ms.push({m:t,j,wd:+((cl(r2[j]).match(/\d+/)||[0])[0])})}
+   att={ms,tc:tc<0?e-1:tc,tw};return}
+  const b={k:(lab.match(/\(([^)]+)\)/)||[0,lab])[1].trim().toUpperCase(),subs:[],tc:-1,rc:-1,sc:-1};
+  for(let j=s;j<e;j++){const t=cl(r1[j]);if(/^total/i.test(t))b.tc=j;else if(/result/i.test(t))b.sc=j;else if(/rank/i.test(t))b.rc=j;else if(t)b.subs.push({n:t,j})}
+  if(b.subs.length){b.fa=/^F/i.test(b.k);ex.push(b)}});
+ if(!ex.length)throw new Error('No exam columns found. Exam names (e.g. FA-1, SA-1) must be in the first header row above the subject names.');
+ const stu=[];
+ for(const r of rows.slice(h+3)){if(!r||!cl(r[cN]))continue;if(cR>=0&&(cl(r[cR])===''||isNaN(cl(r[cR]))))continue;
+  const s={name:cl(r[cN]),cls:cC>=0?cl(r[cC]):'',roll:cR>=0?cl(r[cR]):'',father:cF>=0?cl(r[cF]):'',ex:{}};
+  ex.forEach(b=>{const subs=b.subs.map(x=>({n:x.n,m:mk(r[x.j]),g:gr(r[x.j+1])}));
+   if(!subs.some(x=>x.m!=='-'))return;
+   let tm=b.tc>=0?mk(r[b.tc]):'-';if(!isN(tm)){const v=subs.filter(x=>isN(x.m));tm=v.length?v.reduce((a,x)=>a+x.m,0):subs.every(x=>x.m==='AB')?'AB':'-'}
+   s.ex[b.k]={subs,tm,tg:b.tc>=0?gr(r[b.tc+1]):'-',res:b.sc>=0?cl(r[b.sc]).toUpperCase():'',rk:b.rc>=0?mk(r[b.rc]):'-'}});
+  if(att){const ms=att.ms.map(x=>({m:x.m,wd:x.wd,at:mk(r[x.j])})).filter(x=>isN(x.at));
+   if(ms.length){let ta=mk(r[att.tc]);if(!isN(ta)||att.ms.some(x=>x.j===att.tc))ta=ms.reduce((a,x)=>a+x.at,0);
+    s.att={ms,ta,tw:att.tw||ms.reduce((a,x)=>a+x.wd,0)}}}
+  stu.push(s)}
+ if(!stu.length)throw new Error('No student rows found below the header.');
+ ex.forEach(b=>{stu.forEach(s=>{const e=s.ex[b.k];if(e&&!isN(e.rk)&&isN(e.tm))e.rk=1+stu.filter(o=>o.ex[b.k]&&isN(o.ex[b.k].tm)&&o.ex[b.k].tm>e.tm).length})});
+ return{stu,ex:ex.filter(b=>stu.some(s=>s.ex[b.k]))};
+}
+/* ---------- Telugu AI analysis ---------- */
+const GOOD=['A1','A2','B1'],list=a=>a.join(', ');
+function analysis(s,ex,n){
+ const ks=ex.map(e=>e.k).filter(k=>s.ex[k]),k=ks[ks.length-1];if(!k)return'';
+ const e=s.ex[k],GP={A1:10,A2:9,B1:8,B2:7,C1:6,C2:5,D1:4,D2:3},sb={};
+ ks.forEach(q=>s.ex[q].subs.forEach(x=>{(sb[x.n]=sb[x.n]||[]).push({q,g:x.g,m:x.m})}));
+ const good=[],fail=[],low=[];let ab=0;
+ Object.entries(sb).forEach(([n,a])=>{ab+=a.filter(x=>x.m==='AB').length;const v=a.filter(x=>GP[x.g]);if(!v.length)return;const av=v.reduce((t,x)=>t+GP[x.g],0)/v.length,fx=v.filter(x=>x.g==='D2').map(x=>x.q);if(fx.length)fail.push(`${n} (${fx.join(', ')})`);else{if(av<6)low.push(n);if(av>=8)good.push(n)}});
+ let a=good.length?`నువ్వు ${list(good)} సబ్జెక్టులలో అన్ని పరీక్షలలో కలిపి చక్కటి మార్కులు సాధించావు. అభినందనలు! ఇదే కృషిని కొనసాగించు.`:`నీ ప్రయత్నం అభినందనీయం. ఇంకొంచెం కృషి చేస్తే తప్పకుండా మంచి గ్రేడ్లు సాధించగలవు.`;
+ let b='';
+ if(ab)b+=`కొన్ని సబ్జెక్టులకు గైర్హాజరయ్యావు; ఆ పరీక్షలు తప్పకుండా రాయడానికి ప్రయత్నించు. `;
+ if(fail.length)b+=`${list(fail)} సబ్జెక్టులలో ఆయా పరీక్షలలో ఫెయిల్ అయ్యావు. వీటిపై ప్రత్యేక శ్రద్ధ అవసరం: ప్రతిరోజూ కనీసం ఒక గంట వీటికి కేటాయించు, తెలియని అంశాలను ఉపాధ్యాయులను అడిగి తెలుసుకో, ప్రశ్నలను పదే పదే సాధన చేయి. `;
+ if(low.length)b+=`${list(low)} సబ్జెక్టులలో అన్ని పరీక్షలలో కలిపి మార్కులు కొంచెం తక్కువగా ఉన్నాయి; కొద్ది శ్రమతో మెరుగుపడతాయి. `;
+ if(!fail.length&&!low.length&&!b)b=`ఏ పరీక్షలోనూ ఏ సబ్జెక్టులోనూ ఫెయిల్ కాలేదు, చాలా సంతోషం. ఇదే నిలకడను కొనసాగించు. `;
+ const p=ks.length>1?s.ex[ks[0]]:null;
+ if(p&&GP[p.tg]&&GP[e.tg])b+=GP[e.tg]<GP[p.tg]?`${ks[0]} తో పోలిస్తే ${k} లో మొత్తం గ్రేడ్ తగ్గింది, కాబట్టి జాగ్రత్తగా ఉండు.`:GP[e.tg]>GP[p.tg]?`${ks[0]} నుండి ${k} వరకు మొత్తం గ్రేడ్ మెరుగుపడింది, శభాష్!`:'';
+ let c='';
+ if(s.att&&s.att.tw){const pc=Math.round(s.att.ta*100/s.att.tw);
+  c=`మొత్తం ${s.att.tw} పని దినాలలో ${s.att.ta} రోజులు (${pc}%) బడికి వచ్చావు. `+(pc>=90?`చాలా మంచి హాజరు! ఇదే క్రమశిక్షణను కొనసాగించు.`:pc>=75?`హాజరు బాగానే ఉంది, ఇంకా మెరుగుపరచుకుంటే పాఠాలు పూర్తిగా అర్థమవుతాయి.`:`హాజరు తక్కువగా ఉంది. తరచుగా బడికి రాకపోవడం వల్ల పాఠాలు తప్పిపోయి చదువులో వెనుకబడే అవకాశం ఉంది. ఇకపై క్రమం తప్పకుండా బడికి రా.`)}
+ const d=`ప్రతిరోజూ సమయపట్టిక ప్రకారం చదువు; ఆ రోజు నేర్చుకున్న పాఠాలను అదే రోజు ఒకసారి మళ్ళీ చదువు; సరైన నిద్ర, పౌష్టికాహారం తీసుకో; ఫోన్, టీవీ సమయం తగ్గించు. పట్టుదల, క్రమశిక్షణతో నువ్వు తప్పకుండా గొప్ప విజయం సాధిస్తావు. శుభాకాంక్షలు!`;
+ let r='';const rk=ks.filter(q=>isN(s.ex[q].rk));
+ if(rk.length){const lk=rk[rk.length-1],lr=s.ex[lk].rk,N=n||S.length;
+  r=`ర్యాంకులు: ${rk.map(q=>`${esc(q)} – ${s.ex[q].rk}`).join(', ')} (మొత్తం ${N} మంది విద్యార్థులలో). `;
+  r+=lr<=3?`${lk} లో టాప్ 3 లో నిలిచావు, అద్భుతం! ఈ స్థానాన్ని నిలబెట్టుకో. `:lr<=N*.25?`${lk} లో తరగతిలో మొదటి పావు భాగంలో ఉన్నావు, చాలా బాగుంది. టాప్ 3 లక్ష్యంగా పెట్టుకో. `:lr<=N*.5?`${lk} లో మధ్యస్థ స్థానంలో ఉన్నావు; కొంచెం ఎక్కువ కృషితో టాప్ ర్యాంకుల్లోకి రాగలవు. `:`${lk} లో ర్యాంకు మెరుగుపడాల్సిన అవసరం ఉంది; బలహీన సబ్జెక్టులపై ఎక్కువ దృష్టి పెడితే ర్యాంకు తప్పకుండా పెరుగుతుంది. `;
+  if(rk.length>1){const fk=rk[0],fr=s.ex[fk].rk;
+   r+=lr<fr?`${fk} లో ${fr} వ ర్యాంకు నుండి ${lk} లో ${lr} వ ర్యాంకుకు ఎదిగావు, శభాష్!`:lr>fr?`${fk} లో ${fr} వ ర్యాంకు నుండి ${lk} లో ${lr} వ ర్యాంకుకు తగ్గింది; మళ్ళీ పైకి రావడానికి పట్టుదలతో చదువు.`:`${fk} నుండి ${lk} వరకు ${lr} వ ర్యాంకు నిలకడగా ఉంది; ఇంకా పైకి ఎదగడానికి ప్రయత్నించు.`}}
+ const pts=[a,b,r,c,d].filter(Boolean);
+ return`<p class="in">ప్రియమైన ${esc(s.name)}, ${esc(ks.join(', '))} పరీక్షల ఫలితాల ఆధారంగా విశ్లేషణ:</p>${pts.map((x,i)=>`<p class="pt"><i>${i+1}</i><span>${x}</span></p>`).join('')}`}
+/* ---------- card ---------- */
+const G=g=>g==='-'?'-':`<b class="gr ${g==='D2'?'gf':g==='D1'?'gd':/^A/.test(g)?'ga':/^B/.test(g)?'gb':'gc'}">${esc(g)}</b>`,R=e=>{const t=e.tg;const r=t==='D2'?'FAIL':t!=='-'?'PASS':/FAIL/.test(e.res)?'FAIL':/PASS/.test(e.res)?'PASS':'-';return r==='FAIL'?'<span class="f">FAIL</span>':r==='PASS'?'<span class="pass">PASS</span>':'-'};
+function card(s,c,school){
+ const ex=E.filter(b=>s.ex[b.k]),mx=b=>b.fa?c.faM:c.saM,tx=b=>b.fa?c.faT:c.saT;
+ const subs=[...new Set(ex.flatMap(b=>s.ex[b.k].subs.map(x=>x.n)))];
+ const sub=(b,n)=>s.ex[b.k].subs.find(x=>x.n===n)||{m:'-',g:'-'};
+ let h=`<h2>${esc(school||'School Name')}</h2><h3>STUDENT AI REPORT CARD</h3><div class="info"><div><small>Student Name</small><b>${esc(s.name)}</b></div><div><small>Class</small><b>${esc(s.cls||'-')}</b></div><div><small>Roll No</small><b>${esc(s.roll||'-')}</b></div><div><small>Father's Name</small><b>${esc(s.father||'-')}</b></div></div>`;
+ h+=`<div class="blk"><div class="sec">MARKS &amp; GRADES <small>(మార్కులు, గ్రేడ్లు)</small></div><div class="tw"><table><tr><th rowspan=2 class="l">SUBJECT</th>${ex.map(b=>`<th colspan=3 class="${b.fa?'fa':'sa'}">${esc(b.k)}</th>`).join('')}</tr><tr>${ex.map(()=>'<th>Total</th><th>Marks</th><th>Grade</th>').join('')}</tr>`;
+ subs.forEach(n=>h+=`<tr><td class="l">${esc(n)}</td>${ex.map(b=>{const x=sub(b,n);return`<td>${mx(b)}</td><td>${x.m}</td><td>${G(x.g)}</td>`}).join('')}</tr>`);
+ h+=`<tr class="t"><td class="l">TOTAL</td>${ex.map(b=>{const e=s.ex[b.k];return`<td>${tx(b)}</td><td>${e.tm}</td><td>${G(e.tg)}</td>`}).join('')}</tr><tr><td class="l">RESULT</td>${ex.map(b=>`<td colspan=3>${R(s.ex[b.k])}</td>`).join('')}</tr></table></div></div>`;
+ const dup=(k,r)=>S.filter(o=>o.ex[k]&&o.ex[k].rk===r).length>1;
+ h+=`<div class="blk"><div class="sec">CLASS RANK <small>(ర్యాంకు · out of ${c.n} students)</small></div><div class="tw"><table><tr>${ex.map(b=>`<th class="${b.fa?'fa':'sa'}">${esc(b.k)}</th>`).join('')}</tr><tr>${ex.map(b=>{const r=s.ex[b.k].rk;return`<td>${isN(r)?`<span class="rk${r<=3?' m'+r:''}">${r}</span>${dup(b.k,r)?' *':''}`:r}</td>`}).join('')}</tr></table></div></div>`;
+ if(s.att){const m=s.att.ms;h+=`<div class="blk"><div class="sec">ATTENDANCE <small>(హాజరు)</small></div><div class="tw"><table><tr><th class="l">Month</th>${m.map(x=>`<th>${esc(x.m.slice(0,3))}</th>`).join('')}<th>TOTAL</th></tr><tr><td class="l">Working days</td>${m.map(x=>`<td>${x.wd||'-'}</td>`).join('')}<td class="t">${s.att.tw||'-'}</td></tr><tr><td class="l">Attended</td>${m.map(x=>`<td>${x.at}</td>`).join('')}<td class="t">${s.att.ta}</td></tr></table></div></div>`}
+ h+=`<div class="blk grow"><div class="sec">AI ANALYSIS <small>(విశ్లేషణ)</small></div><div class="ai"><div class="ab">${analysis(s,E,c.n)}</div></div></div><div class="sig"><span>Parent</span><span>Class Teacher</span><span>Head Master</span></div>`;
+ return`<div class="card">${h}</div>`}
+/* ---------- ui ---------- */
+function fit(){document.querySelectorAll('.card').forEach(c=>{const pb=parseFloat(getComputedStyle(c).paddingBottom)||0,L=c.lastElementChild,ov=()=>L.offsetTop+L.offsetHeight>c.clientHeight-pb+1;let f=12;c.style.setProperty('--fs',f+'px');while(ov()&&f>6){f-=.25;c.style.setProperty('--fs',f+'px')}})}
+function render(){const c=cfg(),sc=$('#school').value.trim(),ids=[...sel].sort((a,b)=>a-b);
+ $('#pv').innerHTML=ids.length?ids.map(i=>card(S[i],c,sc)).join(''):'<p>No students selected.</p>';
+ $('#cnt').textContent=ids.length+' of '+S.length+' cards';
+ const z=Math.min(1,($('#pvw').clientWidth||800)/794);document.documentElement.style.setProperty('--z',z);
+ (document.fonts?document.fonts.ready:Promise.resolve()).then(fit)}
+function tab(n){$('#setup').hidden=n!==1;$('#prev').hidden=n!==2;$('#t1').classList.toggle('on',n===1);$('#t2').classList.toggle('on',n===2);if(n===2&&S.length)render()}
+$('#t1').onclick=()=>tab(1);$('#t2').onclick=()=>tab(2);
+function err(m){const e=$('#err');e.textContent=m;e.style.display=m?'block':'none'}
+$('#file').onchange=async ev=>{const f=ev.target.files[0];if(!f)return;err('');$('#ok').textContent='Reading…';
+ try{if(!window.XLSX)throw new Error('Spreadsheet library failed to load. Check your connection and reload.');
+  const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});let res=null,last=null;
+  for(const n of wb.SheetNames){try{res=parse(XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null}));break}catch(e){last=last||e}}
+  if(!res)throw last||new Error('No usable sheet found.');
+  S=res.stu;E=res.ex;sel=new Set(S.map((_,i)=>i));
+  $('#ok').textContent=`Loaded ${S.length} students · exams with marks: ${E.map(e=>e.k).join(', ')}`;
+  $('#pick').innerHTML=`<label><input type="checkbox" id="all" checked> <b>Select all</b></label>`+S.map((s,i)=>`<label><input type="checkbox" class="sc" data-i="${i}" checked> ${esc(s.name)}</label>`).join('');
+  $('#all').onchange=e=>{document.querySelectorAll('.sc').forEach(x=>x.checked=e.target.checked);sync()};
+  document.querySelectorAll('.sc').forEach(x=>x.onchange=sync);
+  tab(2)}catch(e){S=[];err('Could not read this file: '+(e.message||e))}ev.target.value=''};
+function sync(){sel=new Set([...document.querySelectorAll('.sc')].filter(x=>x.checked).map(x=>+x.dataset.i));render()}
+['school','str','faT','saT','faM','saM'].forEach(i=>$('#'+i).addEventListener('input',()=>{try{if(i==='school')localStorage.setItem('school',$('#school').value)}catch(e){}if(S.length&&!$('#prev').hidden)render()}));
+try{$('#school').value=localStorage.getItem('school')||''}catch(e){}
+$('#bp').onclick=()=>{fit();window.print()};
+addEventListener('beforeprint',fit);
+$('#bd').onclick=async()=>{const b=$('#bd');if(!sel.size)return;if(!window.html2pdf){alert('PDF library failed to load. Use Print → Save as PDF instead.');return}
+ b.disabled=true;b.textContent='Preparing…';document.body.classList.add('out');
+ try{await new Promise(r=>setTimeout(r,60));fit();
+  await html2pdf().set({margin:0,filename:'report-cards.pdf',image:{type:'jpeg',quality:.95},html2canvas:{scale:2,useCORS:true,scrollY:0},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css']}}).from($('#pv')).save()}
+ catch(e){alert('PDF failed: '+e.message+'. Use Print → Save as PDF instead.')}
+ document.body.classList.remove('out');b.disabled=false;b.textContent='Download PDF';render()};
+addEventListener('resize',()=>{if(S.length&&!$('#prev').hidden)render()});
+</script></body></html>
+
+</body></html>

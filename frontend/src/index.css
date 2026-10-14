@@ -1,0 +1,231 @@
+@import "tailwindcss";
+
+/* ---- Theme: soft modern SaaS ----
+   Rounded cards, diffused shadows instead of hairline borders, a
+   teal→blue gradient as the single accent thread, and soft-tint pill
+   badges for status/trend instead of solid fills. The report card's own
+   blue stays as the brand anchor (links, icon chips, nav) so the app and
+   the generated Telugu report still feel related — it's just expressed
+   through this softer system now instead of solid header bars. */
+
+:root {
+  color-scheme: light;
+
+  --font-display: "Hind", "Noto Sans Telugu", system-ui, sans-serif;
+  --font-body: "Hind", "Noto Sans Telugu", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  --radius-card: 20px;
+  --radius-control: 14px;
+  --radius-pill: 9999px;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 32px -16px rgba(15, 23, 42, 0.14);
+  --shadow-pop: 0 2px 6px rgba(15, 23, 42, 0.06), 0 24px 48px -20px rgba(15, 23, 42, 0.18);
+
+  --page-plane: #f6f8fb;
+  --surface-1: #ffffff;
+  --surface-raised: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --gridline: #eef1f6;
+  --axis: #cbd5e1;
+  --border: rgba(15, 23, 42, 0.07);
+  --rule: #e2e8f0;
+
+  --accent: #1f4e79; /* the report card's own header blue — brand anchor */
+  --accent-soft: rgba(31, 78, 121, 0.08);
+  --accent-mark: #dc2626;
+  --accent-mark-soft: rgba(220, 38, 38, 0.1);
+  --accent-gold: #d97706;
+  --accent-gold-soft: rgba(217, 119, 6, 0.12);
+
+  --grad-a: #0d9488; /* teal */
+  --grad-b: #2563eb; /* blue */
+
+  --tricolor-saffron: #ff9933;
+  --tricolor-green: #138808;
+
+  --series-1: #2a78d6; /* blue */
+  --series-2: #eb6834; /* orange */
+  --series-3: #1baf7a; /* aqua */
+  --series-4: #eda100; /* yellow */
+  --series-5: #e87ba4; /* magenta */
+  --series-6: #008300; /* green */
+  --series-7: #6250d6; /* violet */
+  --series-8: #e34948; /* red */
+
+  --status-good: #16a34a;
+  --status-good-soft: rgba(22, 163, 74, 0.12);
+  --status-warning: #f59e0b;
+  --status-serious: #ec835a;
+  --status-critical: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 32px -16px rgba(0, 0, 0, 0.55);
+    --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 48px -20px rgba(0, 0, 0, 0.6);
+
+    --page-plane: #0b1220;
+    --surface-1: #131b2c;
+    --surface-raised: #17213a;
+    --text-primary: #f1f5f9;
+    --text-secondary: #9aa7bb;
+    --text-muted: #64748b;
+    --gridline: #1f2937;
+    --axis: #334155;
+    --border: rgba(241, 245, 249, 0.08);
+    --rule: #243049;
+
+    --accent: #6ea3d6;
+    --accent-soft: rgba(110, 163, 214, 0.14);
+    --accent-mark: #f87171;
+    --accent-mark-soft: rgba(248, 113, 113, 0.14);
+    --accent-gold: #fbbf24;
+    --accent-gold-soft: rgba(251, 191, 36, 0.14);
+
+    --grad-a: #2dd4bf;
+    --grad-b: #60a5fa;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 32px -16px rgba(0, 0, 0, 0.55);
+  --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 48px -20px rgba(0, 0, 0, 0.6);
+
+  --page-plane: #0b1220;
+  --surface-1: #131b2c;
+  --surface-raised: #17213a;
+  --text-primary: #f1f5f9;
+  --text-secondary: #9aa7bb;
+  --text-muted: #64748b;
+  --gridline: #1f2937;
+  --axis: #334155;
+  --border: rgba(241, 245, 249, 0.08);
+  --rule: #243049;
+
+  --accent: #6ea3d6;
+  --accent-soft: rgba(110, 163, 214, 0.14);
+  --accent-mark: #f87171;
+  --accent-mark-soft: rgba(248, 113, 113, 0.14);
+  --accent-gold: #fbbf24;
+  --accent-gold-soft: rgba(251, 191, 36, 0.14);
+
+  --grad-a: #2dd4bf;
+  --grad-b: #60a5fa;
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+}
+
+body {
+  margin: 0;
+  background: var(--page-plane);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+}
+
+h1 {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.font-mono,
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Section header inside a soft card: bold title row, no more solid fill bar. */
+.section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  color: var(--text-primary);
+  font-weight: 700;
+  padding-bottom: 0.65rem;
+  margin-bottom: 0.1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.soft-card {
+  background: var(--surface-1);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+}
+
+.icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.gradient-fill {
+  background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+}
+
+.gradient-text {
+  background: linear-gradient(90deg, var(--grad-a), var(--grad-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.accent-rule {
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal {
+  animation: reveal-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
+}

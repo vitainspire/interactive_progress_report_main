@@ -1,0 +1,52 @@
+<!DOCTYPE html><html lang="te"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Progress Card - {{ student.name }}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;700&display=swap">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f5f7fa;--card:#fff;--text:#222;--line:#b5bcc6;--head:#1f4e79;--headtxt:#fff;--th:#dde8f3;--tot:#f2f2f2;--pass:#0a7a2f;--fail:#b3261e}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171c;--card:#1d222a;--text:#e6e8eb;--line:#3b4350;--head:#2d6aa3;--th:#26313f;--tot:#232a34;--pass:#4ade80;--fail:#f87171}}
+:root[data-theme="dark"]{--bg:#14171c;--card:#1d222a;--text:#e6e8eb;--line:#3b4350;--head:#2d6aa3;--th:#26313f;--tot:#232a34;--pass:#4ade80;--fail:#f87171}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Noto Sans Telugu','Gautami','Nirmala UI',system-ui,sans-serif;font-size:15px;line-height:1.7}
+.wrap{max-width:760px;margin:0 auto;padding:14px;background:var(--card)}
+h1{text-align:center;font-size:18px;margin:6px 0}.sub{text-align:center;margin-bottom:10px;font-size:13px}
+h2{background:var(--head);color:var(--headtxt);padding:5px 10px;font-size:16px;margin:18px 0 8px;border-radius:4px}
+h3{font-size:15px;margin:12px 0 4px}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%}td,th{border:1px solid var(--line);padding:4px 8px;text-align:center;white-space:nowrap}
+th{background:var(--th)}.t{font-weight:700;background:var(--tot)}.p{color:var(--pass);font-weight:700}.f{color:var(--fail);font-weight:700}
+.info td{text-align:left;border:none;white-space:normal;padding:1px 4px}ul{padding-left:20px}
+button{display:block;margin:14px auto;padding:8px 18px;border:0;border-radius:6px;background:var(--head);color:#fff;font:inherit;cursor:pointer}
+@media print{body{background:#fff}button{display:none}h2{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body><div class="wrap">
+<h1>AI POWERED STUDENT COMPREHENSIVE DIGITAL PROGRESS CARD</h1>
+{% if school.name %}<div class=sub>{{ school.name }}{% if school.udise %} (UDISE-{{ school.udise }}){% endif %}</div>{% endif %}
+<table class=info><tr><td><b>విద్యార్థి పేరు:</b> {{ student.name }}</td><td><b>తండ్రి పేరు:</b> {{ student.father_name or '-' }}</td></tr>
+<tr><td><b>{{ class_label }}, సెక్షన్:</b> {{ student.section }}</td><td><b>జెండర్:</b> {{ student.gender or '-' }}</td></tr></table>
+
+<h2>పరీక్షల మార్కులు</h2>
+{% for phase in phases %}
+<h3>{{ phase.label_te }}</h3><div class="tw"><table><tr><th>Subject</th><th>Marks</th><th>Grade</th><th>Result</th></tr>
+{% for row in phase.subject_rows %}<tr><td>{{ row.subject_en }}</td><td>{{ row.marks_display }}</td><td>{{ row.grade or '-' }}</td><td class="{{ row.result_class }}">{{ row.result_text }}</td></tr>{% endfor %}
+<tr class=t><td>Total /{{ phase.max_total|int }}</td><td>{{ phase.total_marks }}</td><td>{{ phase.total_grade or '-' }}</td><td class="{{ phase.result_class }}">{{ phase.result_text }}</td></tr></table></div>
+{% endfor %}
+{% if not phases %}<p><i>పరీక్షల మార్కులు ఇంకా అందుబాటులో లేవు.</i></p>{% endif %}
+
+<div class=box><h2>మార్కుల విశ్లేషణ</h2>
+{{ analysis_html|safe }}</div>
+
+<div class=box><h2>ఫెయిల్ అయిన సబ్జెక్టులు</h2>
+{{ fail_html|safe }}</div>
+
+{% if focus_html %}<div class=box><h2>దృష్టి పెట్టాల్సిన పాఠాలు</h2>
+{{ focus_html|safe }}</div>{% endif %}
+
+<div class=box><h2>హాజరు (Attendance)</h2>
+{% if attendance_months %}<div class="tw"><table><tr><th>నెల</th>{% for m in attendance_months %}<th>{{ m.month_te }}</th>{% endfor %}</tr>
+<tr><td>హాజరు</td>{% for m in attendance_months %}<td>{{ m.days_present|int if m.days_present is not none else '-' }}/{{ m.working_days|int if m.working_days is not none else '-' }}</td>{% endfor %}</tr></table></div>{% endif %}
+{{ attendance_remark_html|safe }}
+{{ home_advice_html|safe }}</div>
+
+{% if contacts %}<div class=box><h2>సంప్రదింపు వివరాలు</h2>
+<p>{% for c in contacts %}{{ c.role_te }} {{ c.name }}{% if c.phone %} – {{ c.phone }}{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</p></div>{% endif %}
+<button onclick="window.print()">Print / Save as PDF</button></div></body></html>
