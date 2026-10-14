@@ -119,7 +119,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={busy}
-            className="accent-fill mt-5 w-full rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99] disabled:opacity-60"
+            className="accent-fill mt-5 w-full rounded-md px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99] disabled:opacity-60"
           >
             {busy ? "Logging in…" : "Log in"}
           </button>

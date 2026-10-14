@@ -121,7 +121,7 @@ export function DashboardPage() {
         </div>
         <Link
           to="/upload"
-          className="accent-fill flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99]"
+          className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99]"
         >
           <PlusIcon size={15} />
           New upload
@@ -158,7 +158,7 @@ export function DashboardPage() {
               value={sort}
               onChange={(e) => setSort(e.target.value as SortOrder)}
               aria-label="Sort uploads"
-              className="rounded-xl border px-3 py-2 text-sm font-medium"
+              className="rounded-md border px-3 py-2 text-sm font-medium"
               style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
             >
               <option value="recent">Most recent</option>
@@ -181,7 +181,7 @@ export function DashboardPage() {
           </p>
           <Link
             to="/upload"
-            className="accent-fill mt-4 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200"
+            className="accent-fill mt-4 rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200"
           >
             Upload your first sheet
           </Link>

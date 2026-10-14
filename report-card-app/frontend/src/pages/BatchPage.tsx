@@ -46,7 +46,7 @@ function BatchHeader({ detail, onDelete }: { detail: BatchDetail; onDelete: () =
         </div>
         <button
           onClick={onDelete}
-          className="flex items-center gap-1.5 rounded-xl border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200"
+          className="flex items-center gap-1.5 rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200"
           style={{ borderColor: "var(--accent-mark-soft)", color: "var(--accent-mark)" }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-mark-soft)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -384,7 +384,7 @@ function SettingsDrawer({
       <button
         onClick={onSave}
         disabled={saving}
-        className="mt-4 rounded-xl border px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-60"
+        className="mt-4 rounded-md border px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-60"
         style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
       >
         {saving ? "Saving…" : "Apply settings"}
@@ -421,7 +421,7 @@ function Toolbar({
       <div className="flex flex-wrap items-center gap-2">
         <details className="relative">
           <summary
-            className="cursor-pointer list-none rounded-xl border px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+            className="cursor-pointer list-none rounded-md border px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
             style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
           >
             Select students ({selected.size})
@@ -481,7 +481,7 @@ function Toolbar({
           href={reportUrl}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+          className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
           style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
         >
           <ExternalLinkIcon size={14} />
@@ -489,7 +489,7 @@ function Toolbar({
         </a>
         <button
           onClick={onPrint}
-          className="accent-fill flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99]"
+          className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99]"
         >
           <PrinterIcon size={14} />
           Print
@@ -497,7 +497,7 @@ function Toolbar({
         <button
           onClick={onSendToParents}
           disabled={sending || selected.size === 0}
-          className="flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-60"
+          className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-60"
           style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
         >
           <SendIcon size={14} />
@@ -512,7 +512,7 @@ function ReportPreview({ reportUrl, iframeRef }: { reportUrl: string; iframeRef:
   const [zoom, setZoom] = useState(1);
   return (
     <div className="relative">
-      <div className="dot-grid-plane overflow-auto rounded-xl p-6" style={{ maxHeight: 900, background: "var(--page-plane)" }}>
+      <div className="dot-grid-plane overflow-auto rounded-md p-6" style={{ maxHeight: 900, background: "var(--page-plane)" }}>
         <div
           className="mx-auto overflow-hidden rounded-lg"
           style={{

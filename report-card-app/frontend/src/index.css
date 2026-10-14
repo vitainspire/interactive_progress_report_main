@@ -6,22 +6,22 @@
   --font-display: "Hind", "Noto Sans Telugu", system-ui, sans-serif;
   --font-body: "Hind", "Noto Sans Telugu", system-ui, -apple-system, "Segoe UI", sans-serif;
 
-  --radius-card: 24px;
-  --radius-control: 14px;
+  --radius-card: 8px;
+  --radius-control: 6px;
   --radius-pill: 9999px;
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 32px -16px rgba(15, 23, 42, 0.14);
-  --shadow-pop: 0 2px 6px rgba(15, 23, 42, 0.06), 0 24px 48px -20px rgba(15, 23, 42, 0.18);
+  --shadow-card: 0 1px 0 rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 10px -4px rgba(15, 23, 42, 0.1);
+  --shadow-pop: 0 1px 0 rgba(15, 23, 42, 0.05), 0 8px 20px -6px rgba(15, 23, 42, 0.18);
 
   --page-plane: #f6f8fb;
   --surface-1: #ffffff;
   --text-primary: #0f172a;
   --text-secondary: #64748b;
   --text-muted: #94a3b8;
-  --border: rgba(15, 23, 42, 0.07);
+  --border: rgba(15, 23, 42, 0.12);
 
-  --accent: #2954eb;
-  --accent-strong: #1f3fc4;
-  --accent-soft: rgba(41, 84, 235, 0.08);
+  --accent: #1e3a8a;
+  --accent-strong: #15265e;
+  --accent-soft: rgba(30, 58, 138, 0.08);
   --accent-mark: #dc2626;
   --accent-mark-soft: rgba(220, 38, 38, 0.1);
 
@@ -41,13 +41,14 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 48px -20px rgba(0, 0, 0, 0.6);
+    --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.3);
+    --shadow-pop: 0 1px 0 rgba(0, 0, 0, 0.4), 0 10px 24px -8px rgba(0, 0, 0, 0.55);
     --page-plane: #0b1220;
     --surface-1: #131b2c;
     --text-primary: #f1f5f9;
     --text-secondary: #9aa7bb;
     --text-muted: #64748b;
-    --border: rgba(241, 245, 249, 0.08);
+    --border: rgba(241, 245, 249, 0.14);
     --accent: #5b7cff;
     --accent-strong: #7a95ff;
     --accent-soft: rgba(91, 124, 255, 0.14);
@@ -91,12 +92,23 @@ h1, h2, h3, .font-display {
   flex-shrink: 0;
 }
 
+/* The one bold, repeated signature detail: a crisp offset shadow in the
+   product's own gold (from the report card's own ribbon), not a soft blur —
+   deliberately different from the generic grey drop-shadow every button
+   defaults to. */
 .accent-fill {
   background: var(--accent);
+  box-shadow: 3px 3px 0 0 var(--lp-gold);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.2s ease;
 }
 
 .accent-fill:hover {
   background: var(--accent-strong);
+}
+
+.accent-fill:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--lp-gold);
 }
 
 input[type="text"],

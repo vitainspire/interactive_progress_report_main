@@ -122,7 +122,7 @@ export function UploadPage() {
         {mode === "file" && (
           <div>
             <label
-              className="block cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center"
+              className="block cursor-pointer rounded-lg border-2 border-dashed p-6 text-center"
               style={{ borderColor: "var(--accent)", color: "var(--text-primary)" }}
             >
               <input type="file" accept=".xlsx,.csv" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
@@ -134,12 +134,12 @@ export function UploadPage() {
         )}
 
         {mode === "drive" && (
-          <div className="rounded-2xl border-2 border-dashed p-6 text-center" style={{ borderColor: "var(--accent)" }}>
+          <div className="rounded-lg border-2 border-dashed p-6 text-center" style={{ borderColor: "var(--accent)" }}>
             <button
               type="button"
               onClick={browseGoogleDrive}
               disabled={picking}
-              className="accent-fill rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
+              className="accent-fill rounded-md px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
             >
               {picking ? "Opening Google Drive…" : "Browse Google Sheets"}
             </button>
@@ -177,7 +177,7 @@ export function UploadPage() {
         <button
           type="submit"
           disabled={!canSubmit || busy}
-          className="accent-fill w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
+          className="accent-fill w-full rounded-md px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
         >
           {busy ? "Reading…" : "Upload"}
         </button>

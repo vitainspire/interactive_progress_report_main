@@ -11,14 +11,14 @@ function ReportCardMock() {
 
   return (
     <div
-      className="w-full max-w-sm rounded-2xl p-4"
+      className="w-full max-w-sm rounded-lg p-4"
       style={{
         background: "linear-gradient(155deg, #eef2ff 0%, #fffbea 100%)",
         boxShadow: "var(--shadow-pop)",
         transform: "rotate(-2.5deg)",
       }}
     >
-      <div className="overflow-hidden rounded-xl" style={{ background: "#fff", border: "1px solid rgba(15,23,42,0.08)" }}>
+      <div className="overflow-hidden rounded-md" style={{ background: "#fff", border: "1px solid rgba(15,23,42,0.08)" }}>
         <div
           className="px-4 py-2.5 text-center text-sm font-bold text-white"
           style={{ background: "linear-gradient(120deg, var(--lp-navy), #2563eb 70%)" }}
@@ -77,7 +77,7 @@ function Feature({ icon, title, body }: { icon: React.ReactNode; title: string; 
   return (
     <div>
       <div
-        className="flex h-10 w-10 items-center justify-center rounded-xl"
+        className="flex h-10 w-10 items-center justify-center rounded-md"
         style={{ background: "var(--lp-gold-soft)", color: "var(--lp-navy)" }}
       >
         {icon}
@@ -128,16 +128,12 @@ export function LandingPage() {
         <nav className="flex flex-none items-center gap-1 sm:gap-2">
           <Link
             to="/login"
-            className="whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)] sm:px-4"
+            className="whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)] sm:px-4"
             style={{ color: "var(--text-primary)" }}
           >
             Log in
           </Link>
-          <Link
-            to="/signup"
-            className="whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-sm transition-transform duration-200 active:scale-[0.98] sm:px-4"
-            style={{ background: "var(--lp-navy)" }}
-          >
+          <Link to="/signup" className="accent-fill whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold text-white sm:px-4">
             Get started
           </Link>
         </nav>
@@ -159,11 +155,7 @@ export function LandingPage() {
               parent-ready WhatsApp links — no manual formatting, no translating by hand.
             </p>
             <div className="mt-7 flex flex-col items-start gap-3">
-              <Link
-                to="/signup"
-                className="rounded-xl px-6 py-3.5 text-base font-semibold text-white shadow-sm transition-transform duration-200 active:scale-[0.98]"
-                style={{ background: "var(--lp-navy)" }}
-              >
+              <Link to="/signup" className="accent-fill rounded-md px-6 py-3.5 text-base font-semibold text-white">
                 Create your first report card
               </Link>
               <Link to="/login" className="text-sm font-medium underline-offset-4 hover:underline" style={{ color: "var(--text-secondary)" }}>
@@ -242,11 +234,7 @@ export function LandingPage() {
             Ready to see your class's first report card?
           </h2>
           <div className="mt-7">
-            <Link
-              to="/signup"
-              className="inline-block rounded-xl px-7 py-3.5 text-base font-semibold text-white shadow-sm transition-transform duration-200 active:scale-[0.98]"
-              style={{ background: "var(--lp-navy)" }}
-            >
+            <Link to="/signup" className="accent-fill inline-block rounded-md px-7 py-3.5 text-base font-semibold text-white">
               Get started
             </Link>
           </div>
