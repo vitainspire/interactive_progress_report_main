@@ -27,6 +27,15 @@
 
   --status-good: #16a34a;
   --status-good-soft: rgba(22, 163, 74, 0.12);
+
+  /* Pulled from the report card itself (card_render.py) rather than a new
+     invented palette — the landing page's one bold accent moment is the
+     product's own navy/gold, not a generic SaaS blue. */
+  --lp-navy: #1e3a8a;
+  --lp-navy-deep: #15265e;
+  --lp-gold: #e9a400;
+  --lp-gold-soft: #fff3d1;
+  --font-serif: "Fraunces", "Noto Sans Telugu", Georgia, serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -46,6 +55,9 @@
     --accent-mark-soft: rgba(248, 113, 113, 0.14);
     --status-good: #22c55e;
     --status-good-soft: rgba(34, 197, 94, 0.14);
+    --lp-navy: #3b5bc9;
+    --lp-gold: #f5b700;
+    --lp-gold-soft: rgba(245, 183, 0, 0.14);
   }
 }
 

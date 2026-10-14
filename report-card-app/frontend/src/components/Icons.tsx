@@ -177,6 +177,26 @@ export function BarChartIcon({ size = 18, className }: IconProps) {
   );
 }
 
+export function SpeakerWaveIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...base} stroke="currentColor">
+      <path d="M4 10v4h4l5 4V6l-5 4H4z" />
+      <path d="M16.5 9a4.5 4.5 0 0 1 0 6M19.5 6a8.5 8.5 0 0 1 0 12" />
+    </svg>
+  );
+}
+
+export function TeluguGlyphIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <path d="M3 10c0-4 3.5-7 9-7s9 3 9 7-3.5 7-9 7l-5 4 1-5c-3-1.2-5-3.6-5-6z" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <text x="12" y="14" textAnchor="middle" fontSize="13" fontWeight={700} fontFamily="'Noto Sans Telugu', sans-serif" fill="currentColor">
+        అ
+      </text>
+    </svg>
+  );
+}
+
 export function PlugIcon({ size = 18, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...base} stroke="currentColor">

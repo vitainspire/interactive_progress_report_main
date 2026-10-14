@@ -30,7 +30,7 @@ function BatchHeader({ detail, onDelete }: { detail: BatchDetail; onDelete: () =
   return (
     <div>
       <nav className="text-xs" style={{ color: "var(--text-muted)" }} aria-label="Breadcrumb">
-        <Link to="/" className="hover:underline" style={{ color: "var(--text-muted)" }}>
+        <Link to="/dashboard" className="hover:underline" style={{ color: "var(--text-muted)" }}>
           Uploads
         </Link>{" "}
         / {detail.name}
@@ -657,7 +657,7 @@ export function BatchPage() {
   async function deleteBatch() {
     if (!confirm(`Delete "${detail?.name}"? This can't be undone.`)) return;
     await api.del(`/batches/${batchId}`);
-    navigate("/");
+    navigate("/dashboard");
   }
 
   function printSelected() {

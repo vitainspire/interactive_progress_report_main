@@ -13,7 +13,7 @@ export function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to="/dashboard" replace />;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -21,7 +21,7 @@ export function SignupPage() {
     setBusy(true);
     try {
       await signup(email, password, displayName);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create account");
     } finally {

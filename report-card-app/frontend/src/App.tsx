@@ -4,6 +4,7 @@ import { useAuth } from "./auth/AuthContext";
 import { BatchPage } from "./pages/BatchPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
+import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { UploadPage } from "./pages/UploadPage";
@@ -15,9 +16,17 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function Root() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <LandingPage />;
+}
+
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<Root />} />
       <Route path="login" element={<LoginPage />} />
       <Route path="signup" element={<SignupPage />} />
       <Route
@@ -27,7 +36,7 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<DashboardPage />} />
+        <Route path="dashboard" element={<DashboardPage />} />
         <Route path="upload" element={<UploadPage />} />
         <Route path="batches/:id" element={<BatchPage />} />
         <Route path="integrations" element={<IntegrationsPage />} />
