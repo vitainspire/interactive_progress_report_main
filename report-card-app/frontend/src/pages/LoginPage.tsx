@@ -35,6 +35,14 @@ export function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-10" style={{ background: "var(--page-plane)" }}>
       <div className="w-full max-w-md">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <span className="icon-chip" style={{ width: "3rem", height: "3rem", fontWeight: 700 }}>
+            RC
+          </span>
+          <div className="font-display mt-3 text-xl font-bold" style={{ color: "var(--text-primary)" }}>
+            Report Card Generator
+          </div>
+        </div>
         <form onSubmit={onSubmit} aria-label="Teacher login" className="soft-card p-8" style={{ boxShadow: "var(--shadow-pop)" }}>
           <h1 className="text-[1.65rem] font-extrabold leading-tight" style={{ color: "var(--text-primary)" }}>
             Login
