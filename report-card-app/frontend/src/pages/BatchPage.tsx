@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import {
+  BarChartIcon,
   ExternalLinkIcon,
   FitScreenIcon,
   PrinterIcon,
@@ -12,7 +13,7 @@ import {
   ZoomInIcon,
   ZoomOutIcon,
 } from "../components/Icons";
-import type { BatchDetail, SendResult, StudentBrief } from "../types";
+import type { BatchDetail, ClassStats, RankedStudent, SendResult, StudentBrief } from "../types";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -58,6 +59,159 @@ function BatchHeader({ detail, onDelete }: { detail: BatchDetail; onDelete: () =
   );
 }
 
+function StatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl p-3 text-center" style={{ background: "var(--page-plane)" }}>
+      <div className="text-lg font-extrabold" style={{ color: "var(--text-primary)" }}>
+        {value}
+      </div>
+      <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-secondary)" }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function GradeDistributionChart({ data }: { data: { grade: string; count: number }[] }) {
+  const max = Math.max(1, ...data.map((d) => d.count));
+  return (
+    <div className="flex items-end gap-2" style={{ height: 110 }}>
+      {data.map((d) => (
+        <div key={d.grade} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
+          <span className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>
+            {d.count}
+          </span>
+          <div
+            className="w-full rounded-t-md"
+            style={{
+              height: `${Math.max(6, (d.count / max) * 78)}%`,
+              background: d.grade === "D2" ? "var(--accent-mark)" : d.grade.startsWith("A") ? "var(--status-good)" : "var(--accent)",
+            }}
+            title={`${d.grade}: ${d.count} students`}
+          />
+          <span className="text-[11px] font-semibold" style={{ color: "var(--text-secondary)" }}>
+            {d.grade}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SubjectAverageBars({ data }: { data: ClassStats["subject_averages"] }) {
+  return (
+    <div className="space-y-2.5">
+      {data.map((s) => (
+        <div key={s.subject}>
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+              {s.subject}
+            </span>
+            <span style={{ color: "var(--text-secondary)" }}>
+              {s.avg_marks} / {s.max_marks} ({s.avg_pct}%)
+            </span>
+          </div>
+          <div className="mt-1 h-2 w-full overflow-hidden rounded-full" style={{ background: "var(--border)" }}>
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.min(100, s.avg_pct)}%`,
+                background: s.avg_pct >= 75 ? "var(--status-good)" : s.avg_pct >= 50 ? "var(--accent)" : "var(--accent-mark)",
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StudentMiniList({ title, students, tone }: { title: string; students: RankedStudent[]; tone: "good" | "warn" }) {
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>
+        {title}
+      </h3>
+      <div className="mt-2 space-y-1.5">
+        {students.length === 0 && (
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            Nothing to show yet.
+          </p>
+        )}
+        {students.map((s) => (
+          <div key={s.id} className="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-sm" style={{ background: "var(--page-plane)" }}>
+            <span style={{ color: "var(--text-primary)" }}>{s.name}</span>
+            <span className="text-xs font-semibold" style={{ color: tone === "good" ? "var(--status-good)" : "var(--accent-mark)" }}>
+              {s.rank != null ? `Rank ${s.rank}` : s.reason === "fail" ? "Failed" : "Low marks"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ClassOverview({ stats }: { stats: ClassStats | null }) {
+  return (
+    <div className="soft-card p-5">
+      <div className="flex items-center gap-2">
+        <span className="icon-chip" style={{ width: "1.75rem", height: "1.75rem" }}>
+          <BarChartIcon size={14} />
+        </span>
+        <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+          Class overview{stats?.latest_exam ? ` · ${stats.latest_exam}` : ""}
+        </h2>
+      </div>
+
+      {!stats ? (
+        <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+          Crunching the numbers…
+        </p>
+      ) : stats.graded_count === 0 ? (
+        <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+          No graded results yet for this batch.
+        </p>
+      ) : (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile label="Pass rate" value={`${Math.round((stats.pass_count / stats.graded_count) * 100)}%`} />
+            <StatTile label="Passed" value={String(stats.pass_count)} />
+            <StatTile label="Failed" value={String(stats.fail_count)} />
+            <StatTile label="Avg attendance" value={stats.avg_attendance_pct != null ? `${stats.avg_attendance_pct}%` : "—"} />
+          </div>
+
+          {stats.grade_distribution.length > 0 && (
+            <div className="mt-5">
+              <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>
+                Grade distribution
+              </h3>
+              <div className="mt-2">
+                <GradeDistributionChart data={stats.grade_distribution} />
+              </div>
+            </div>
+          )}
+
+          {stats.subject_averages.length > 0 && (
+            <div className="mt-5">
+              <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-secondary)" }}>
+                Subject-wise class average
+              </h3>
+              <div className="mt-2">
+                <SubjectAverageBars data={stats.subject_averages} />
+              </div>
+            </div>
+          )}
+
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <StudentMiniList title="Top performers" students={stats.top_students} tone="good" />
+            <StudentMiniList title="Needs attention" students={stats.attention_students} tone="warn" />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 interface SettingsState {
   name: string;
   schoolName: string;
@@ -84,7 +238,7 @@ function SettingsDrawer({
   defaultStrength: number;
 }) {
   return (
-    <details className="soft-card p-5" open>
+    <details className="soft-card p-5">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-base font-semibold" style={{ color: "var(--text-primary)" }}>
         <span className="icon-chip" style={{ width: "1.75rem", height: "1.75rem" }}>
           <SettingsIcon size={14} />
@@ -312,6 +466,7 @@ export function BatchPage() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const [detail, setDetail] = useState<BatchDetail | null>(null);
+  const [stats, setStats] = useState<ClassStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -346,6 +501,14 @@ export function BatchPage() {
         });
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load this upload"));
+
+    setStats(null);
+    api
+      .get<ClassStats>(`/batches/${batchId}/stats`)
+      .then(setStats)
+      .catch(() => {
+        /* overview is a bonus, not required for the page to work */
+      });
   }, [batchId]);
 
   const selectedIds = useMemo(() => [...selected].sort((a, b) => a - b), [selected]);
@@ -384,6 +547,10 @@ export function BatchPage() {
       const updated = await api.put<BatchDetail>(`/batches/${batchId}/settings`, payload);
       setDetail((prev) => (prev ? { ...prev, ...updated, students: prev.students } : prev));
       setReloadNonce((n) => n + 1);
+      api
+        .get<ClassStats>(`/batches/${batchId}/stats`)
+        .then(setStats)
+        .catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save settings");
     } finally {
@@ -427,6 +594,8 @@ export function BatchPage() {
   return (
     <div className="space-y-5">
       <BatchHeader detail={detail} onDelete={deleteBatch} />
+
+      <ClassOverview stats={stats} />
 
       <SettingsDrawer
         settings={settings}

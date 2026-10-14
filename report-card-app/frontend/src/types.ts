@@ -32,6 +32,47 @@ export interface BatchDetail extends BatchSummary {
   students: StudentBrief[];
 }
 
+export interface GradeCount {
+  grade: string;
+  count: number;
+}
+
+export interface SubjectAverage {
+  subject: string;
+  avg_marks: number;
+  max_marks: number;
+  avg_pct: number;
+}
+
+export interface RankedStudent {
+  id: number;
+  name: string;
+  rank: number | null;
+  total_marks: number | string;
+  grade: string;
+  reason?: "fail" | "low";
+}
+
+export interface ExamTrendPoint {
+  exam: string;
+  avg_pct: number | null;
+}
+
+export interface ClassStats {
+  latest_exam: string | null;
+  total_students: number;
+  class_strength: number;
+  graded_count: number;
+  pass_count: number;
+  fail_count: number;
+  grade_distribution: GradeCount[];
+  subject_averages: SubjectAverage[];
+  top_students: RankedStudent[];
+  attention_students: RankedStudent[];
+  avg_attendance_pct: number | null;
+  exam_trend: ExamTrendPoint[];
+}
+
 export interface SendResult {
   student_id: number;
   name: string;
