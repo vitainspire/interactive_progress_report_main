@@ -100,3 +100,14 @@ CREATE TABLE IF NOT EXISTS attendance_total (
     total_working_days REAL,
     total_present REAL
 );
+
+-- Caches generated Bhashini TTS audio by a hash of (language, voice, text),
+-- so repeated "Listen" taps for the same report page don't re-call a free
+-- government API every time, and a slow/down Bhashini doesn't block a
+-- parent who already generated this exact audio once before.
+CREATE TABLE IF NOT EXISTS tts_audio_cache (
+    text_hash TEXT PRIMARY KEY,
+    audio_format TEXT NOT NULL,
+    audio_bytes BYTEA NOT NULL,
+    created_at TEXT NOT NULL
+);

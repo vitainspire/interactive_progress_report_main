@@ -130,9 +130,35 @@ READ_ALOUD_SCRIPT = """
     });
   }
 
+  var audioEl = null; // currently-playing real Bhashini audio, if any
+
   function stopSpeech(){
     if('speechSynthesis' in window) speechSynthesis.cancel();
+    if(audioEl){ audioEl.pause(); audioEl.src = ''; audioEl = null; }
     if(speaking){ speaking.classList.remove('speaking'); speaking.textContent = speaking.dataset.label; speaking = null; }
+  }
+
+  // Falls back to the browser's own voice when real audio isn't available
+  // (Bhashini not configured, a failed call, or no token on this page).
+  function speakWithBrowser(page){
+    if(!('speechSynthesis' in window)){ stopSpeech(); alert('Reading aloud is not supported in this browser.'); return; }
+    getVoicesAsync().then(function(voices){
+      var teluguVoice = voices.filter(function(v){ return /^te/i.test(v.lang); })[0];
+      var text, lang;
+      if(teluguVoice){
+        text = page.getAttribute('data-speech-te') || '';
+        lang = teluguVoice.lang;
+      } else {
+        text = page.getAttribute('data-speech-roman') || '';
+        var enInVoice = voices.filter(function(v){ return /^en-in/i.test(v.lang); })[0];
+        lang = enInVoice ? enInVoice.lang : 'en-US';
+      }
+      if(!text){ stopSpeech(); return; }
+      var utter = new SpeechSynthesisUtterance(text);
+      utter.lang = lang;
+      utter.onend = utter.onerror = function(){ stopSpeech(); };
+      speechSynthesis.speak(utter);
+    });
   }
 
   var pages = Array.prototype.slice.call(document.querySelectorAll('.page'));
@@ -142,6 +168,7 @@ READ_ALOUD_SCRIPT = """
   var nextBtn = document.getElementById('nextBtn');
   var speakBtn = document.getElementById('speakBtn');
   var pageLabel = document.getElementById('pageLabel');
+  var publicToken = document.querySelector('main').dataset.token || '';
 
   function show(i){
     stopSpeech();
@@ -158,30 +185,37 @@ READ_ALOUD_SCRIPT = """
   nextBtn.addEventListener('click', function(){ if(current < pages.length - 1) show(current + 1); });
 
   speakBtn.addEventListener('click', function(){
-    if(!('speechSynthesis' in window)){ alert('Reading aloud is not supported in this browser.'); return; }
     if(speaking){ stopSpeech(); return; }
     var page = pages[current];
-    getVoicesAsync().then(function(voices){
-      var teluguVoice = voices.filter(function(v){ return /^te/i.test(v.lang); })[0];
-      var text, lang;
-      if(teluguVoice){
-        text = page.getAttribute('data-speech-te') || '';
-        lang = teluguVoice.lang;
-      } else {
-        text = page.getAttribute('data-speech-roman') || '';
-        var enInVoice = voices.filter(function(v){ return /^en-in/i.test(v.lang); })[0];
-        lang = enInVoice ? enInVoice.lang : 'en-US';
-      }
-      if(!text) return;
-      var utter = new SpeechSynthesisUtterance(text);
-      utter.lang = lang;
-      utter.onend = utter.onerror = function(){ stopSpeech(); };
-      speakBtn.dataset.label = speakBtn.dataset.label || speakBtn.textContent;
-      speakBtn.textContent = '\\u23f9 Stop';
-      speakBtn.classList.add('speaking');
-      speaking = speakBtn;
-      speechSynthesis.speak(utter);
-    });
+    var pageId = page.getAttribute('data-page-id');
+
+    speakBtn.dataset.label = speakBtn.dataset.label || speakBtn.textContent;
+    speakBtn.textContent = '\\u23f9 Stop';
+    speakBtn.classList.add('speaking');
+    speaking = speakBtn;
+
+    if(!pageId || !publicToken){
+      speakWithBrowser(page);
+      return;
+    }
+
+    // Try real Telugu audio (Bhashini) first; any failure — not
+    // configured, API error, network issue — falls back to the browser's
+    // own voice so "Listen" always does something either way.
+    fetch('/api/public/report/' + publicToken + '/voice/' + encodeURIComponent(pageId))
+      .then(function(resp){
+        if(!resp.ok) throw new Error('voice endpoint returned ' + resp.status);
+        return resp.blob();
+      })
+      .then(function(blob){
+        if(speaking !== speakBtn) return; // user already stopped/switched pages
+        audioEl = new Audio(URL.createObjectURL(blob));
+        audioEl.onended = audioEl.onerror = function(){ stopSpeech(); };
+        audioEl.play();
+      })
+      .catch(function(){
+        if(speaking === speakBtn) speakWithBrowser(page);
+      });
   });
 
   var touchStartX = null;
@@ -214,7 +248,7 @@ PAGE_SHELL = """<!doctype html>
   <div class="steps">{steps}</div>
   <div class="pagelabel" id="pageLabel"></div>
 </div>
-<main>{pages}</main>
+<main data-token="{token}">{pages}</main>
 <div class="navbar">
   <button type="button" class="nav" id="prevBtn">⬅ వెనుకకి</button>
   <button type="button" class="listen" id="speakBtn">\U0001f50a వినండి / Listen</button>
@@ -296,7 +330,7 @@ def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject
     h += f'<div class="commentary {facts.classification}"><span class="bubble">{icon}</span><span>{_esc(subject_commentary_telugu(facts))}</span></div>'
     h += '<div class="grow"></div></div>'
 
-    return f'<section class="page" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
+    return f'<section class="page" data-page-id="{_esc(subject_name)}" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
 
 
 def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str) -> str:
@@ -317,7 +351,7 @@ def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: 
 
     if facts is None:
         h += '<div class="grow"></div></div>'
-        return f'<section class="page" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
+        return f'<section class="page" data-page-id="conclusion" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
 
     is_pass = facts.grade not in ("D2", "-") or bool(re.search(r"PASS", facts.result_text or "", re.I))
     if facts.grade == "D2" or re.search(r"FAIL", facts.result_text or "", re.I):
@@ -361,14 +395,17 @@ def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: 
     h += '<div class="closing">❤️ పూర్తి వివరాల కోసం పైన వివరాలను వినండి, మీ పిల్లవాడి భవిష్యత్తు కోసం శుభాకాంక్షలు!</div>'
     h += '<div class="grow"></div></div>'
 
-    return f'<section class="page" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
+    return f'<section class="page" data-page-id="conclusion" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
 
 
-def render_parent_report_page(student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str, title: str = "Report Card") -> str:
+def render_parent_report_page(
+    student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str, title: str = "Report Card", token: str = ""
+) -> str:
     """`student` is the single student this link belongs to (parent links
     always resolve to exactly one student — see api/public.py). Builds
     (number of subjects + 1) pages: one per subject in discovery order,
-    then a final overall/conclusion page."""
+    then a final overall/conclusion page. `token` is embedded for
+    READ_ALOUD_SCRIPT to call the real-audio voice route."""
     exams_present = [e["key"] for e in exam_defs if e["key"] in student["exams"]]
     subjects: list[str] = []
     for key in exams_present:
@@ -395,6 +432,30 @@ def render_parent_report_page(student: dict, all_students: list[dict], exam_defs
         school=_esc(school_name or "School"),
         student_name=_esc(student["name"]),
         steps=steps,
+        token=_esc(token),
         pages="".join(pages_html),
         script=READ_ALOUD_SCRIPT,
     )
+
+
+def get_speech_text(student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str, page: str) -> str | None:
+    """Recomputes the Telugu narration for one page (`page` is a subject
+    name, or the literal "conclusion") without rendering any HTML — used by
+    the real-audio voice route so it always synthesizes exactly what that
+    page would read aloud itself, never client-supplied text. Returns None
+    if `page` isn't a real subject/conclusion for this student."""
+    if page == "conclusion":
+        exam_order = [e["key"] for e in exam_defs]
+        class_strength = settings.class_strength_override or len(all_students)
+        return build_voice_script_telugu(student, exam_order, class_strength, school_name) or None
+
+    is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
+
+    def max_marks(key: str) -> float:
+        return settings.fa_marks_per_subject if is_fa_by_key[key] else settings.sa_marks_per_subject
+
+    exam_order = [e["key"] for e in exam_defs]
+    facts = compute_subject_facts(student, exam_order, page, max_marks)
+    if not facts.history:
+        return None
+    return build_subject_voice_telugu(facts, student["name"]) or None

@@ -52,3 +52,11 @@ WHATSAPP_TEMPLATE_LANG = os.environ.get("WHATSAPP_TEMPLATE_LANG", "en_US")
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_SMS_FROM = os.environ.get("TWILIO_SMS_FROM", "")
+
+# Bhashini (MeitY/Digital India's free Indian-language AI API) — used to
+# generate real Telugu speech audio server-side for the parent report's
+# "Listen" button, instead of relying on the browser's own speechSynthesis
+# (which only speaks real Telugu if that specific device has a Telugu
+# voice installed — many don't). See app/integrations/bhashini.py.
+BHASHINI_USER_ID = os.environ.get("BHASHINI_USER_ID", "")
+BHASHINI_ULCA_API_KEY = os.environ.get("BHASHINI_ULCA_API_KEY", "")
