@@ -3,9 +3,13 @@ presentation from card_render.py's dense printable card, built for a
 parent (often in a rural area, sometimes unable to read comfortably) to
 follow on a phone. Structure is fixed by design: one page per subject,
 plus a final overall/conclusion page — (number of subjects + 1) pages
-total — moved through one at a time (tap Next/Back or swipe), with a
-"Listen" button on every page that narrates just that page's content, so
-the whole report can be understood by listening alone.
+total — moved through via native vertical scroll-snap, one swipe up/down
+per page, the same gesture as a reels/shorts feed rather than a labeled
+Next/Back button. A floating "Listen" button narrates just the current
+page's content, and each page's own script is self-contained (names the
+student, the subject, and how many subjects remain) and ends by telling
+the listener to swipe up — so the whole report can be understood by
+listening alone, without ever needing to look at or read the screen.
 
 Icon-led rather than a plain data table (circular mark-percentage rings,
 a celebratory conclusion banner) so it's something a parent actually wants
@@ -55,8 +59,8 @@ def _subject_icon(name: str) -> str:
 PARENT_CSS = """
 :root{color-scheme:light}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
-body{background:#f7f8fa;font:16px/1.55 'Noto Sans','Noto Sans Telugu',system-ui,sans-serif;color:#0f172a;display:flex;flex-direction:column;min-height:100vh}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:#f7f8fa;font:16px/1.55 'Noto Sans','Noto Sans Telugu',system-ui,sans-serif;color:#0f172a;display:flex;flex-direction:column;height:100vh}
 .topbar{position:sticky;top:0;z-index:3;background:#1e3a8a;color:#fff;padding:.7em 1em .6em}
 .topbar .school{font-weight:700;font-size:1em;text-align:center;opacity:.9}
 .topbar .student{text-align:center;font-size:1.2em;font-weight:800;margin-top:.1em}
@@ -64,15 +68,13 @@ body{background:#f7f8fa;font:16px/1.55 'Noto Sans','Noto Sans Telugu',system-ui,
 .step{width:1.6em;height:1.6em;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:.8em;transition:all .2s ease;filter:grayscale(.6);opacity:.65}
 .step.active{background:#e9a400;transform:scale(1.18);filter:none;opacity:1}
 .pagelabel{text-align:center;font-size:.8em;margin-top:.4em;opacity:.85;font-weight:600;letter-spacing:.3px}
-main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
-.page{display:none;flex:1;overflow-y:auto;animation:pop .28s cubic-bezier(.2,.8,.3,1)}
-.page.active{display:flex;flex-direction:column}
-@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
+.page{min-height:100%;display:flex;flex-direction:column;scroll-snap-align:start;scroll-snap-stop:always}
 .hero{flex:none;padding:1.6em 1.2em 1.3em;text-align:center;background:#fff;border-bottom:1px solid #e7eaf0}
 .hero-icon{width:3.2em;height:3.2em;margin:0 auto .6em;border-radius:12px;background:#1e3a8a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.7em}
 .hero h1{margin:0;font-size:1.5em;font-weight:800;letter-spacing:.2px;color:#0f172a}
 .hero .sub{font-size:.85em;font-weight:600;color:#64748b;margin-top:.3em}
-.body-pad{padding:1.1em 1.1em 1.6em;flex:1;display:flex;flex-direction:column}
+.body-pad{padding:1.1em 1.1em 8em;flex:1;display:flex;flex-direction:column}
 .exam-rows{display:flex;flex-direction:column;gap:.7em;margin-top:1.1em}
 .exam-row{background:#fff;border:1px solid #e7eaf0;border-radius:10px;padding:.7em .85em;display:flex;align-items:center;gap:.8em}
 .ring{--pct:0%;width:3em;height:3em;border-radius:50%;flex:none;background:conic-gradient(var(--ring-color,#1e3a8a) var(--pct),#e7eaf0 0);display:flex;align-items:center;justify-content:center}
@@ -105,14 +107,13 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative
 .recap-line b{color:#1e3a8a}
 .closing{margin-top:1.1em;background:#eef2fb;border:1px solid #dbe3f5;border-radius:10px;padding:1em 1.1em;font-size:1em;line-height:1.55}
 .grow{flex:1 0 auto}
-.navbar{position:sticky;bottom:0;z-index:3;background:#fff;border-top:1px solid #e7eaf0;display:flex;align-items:center;gap:.5em;padding:.6em .7em}
-.navbar button{border:0;font:inherit;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.4em;border-radius:8px;transition:transform .12s ease}
-.navbar button:active{transform:scale(.97)}
-.navbar button.nav{flex:1;padding:.85em .3em;background:#f1f4fa;color:#1e3a8a;font-size:.95em}
-.navbar button.nav:disabled{opacity:.3}
-.navbar button.listen{flex:1.5;padding:.85em .3em;background:#1e3a8a;color:#fff;font-size:1em;box-shadow:3px 3px 0 0 #e9a400}
-.navbar button.listen:active{box-shadow:1px 1px 0 0 #e9a400}
-.navbar button.listen.speaking{background:#dc2626;box-shadow:3px 3px 0 0 #fca5a5}
+.bottom-fade{position:fixed;left:0;right:0;bottom:0;height:8.5em;background:linear-gradient(to bottom,rgba(247,248,250,0) 0%,#f7f8fa 65%);pointer-events:none;z-index:4}
+.listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:0;font:inherit;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5em;border-radius:99px;padding:.9em 1.6em;background:#1e3a8a;color:#fff;font-size:1em;box-shadow:3px 3px 0 0 #e9a400;transition:transform .12s ease}
+.listen-fab:active{transform:translateX(-50%) scale(.97)}
+.listen-fab.speaking{background:#dc2626;box-shadow:3px 3px 0 0 #fca5a5}
+.swipe-hint{position:fixed;left:50%;bottom:6.3em;transform:translateX(-50%);z-index:5;font-size:.78em;font-weight:600;color:#475569;background:rgba(255,255,255,.92);padding:.35em .9em;border-radius:99px;box-shadow:0 1px 6px rgba(0,0,0,.1);display:flex;align-items:center;gap:.35em;animation:hintbob 1.6s ease-in-out infinite}
+.swipe-hint.hidden{display:none}
+@keyframes hintbob{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-4px)}}
 """
 
 READ_ALOUD_SCRIPT = """
@@ -161,28 +162,36 @@ READ_ALOUD_SCRIPT = """
     });
   }
 
+  var main = document.querySelector('main');
   var pages = Array.prototype.slice.call(document.querySelectorAll('.page'));
   var steps = Array.prototype.slice.call(document.querySelectorAll('.step'));
   var current = 0;
-  var prevBtn = document.getElementById('prevBtn');
-  var nextBtn = document.getElementById('nextBtn');
   var speakBtn = document.getElementById('speakBtn');
   var pageLabel = document.getElementById('pageLabel');
-  var publicToken = document.querySelector('main').dataset.token || '';
+  var swipeHint = document.getElementById('swipeHint');
+  var publicToken = main.dataset.token || '';
 
-  function show(i){
+  // Navigation is native vertical scroll-snap (swipe up/down, like a
+  // reels/shorts feed) rather than click-driven — this just tracks which
+  // page the scroll has landed on, for the dots/label/stopping audio.
+  function setCurrent(i){
+    if(i === current) return;
     stopSpeech();
-    pages.forEach(function(p, idx){ p.classList.toggle('active', idx === i); });
-    steps.forEach(function(d, idx){ d.classList.toggle('active', idx === i); });
     current = i;
-    prevBtn.disabled = i === 0;
-    nextBtn.style.visibility = i === pages.length - 1 ? 'hidden' : 'visible';
+    steps.forEach(function(d, idx){ d.classList.toggle('active', idx === i); });
     pageLabel.textContent = (i + 1) + ' / ' + pages.length;
-    window.scrollTo(0, 0);
+    swipeHint.classList.toggle('hidden', i === pages.length - 1);
   }
 
-  prevBtn.addEventListener('click', function(){ if(current > 0) show(current - 1); });
-  nextBtn.addEventListener('click', function(){ if(current < pages.length - 1) show(current + 1); });
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if(entry.isIntersecting && entry.intersectionRatio >= 0.6){
+        var idx = pages.indexOf(entry.target);
+        if(idx >= 0) setCurrent(idx);
+      }
+    });
+  }, { root: main, threshold: [0.6] });
+  pages.forEach(function(p){ observer.observe(p); });
 
   speakBtn.addEventListener('click', function(){
     if(speaking){ stopSpeech(); return; }
@@ -218,19 +227,9 @@ READ_ALOUD_SCRIPT = """
       });
   });
 
-  var touchStartX = null;
-  document.querySelector('main').addEventListener('touchstart', function(e){ touchStartX = e.changedTouches[0].clientX; });
-  document.querySelector('main').addEventListener('touchend', function(e){
-    if(touchStartX === null) return;
-    var dx = e.changedTouches[0].clientX - touchStartX;
-    touchStartX = null;
-    if(Math.abs(dx) < 60) return;
-    if(dx < 0 && current < pages.length - 1) show(current + 1);
-    if(dx > 0 && current > 0) show(current - 1);
-  });
-
+  pageLabel.textContent = '1 / ' + pages.length;
+  swipeHint.classList.toggle('hidden', pages.length <= 1);
   window.addEventListener('beforeunload', function(){ try { speechSynthesis.cancel(); } catch(e){} });
-  show(0);
 })();
 </script>
 """
@@ -249,11 +248,9 @@ PAGE_SHELL = """<!doctype html>
   <div class="pagelabel" id="pageLabel"></div>
 </div>
 <main data-token="{token}">{pages}</main>
-<div class="navbar">
-  <button type="button" class="nav" id="prevBtn">⬅ వెనుకకి</button>
-  <button type="button" class="listen" id="speakBtn">\U0001f50a వినండి / Listen</button>
-  <button type="button" class="nav" id="nextBtn">తరువాత ➡</button>
-</div>
+<div class="bottom-fade"></div>
+<div class="swipe-hint" id="swipeHint">⬆ తదుపరి కోసం పైకి స్వైప్ చేయండి</div>
+<button type="button" class="listen-fab" id="speakBtn">\U0001f50a వినండి / Listen</button>
 {script}
 </body></html>
 """
@@ -288,7 +285,17 @@ def _render_marks_cell(v) -> str:
     return fmt_num(v) if isinstance(v, (int, float)) else str(v)
 
 
-def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject_name: str) -> str:
+def _discover_subjects(student: dict, exam_defs: list[dict]) -> list[str]:
+    exams_present = [e["key"] for e in exam_defs if e["key"] in student["exams"]]
+    subjects: list[str] = []
+    for key in exams_present:
+        for x in student["exams"][key]["subjects"]:
+            if x["name"] not in subjects:
+                subjects.append(x["name"])
+    return subjects
+
+
+def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject_name: str, index: int, total: int) -> str:
     is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
 
     def max_marks(key: str) -> float:
@@ -296,8 +303,9 @@ def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject
 
     exam_order = [e["key"] for e in exam_defs]
     facts = compute_subject_facts(student, exam_order, subject_name, max_marks)
-    speech_te = build_subject_voice_telugu(facts, student["name"])
-    speech_roman = build_subject_voice_romanized(facts, student["name"])
+    is_last = index == total - 1
+    speech_te = build_subject_voice_telugu(facts, student["name"], index, total, is_last)
+    speech_roman = build_subject_voice_romanized(facts, student["name"], index, total, is_last)
     icon = _subject_icon(subject_name)
 
     h = (
@@ -406,20 +414,10 @@ def render_parent_report_page(
     (number of subjects + 1) pages: one per subject in discovery order,
     then a final overall/conclusion page. `token` is embedded for
     READ_ALOUD_SCRIPT to call the real-audio voice route."""
-    exams_present = [e["key"] for e in exam_defs if e["key"] in student["exams"]]
-    subjects: list[str] = []
-    for key in exams_present:
-        for x in student["exams"][key]["subjects"]:
-            if x["name"] not in subjects:
-                subjects.append(x["name"])
+    subjects = _discover_subjects(student, exam_defs)
 
-    pages_html = [_render_subject_page(student, exam_defs, settings, name) for name in subjects]
+    pages_html = [_render_subject_page(student, exam_defs, settings, name, i, len(subjects)) for i, name in enumerate(subjects)]
     pages_html.append(_render_conclusion_page(student, all_students, exam_defs, settings, school_name))
-
-    # Mark the very first page active up front so there is no flash of
-    # unstyled/empty content before READ_ALOUD_SCRIPT's show(0) runs.
-    if pages_html:
-        pages_html[0] = pages_html[0].replace('class="page"', 'class="page active"', 1)
 
     step_icons = [_subject_icon(name) for name in subjects] + ["\U0001f3c1"]
     steps = "".join(
@@ -449,6 +447,12 @@ def get_speech_text(student: dict, all_students: list[dict], exam_defs: list[dic
         class_strength = settings.class_strength_override or len(all_students)
         return build_voice_script_telugu(student, exam_order, class_strength, school_name) or None
 
+    subjects = _discover_subjects(student, exam_defs)
+    if page not in subjects:
+        return None
+    index = subjects.index(page)
+    is_last = index == len(subjects) - 1
+
     is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
 
     def max_marks(key: str) -> float:
@@ -458,4 +462,4 @@ def get_speech_text(student: dict, all_students: list[dict], exam_defs: list[dic
     facts = compute_subject_facts(student, exam_order, page, max_marks)
     if not facts.history:
         return None
-    return build_subject_voice_telugu(facts, student["name"]) or None
+    return build_subject_voice_telugu(facts, student["name"], index, len(subjects), is_last) or None

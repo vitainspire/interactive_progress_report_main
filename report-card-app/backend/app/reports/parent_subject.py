@@ -104,27 +104,73 @@ def subject_commentary_romanized(facts: SubjectFacts) -> str:
     return line
 
 
-def build_subject_voice_telugu(facts: SubjectFacts, student_name: str) -> str:
+_ORDINAL_TE = ["మొదటి", "రెండవ", "మూడవ", "నాలుగవ", "ఐదవ", "ఆరవ", "ఏడవ", "ఎనిమిదవ", "తొమ్మిదవ", "పదవ"]
+_ORDINAL_ROMAN = ["modati", "rendava", "moodava", "naalugava", "aidava", "aarava", "edava", "enimidava", "thommidava", "padava"]
+
+_GRADE_QUALITY_TE = {
+    "A1": "అద్భుతం", "A2": "అద్భుతం",
+    "B1": "చాలా బాగుంది", "B2": "చాలా బాగుంది",
+    "C1": "బాగుంది", "C2": "మోస్తరుగా ఉంది",
+    "D1": "తక్కువగా ఉంది, మెరుగుపరచుకోవాలి",
+    "D2": "ఫెయిల్ అయ్యారు",
+}
+_GRADE_QUALITY_ROMAN = {
+    "A1": "adbhutham", "A2": "adbhutham",
+    "B1": "chala baagundi", "B2": "chala baagundi",
+    "C1": "baagundi", "C2": "mostharuga undi",
+    "D1": "thakkuvaga undi, merugupadhukovaali",
+    "D2": "fail ayyaru",
+}
+
+
+def _ordinal(i: int, words: list[str]) -> str:
+    return words[i] if 0 <= i < len(words) else str(i + 1)
+
+
+def build_subject_voice_telugu(facts: SubjectFacts, student_name: str, index: int = 0, total: int = 1, is_last: bool = True) -> str:
+    """Self-contained on purpose: a parent may listen to just this one page
+    without having heard any other, so it restates who/which subject/how
+    many subjects remain every time, rather than assuming prior context."""
     if not facts.history:
         return ""
-    lines = [f"ఇప్పుడు {facts.name} సబ్జెక్టు గురించి."]
-    for h in facts.history:
+    lines = [
+        f"ఇది {student_name} యొక్క {facts.name} సబ్జెక్టు ఫలితం, మొత్తం {total} సబ్జెక్టులలో {_ordinal(index, _ORDINAL_TE)}ది."
+    ]
+    for i, h in enumerate(facts.history):
+        exam_label = f"{_ordinal(i, _ORDINAL_TE)} పరీక్ష {h.exam_key}"
         if isinstance(h.marks, (int, float)):
-            lines.append(f"{h.exam_key} పరీక్షలో, {fmt_num(h.max_marks)} మార్కులకు {fmt_num(h.marks)} మార్కులు సాధించారు, గ్రేడ్ {h.grade}.")
+            quality = _GRADE_QUALITY_TE.get(h.grade, "")
+            lines.append(
+                f"{exam_label} లో, {fmt_num(h.max_marks)} మార్కులకు {fmt_num(h.marks)} మార్కులు సాధించారు, గ్రేడ్ {h.grade} - అంటే {quality}."
+            )
         else:
-            lines.append(f"{h.exam_key} పరీక్షలో గ్రేడ్ {h.grade}.")
+            lines.append(f"{exam_label} లో గ్రేడ్ {h.grade}.")
     lines.append(subject_commentary_telugu(facts))
+    if is_last:
+        lines.append("తరువాత పేజీలో మొత్తం ఫలితం ఉంది, చూడటానికి పైకి స్వైప్ చేయండి.")
+    else:
+        lines.append("తదుపరి సబ్జెక్టు కోసం పైకి స్వైప్ చేయండి.")
     return " ".join(lines)
 
 
-def build_subject_voice_romanized(facts: SubjectFacts, student_name: str) -> str:
+def build_subject_voice_romanized(facts: SubjectFacts, student_name: str, index: int = 0, total: int = 1, is_last: bool = True) -> str:
     if not facts.history:
         return ""
-    lines = [f"Ippudu {facts.name} subject gurinchi."]
-    for h in facts.history:
+    lines = [
+        f"Idhi {student_name} yokka {facts.name} subject phalitham, mottham {total} subjectullo {_ordinal(index, _ORDINAL_ROMAN)}di."
+    ]
+    for i, h in enumerate(facts.history):
+        exam_label = f"{_ordinal(i, _ORDINAL_ROMAN)} pariksha {h.exam_key}"
         if isinstance(h.marks, (int, float)):
-            lines.append(f"{h.exam_key} parikshalo, {fmt_num(h.max_marks)} marks ki {fmt_num(h.marks)} marks sadhinchaaru, grade {h.grade}.")
+            quality = _GRADE_QUALITY_ROMAN.get(h.grade, "")
+            lines.append(
+                f"{exam_label} lo, {fmt_num(h.max_marks)} marks ki {fmt_num(h.marks)} marks sadhinchaaru, grade {h.grade} - ante {quality}."
+            )
         else:
-            lines.append(f"{h.exam_key} parikshalo grade {h.grade}.")
+            lines.append(f"{exam_label} lo grade {h.grade}.")
     lines.append(subject_commentary_romanized(facts))
+    if is_last:
+        lines.append("Tharuvatha page lo mottham phalitham undi, chudataniki paiki swipe cheyandi.")
+    else:
+        lines.append("Thadupari subject kosam paiki swipe cheyandi.")
     return " ".join(lines)
