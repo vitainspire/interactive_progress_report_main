@@ -119,17 +119,22 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
 .score-num .big{font-size:2em;font-weight:700;color:#fff;line-height:1}
 .score-num .big sup{font-size:.42em;font-weight:600;margin-left:.05em;opacity:.85}
 .score-num .exam{font-size:.65em;color:rgba(255,255,255,.6);margin-top:.25em;font-weight:600;letter-spacing:.3px}
-.hero-grade{margin-top:.7em}
+.hero-grade{margin-top:.7em;display:flex;align-items:center;justify-content:center;gap:.6em;flex-wrap:wrap}
 .hero-grade .gr{font-size:1.05em;padding:.3em 1em}
+.hero-marks{font-size:.85em;font-weight:600;color:rgba(255,255,255,.75)}
 
-/* ---- Exam timeline: compact chips for every exam on record (handles 1
-   or many exams the same way), sitting on the light stage below. ---- */
+/* ---- Exam history: collapsed by default — the hero above already fully
+   covers the current/latest exam, so the page opens showing just that,
+   not a wall of every exam at once. "View previous exams" reveals the
+   rest on demand, as a single row of chips (never wraps — see .timeline,
+   same one-row-always reasoning as before, now just hidden until asked
+   for). ---- */
 .body-pad{padding:1.1em 1.2em 8em;flex:1;display:flex;flex-direction:column;background:var(--ivory)}
-/* Single row, never wraps — however many exams exist (2, 3, or more), the
-   timeline always costs exactly one row of vertical height. Extra chips
-   scroll horizontally instead of pushing the page past one screen, which
-   on scroll-snap navigation would make the commentary below unreachable. */
-.timeline{display:flex;flex-wrap:nowrap;gap:.6em;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.history-toggle{display:flex;align-items:center;justify-content:center;gap:.4em;width:100%;border:1px solid var(--line);background:#fff;color:var(--navy);font:inherit;font-weight:600;font-size:.85em;border-radius:10px;padding:.7em 1em;cursor:pointer}
+.history-toggle .chev{transition:transform .2s ease;font-size:.85em}
+.history-toggle.open .chev{transform:rotate(180deg)}
+.timeline{display:flex;flex-wrap:nowrap;gap:.6em;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-top:.8em}
+.timeline.collapsed{display:none}
 .timeline::-webkit-scrollbar{display:none}
 .chip{flex:1 1 auto;min-width:6.4em;background:#fff;border:1px solid var(--line);border-radius:12px;padding:.85em .9em;box-shadow:0 1px 2px rgba(15,23,42,.03)}
 .chip .exam-name{font-size:.72em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
@@ -235,9 +240,10 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
   .score-num .exam{font-size:.55em;margin-top:.1em}
   .hero-grade{margin-top:.45em}
   .body-pad{padding:.7em 1.2em 6.6em}
-  .timeline{gap:.4em}
-  .chip{padding:.55em .65em}
-  .commentary{margin-top:.7em}
+  .history-toggle{padding:.55em 1em;font-size:.8em}
+  .timeline{gap:.4em;margin-top:.5em}
+  .chip{padding:.45em .6em}
+  .commentary{margin-top:.6em}
   .finale-total{font-size:3em}
   .finale-stat{margin-top:1.2em}
   .finale-msg{margin-top:1.1em}
@@ -448,6 +454,21 @@ READ_ALOUD_SCRIPT = """
       });
   });
 
+  // Delegated (not per-button) since every subject page has its own
+  // independent "View previous exams" toggle — one listener handles them
+  // all, each only ever affecting its own adjacent .timeline.
+  main.addEventListener('click', function(e){
+    var btn = e.target.closest('.history-toggle');
+    if(!btn) return;
+    var timeline = btn.nextElementSibling;
+    var open = btn.classList.toggle('open');
+    if(timeline) timeline.classList.toggle('collapsed', !open);
+    var label = btn.querySelector('.label');
+    if(label) label.textContent = open
+      ? 'దాచండి / Hide'
+      : 'మునుపటి పరీక్షలు చూడండి / View previous exams';
+  });
+
   var shareBtn = document.getElementById('shareBtn');
   if(shareBtn){
     shareBtn.addEventListener('click', function(){
@@ -613,20 +634,35 @@ def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject
         if isinstance(latest.marks, (int, float)) and latest.max_marks:
             pct = latest.marks * 100 / latest.max_marks
         h += _render_score_ring(pct, latest.exam_key)
-        if latest.grade != "-":
-            h += f'<div class="hero-grade">{_render_grade_badge(latest.grade)}</div>'
-    h += "</div>"
-
-    h += '<div class="body-pad"><div class="timeline">'
-    for e in facts.history:
         h += (
-            '<div class="chip">'
-            f'<div class="exam-name">{_esc(e.exam_key)}</div>'
-            f'<div class="exam-marks">{_render_marks_cell(e.marks)}/{_render_marks_cell(e.max_marks)}</div>'
-            f"{_render_grade_badge(e.grade)}"
+            '<div class="hero-grade">'
+            f"{_render_grade_badge(latest.grade)}"
+            f'<span class="hero-marks">{_render_marks_cell(latest.marks)} / {_render_marks_cell(latest.max_marks)} marks</span>'
             "</div>"
         )
     h += "</div>"
+
+    h += '<div class="body-pad">'
+    if len(facts.history) > 1:
+        # The hero above already fully covers the latest exam — this only
+        # ever needs to render when there's actually more history to show
+        # behind the toggle, not for a subject with just one exam on record.
+        h += (
+            '<button type="button" class="history-toggle">'
+            '<span class="label">మునుపటి పరీక్షలు చూడండి / View previous exams</span>'
+            '<span class="chev">▾</span>'
+            "</button>"
+        )
+        h += '<div class="timeline collapsed">'
+        for e in facts.history:
+            h += (
+                '<div class="chip">'
+                f'<div class="exam-name">{_esc(e.exam_key)}</div>'
+                f'<div class="exam-marks">{_render_marks_cell(e.marks)}/{_render_marks_cell(e.max_marks)}</div>'
+                f"{_render_grade_badge(e.grade)}"
+                "</div>"
+            )
+        h += "</div>"
     h += (
         f'<div class="commentary {facts.classification}">'
         '<div class="ctitle">How they did</div>'
