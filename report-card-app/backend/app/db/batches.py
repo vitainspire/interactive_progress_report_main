@@ -150,6 +150,120 @@ def create_batch(
     return batch_id
 
 
+def set_batch_sheet_source(conn: psycopg.Connection, batch_id: int, sheet_url: str, content_hash: str) -> None:
+    """Records which Google Sheet a batch came from and a hash of its
+    content at upload time — called once, right after a successful
+    Google-Sheet-sourced upload, so the background poller (sheet_sync.py)
+    has something to compare against on its very first cycle instead of
+    treating that first check as a "change"."""
+    conn.execute(
+        "UPDATE batch SET sheet_url = %s, sheet_content_hash = %s, last_synced_at = %s WHERE id = %s",
+        (sheet_url, content_hash, datetime.now(timezone.utc).isoformat(), batch_id),
+    )
+
+
+def list_batches_with_sheet_url(conn: psycopg.Connection) -> list[dict]:
+    """Every batch (across every account) that was created from a Google
+    Sheet link — what the background poller iterates each cycle."""
+    return conn.execute("SELECT id, sheet_url, sheet_content_hash FROM batch WHERE sheet_url IS NOT NULL").fetchall()
+
+
+def update_batch_sheet_hash(conn: psycopg.Connection, batch_id: int, content_hash: str) -> None:
+    conn.execute(
+        "UPDATE batch SET sheet_content_hash = %s, last_synced_at = %s WHERE id = %s",
+        (content_hash, datetime.now(timezone.utc).isoformat(), batch_id),
+    )
+
+
+def sync_batch_from_parsed(conn: psycopg.Connection, batch_id: int, parsed: dict) -> dict:
+    """Updates an existing batch's students/marks/attendance from a freshly
+    re-fetched sheet — used by the auto-sync poller, as opposed to
+    create_batch's "always a brand-new batch" path.
+
+    Students are matched to their existing row by (section, roll_no),
+    since that's the one identifier a school's sheet is likely to keep
+    stable across edits — deliberately NOT by name, which a teacher might
+    correct (a typo fix shouldn't look like a different student). Matching
+    this way means a student's database id — and therefore any parent
+    share link already sent for them — survives a sync untouched; only
+    their marks/attendance rows get replaced.
+
+    A student present in the new sheet with no match becomes a new row.
+    A student in the OLD data with no match in the new sheet is left
+    completely alone rather than deleted — a row temporarily missing
+    because of a mid-edit sheet, or a genuine removal, should never
+    silently break a link a parent may already have opened."""
+    exam_order = [e["key"] for e in parsed["exams"]]
+    conn.execute("UPDATE batch SET exam_order = %s WHERE id = %s", (json.dumps(parsed["exams"]), batch_id))
+
+    existing = conn.execute("SELECT id, section, roll_no, order_index FROM student WHERE batch_id = %s", (batch_id,)).fetchall()
+    next_order = max((r["order_index"] for r in existing), default=-1) + 1
+
+    def match_key(section: str, roll: str) -> tuple[str, str] | None:
+        section = (section or "").strip().upper()
+        roll = (roll or "").strip()
+        return (section, roll) if roll else None
+
+    existing_by_key = {k: r["id"] for r in existing if (k := match_key(r["section"], r["roll_no"]))}
+
+    students = parsed["students"]
+    matched_ids: list[int | None] = [existing_by_key.get(match_key(s["section"], s["roll"])) for s in students]
+    to_insert = [s for s, sid in zip(students, matched_ids) if sid is None]
+
+    for s, sid in zip(students, matched_ids):
+        if sid is not None:
+            conn.execute(
+                "UPDATE student SET name = %s, father_name = %s, phone = %s WHERE id = %s",
+                (s["name"], s["father"], s.get("phone", ""), sid),
+            )
+
+    if to_insert:
+        insert_rows = [(batch_id, s["name"], s["section"], s["roll"], s["father"], s.get("phone", ""), next_order + i) for i, s in enumerate(to_insert)]
+        new_ids = iter(
+            _batch_insert_returning_ids(conn, "student", ["batch_id", "name", "section", "roll_no", "father_name", "phone", "order_index"], insert_rows)
+        )
+        matched_ids = [sid if sid is not None else next(new_ids) for sid in matched_ids]
+
+    # Every current student's exam/attendance rows are fully replaced
+    # (delete then reinsert) rather than diffed cell-by-cell — simplest way
+    # to guarantee the result matches the sheet exactly, and these rows
+    # have no external references of their own (only the student row itself
+    # is referenced by student_share, which is never touched here).
+    conn.execute("DELETE FROM exam_subject_result WHERE student_id = ANY(%s)", (matched_ids,))
+    conn.execute("DELETE FROM exam_summary WHERE student_id = ANY(%s)", (matched_ids,))
+    conn.execute("DELETE FROM attendance_month WHERE student_id = ANY(%s)", (matched_ids,))
+    conn.execute("DELETE FROM attendance_total WHERE student_id = ANY(%s)", (matched_ids,))
+
+    subject_rows, summary_rows, month_rows, total_rows = [], [], [], []
+    for student_id, s in zip(matched_ids, students):
+        for exam_key in exam_order:
+            e = s["exams"].get(exam_key)
+            if not e:
+                continue
+            for sub_index, x in enumerate(e["subjects"]):
+                marks = x["marks"] if isinstance(x["marks"], (int, float)) else None
+                marks_text = str(x["marks"]) if not isinstance(x["marks"], (int, float)) else ""
+                subject_rows.append((student_id, exam_key, x["name"], marks, marks_text, x["grade"], sub_index))
+            total_marks = e["total_marks"] if isinstance(e["total_marks"], (int, float)) else None
+            total_marks_text = str(e["total_marks"]) if not isinstance(e["total_marks"], (int, float)) else ""
+            rank = int(e["rank"]) if isinstance(e["rank"], (int, float)) else None
+            summary_rows.append((student_id, exam_key, total_marks, total_marks_text, e["total_grade"], e["result"], rank))
+
+        att = s.get("attendance")
+        if att:
+            for order_index2, m in enumerate(att["months"]):
+                month_rows.append((student_id, m["month"], m["working_days"], m["attended"], order_index2))
+            total_rows.append((student_id, att["total_working"], att["total_present"]))
+
+    _batch_insert(conn, "exam_subject_result", ["student_id", "exam_code", "subject", "marks", "marks_text", "grade", "order_index"], subject_rows)
+    _batch_insert(conn, "exam_summary", ["student_id", "exam_code", "total_marks", "total_marks_text", "total_grade", "result", "rank"], summary_rows)
+    _batch_insert(conn, "attendance_month", ["student_id", "month", "working_days", "days_present", "order_index"], month_rows)
+    _batch_insert(conn, "attendance_total", ["student_id", "total_working_days", "total_present"], total_rows)
+
+    conn.execute("UPDATE batch SET last_synced_at = %s WHERE id = %s", (datetime.now(timezone.utc).isoformat(), batch_id))
+    return {"matched": len(students) - len(to_insert), "added": len(to_insert), "total": len(students)}
+
+
 def list_batches(conn: psycopg.Connection, user_id: int) -> list[dict]:
     return conn.execute(
         """SELECT b.*, (SELECT COUNT(*) FROM student WHERE batch_id = b.id) AS student_count

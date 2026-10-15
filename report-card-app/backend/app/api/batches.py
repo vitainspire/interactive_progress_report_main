@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 from datetime import datetime, timezone
@@ -89,6 +90,13 @@ async def upload_batch(
         if school_name and school_name.strip():
             set_default_school_name(conn, current_user["id"], school_name.strip())
         batch_id = repo.create_batch(conn, current_user["id"], batch_name, effective_school_name, source_label, parsed)
+        if has_link:
+            # Recorded once, here, so the background poller (sheet_sync.py)
+            # picks this batch up on its very next cycle — and so its first
+            # comparison is against the content as of right now, not a
+            # blank slate that would look like a "change" immediately.
+            assert sheet_url is not None
+            repo.set_batch_sheet_source(conn, batch_id, sheet_url.strip(), hashlib.sha256(raw).hexdigest())
         row = repo.get_batch(conn, current_user["id"], batch_id)
         return _batch_out(row, student_count=len(parsed["students"]))
 

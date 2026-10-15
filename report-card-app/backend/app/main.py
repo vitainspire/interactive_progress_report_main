@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api import auth, batches, integrations, public
 from app.core.config import CORS_ORIGINS
 from app.db.database import close_pool, init_db, session
+from app.integrations import sheet_sync
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -15,7 +17,12 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # One background task for the whole process — see sheet_sync.py. Never
+    # awaited by a request; a teacher uploading or a parent viewing a
+    # report never waits on this.
+    poll_task = asyncio.create_task(sheet_sync.poll_loop())
     yield
+    poll_task.cancel()
     close_pool()
 
 
