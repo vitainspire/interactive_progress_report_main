@@ -125,8 +125,13 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
 /* ---- Exam timeline: compact chips for every exam on record (handles 1
    or many exams the same way), sitting on the light stage below. ---- */
 .body-pad{padding:1.1em 1.2em 8em;flex:1;display:flex;flex-direction:column;background:var(--ivory)}
-.timeline{display:flex;flex-wrap:wrap;gap:.6em}
-.chip{flex:1;min-width:7.2em;background:#fff;border:1px solid var(--line);border-radius:12px;padding:.85em .9em;box-shadow:0 1px 2px rgba(15,23,42,.03)}
+/* Single row, never wraps — however many exams exist (2, 3, or more), the
+   timeline always costs exactly one row of vertical height. Extra chips
+   scroll horizontally instead of pushing the page past one screen, which
+   on scroll-snap navigation would make the commentary below unreachable. */
+.timeline{display:flex;flex-wrap:nowrap;gap:.6em;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.timeline::-webkit-scrollbar{display:none}
+.chip{flex:1 1 auto;min-width:6.4em;background:#fff;border:1px solid var(--line);border-radius:12px;padding:.85em .9em;box-shadow:0 1px 2px rgba(15,23,42,.03)}
 .chip .exam-name{font-size:.72em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
 .chip .exam-marks{font-size:1.15em;font-weight:700;color:var(--ink);margin-top:.3em}
 .chip .gr{margin-top:.5em}
