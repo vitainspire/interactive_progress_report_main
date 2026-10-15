@@ -104,9 +104,13 @@ CREATE TABLE IF NOT EXISTS attendance_total (
 -- Caches generated Bhashini TTS audio by a hash of (language, voice, text),
 -- so repeated "Listen" taps for the same report page don't re-call a free
 -- government API every time, and a slow/down Bhashini doesn't block a
--- parent who already generated this exact audio once before.
+-- parent who already generated this exact audio once before. content_key
+-- identifies "this student's this page" independent of the exam text, so
+-- the stale row left behind when a new exam changes that page's wording
+-- can be found and deleted instead of accumulating forever.
 CREATE TABLE IF NOT EXISTS tts_audio_cache (
     text_hash TEXT PRIMARY KEY,
+    content_key TEXT,
     audio_format TEXT NOT NULL,
     audio_bytes BYTEA NOT NULL,
     created_at TEXT NOT NULL

@@ -60,14 +60,16 @@ def get_public_report_voice(token: str, page: str):
         text = get_speech_text(student, all_students, json.loads(batch_row["exam_order"]), settings, batch_row["school_name"], page)
         if not text:
             raise HTTPException(404, "No narration available for this page.")
+        content_key = f"{student['id']}:{page}"
         try:
-            audio = tts_cache.get_or_synthesize(conn, text)
+            audio_format, audio = tts_cache.get_or_synthesize(conn, content_key, text)
         except (bhashini.BhashiniNotConfigured, bhashini.BhashiniSendError) as exc:
             raise HTTPException(503, f"Real voice narration isn't available right now: {exc}")
         # The audio itself is cached server-side forever (keyed by the exact
-        # text), but fetching a multi-MB blob from Postgres still costs a
-        # real round trip — this lets the browser skip that entirely for a
-        # repeat "Listen" tap within the same visit, without risking a
-        # permanently stale cache if marks are later corrected.
+        # text), but fetching even a compressed blob from Postgres still
+        # costs a real round trip — this lets the browser skip that
+        # entirely for a repeat "Listen" tap within the same visit, without
+        # risking a permanently stale cache if marks are later corrected.
         headers = {"Cache-Control": "private, max-age=3600"}
-        return Response(content=audio, media_type="audio/wav", headers=headers)
+        media_type = "audio/mpeg" if audio_format == "mp3" else "audio/wav"
+        return Response(content=audio, media_type=media_type, headers=headers)

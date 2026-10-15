@@ -66,6 +66,15 @@ def _migrate_student_phone(conn: psycopg.Connection) -> None:
     conn.execute("ALTER TABLE student ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT ''")
 
 
+def _migrate_tts_audio_cache(conn: psycopg.Connection) -> None:
+    """Adds `content_key` to a pre-existing `tts_audio_cache` table (see
+    schema.sql for what it's for). Rows written before this migration keep
+    a NULL content_key and are simply never cleaned up — harmless, since
+    they're still valid cached audio for whatever text hashed into them."""
+    conn.execute("ALTER TABLE tts_audio_cache ADD COLUMN IF NOT EXISTS content_key TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tts_audio_cache_content_key ON tts_audio_cache (content_key)")
+
+
 def init_db() -> None:
     with get_connection() as conn:
         schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
@@ -74,6 +83,7 @@ def init_db() -> None:
             if statement:
                 conn.execute(statement)
         _migrate_student_phone(conn)
+        _migrate_tts_audio_cache(conn)
         conn.commit()
 
 
