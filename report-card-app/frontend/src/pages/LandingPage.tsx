@@ -1,74 +1,19 @@
 import { Link } from "react-router-dom";
 import { BarChartIcon, SheetIcon, SpeakerWaveIcon, TeluguGlyphIcon } from "../components/Icons";
+import classOverviewScreenshot from "../assets/landing/class-overview.png";
+import reportCardScreenshot from "../assets/landing/report-card.png";
 
-function ReportCardMock() {
-  const rows = [
-    { subject: "TELUGU", fa: "45", sa: "70", grade: "A2", tone: "ga" },
-    { subject: "ENGLISH", fa: "41", sa: "66", grade: "B1", tone: "gb" },
-    { subject: "MATHS", fa: "48", sa: "77", grade: "A1", tone: "ga" },
-  ];
-  const toneColor: Record<string, string> = { ga: "#16a34a", gb: "#2563eb" };
-
+function ReportCardShot() {
   return (
     <div
-      className="w-full max-w-sm rounded-lg p-4"
+      className="w-full max-w-sm overflow-hidden rounded-lg"
       style={{
-        background: "linear-gradient(155deg, #eef2ff 0%, #fffbea 100%)",
         boxShadow: "var(--shadow-pop)",
         transform: "rotate(-2.5deg)",
+        border: "1px solid rgba(15,23,42,0.08)",
       }}
     >
-      <div className="overflow-hidden rounded-md" style={{ background: "#fff", border: "1px solid rgba(15,23,42,0.08)" }}>
-        <div
-          className="px-4 py-2.5 text-center text-sm font-bold text-white"
-          style={{ background: "linear-gradient(120deg, var(--lp-navy), #2563eb 70%)" }}
-        >
-          S.P.P HIGH SCHOOL
-        </div>
-        <div className="flex justify-center" style={{ background: "#fff" }}>
-          <span
-            className="-mt-2.5 rounded-full px-4 py-1 text-[10px] font-bold tracking-wide text-[#1b1b1b]"
-            style={{ background: "linear-gradient(90deg, var(--lp-gold), #f5b700)" }}
-          >
-            STUDENT REPORT CARD
-          </span>
-        </div>
-        <div className="px-4 pb-1 pt-3 text-[11px] font-semibold" style={{ color: "var(--lp-navy)" }}>
-          ARAVA LAKSHMI <span className="font-normal text-slate-400">· Class 10 · Roll 7</span>
-        </div>
-        <table className="mt-1 w-full text-[11px]">
-          <thead>
-            <tr style={{ background: "#f1f5fb", color: "#475569" }}>
-              <th className="px-3 py-1 text-left font-semibold">Subject</th>
-              <th className="px-2 py-1 font-semibold">FA-1</th>
-              <th className="px-2 py-1 font-semibold">SA-1</th>
-              <th className="px-2 py-1 font-semibold">Grade</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.subject} style={{ borderTop: "1px solid #eef1f6" }}>
-                <td className="px-3 py-1 font-medium" style={{ color: "var(--lp-navy)" }}>
-                  {r.subject}
-                </td>
-                <td className="px-2 py-1 text-center text-slate-500">{r.fa}</td>
-                <td className="px-2 py-1 text-center text-slate-500">{r.sa}</td>
-                <td className="px-2 py-1 text-center">
-                  <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: toneColor[r.tone] }}>
-                    {r.grade}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="flex items-center justify-between px-4 py-2.5 text-[10px]" style={{ background: "#f8fafc", color: "#64748b" }}>
-          <span>
-            Rank <b style={{ color: "var(--lp-navy)" }}>3</b> of 62
-          </span>
-          <span>Attendance 92%</span>
-        </div>
-      </div>
+      <img src={reportCardScreenshot} alt="A real parent report page, exactly as a parent sees it on their phone" className="block w-full" />
     </div>
   );
 }
@@ -164,7 +109,7 @@ export function LandingPage() {
             </div>
           </div>
           <div className="flex justify-center md:justify-end">
-            <ReportCardMock />
+            <ReportCardShot />
           </div>
         </section>
 
@@ -184,7 +129,7 @@ export function LandingPage() {
           <h2 className="font-serif text-2xl font-semibold md:text-3xl" style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}>
             What happens when you upload a sheet
           </h2>
-          <div className="mt-10 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
             <Feature
               icon={<SheetIcon size={22} />}
               title="Upload once, generate for the whole class"
@@ -200,16 +145,36 @@ export function LandingPage() {
               title="Parents don't have to read to understand"
               body="The link sent to parents is a page per subject plus a results page, with a listen button that narrates it in Telugu — built for a phone, not a printer."
             />
-            <Feature
-              icon={<BarChartIcon size={22} />}
-              title="See the whole class at a glance"
-              body="Pass rate, grade distribution, subject averages, and who needs attention — computed from the same upload, no extra work."
-            />
           </div>
         </section>
 
         <section className="border-y" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
-          <div className="mx-auto max-w-3xl px-6 py-16 md:py-24">
+          <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-16 md:grid-cols-2 md:py-24">
+            <div>
+              <span className="icon-chip" style={{ width: "2.2rem", height: "2.2rem" }}>
+                <BarChartIcon size={18} />
+              </span>
+              <h2
+                className="mt-4 font-serif text-2xl font-semibold md:text-3xl"
+                style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}
+              >
+                See the whole class at a glance
+              </h2>
+              <p className="mt-4 max-w-md text-base leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                Pass rate, grade distribution, subject averages, and who needs attention — computed the moment you
+                upload, from the same sheet, no extra work. This is the real dashboard, not a mockup.
+              </p>
+            </div>
+            <div className="overflow-hidden rounded-lg" style={{ boxShadow: "var(--shadow-pop)", border: "1px solid rgba(15,23,42,0.08)" }}>
+              <img
+                src={classOverviewScreenshot}
+                alt="The real class overview dashboard: pass rate, grade distribution, subject averages, top performers, and students needing attention"
+                className="block w-full"
+              />
+            </div>
+          </div>
+
+          <div className="mx-auto max-w-3xl border-t px-6 py-16 md:py-24" style={{ borderColor: "var(--border)" }}>
             <h2 className="font-serif text-2xl font-semibold md:text-3xl" style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}>
               How it works
             </h2>
