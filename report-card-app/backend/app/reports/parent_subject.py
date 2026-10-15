@@ -167,11 +167,8 @@ def build_subject_voice_telugu(
         lines.append(f"ఇది {school} నుండి ఫోన్ కాల్.")
         if parent_name:
             lines.append(f"{parent_name} గారు, నమస్కారం.")
-        lines.append(f"{student_name} యొక్క ప్రోగ్రెస్ కార్డ్ ఫలితాల గురించి తెలియజేయడానికి ఈ కాల్ చేస్తున్నాము.")
-        lines.append(f"మొత్తం {total} సబ్జెక్టుల ఫలితాలు ఒక్కొక్కటిగా చెప్తాను, చివర్లో మొత్తం ఫలితం కూడా చెప్తాను.")
-        lines.append(f"మొదటిది, {facts.name} సబ్జెక్టు.")
-    else:
-        lines.append(f"తదుపరి సబ్జెక్టు, {facts.name}.")
+        lines.append(f"ఇది {student_name} యొక్క ప్రోగ్రెస్ కార్డ్.")
+    lines.append(f"ఇప్పుడు {facts.name} సబ్జెక్టు.")
 
     for i, h in enumerate(facts.history):
         exam_label = f"{_ordinal(i, _ORDINAL_TE)} పరీక్ష {h.exam_key}"
@@ -209,11 +206,8 @@ def build_subject_voice_romanized(
         lines.append(f"Idhi {school} nundi phone call.")
         if parent_name:
             lines.append(f"{parent_name} garu, namaskaram.")
-        lines.append(f"{student_name} yokka progress card phalithala gurinchi teliyajeyadaniki ee call chesthunnamu.")
-        lines.append(f"Mottham {total} subjectula phalithalu okkokati cheptanu, chivarlo mottham phalitham kooda cheptanu.")
-        lines.append(f"Modatidi, {facts.name} subject.")
-    else:
-        lines.append(f"Thadupari subject, {facts.name}.")
+        lines.append(f"Idhi {student_name} yokka progress card.")
+    lines.append(f"Ippudu {facts.name} subject.")
 
     for i, h in enumerate(facts.history):
         exam_label = f"{_ordinal(i, _ORDINAL_ROMAN)} pariksha {h.exam_key}"

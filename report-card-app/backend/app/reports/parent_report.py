@@ -185,15 +185,24 @@ READ_ALOUD_SCRIPT = """
     swipeHint.classList.toggle('hidden', i === pages.length - 1);
   }
 
-  var observer = new IntersectionObserver(function(entries){
-    entries.forEach(function(entry){
-      if(entry.isIntersecting && entry.intersectionRatio >= 0.6){
-        var idx = pages.indexOf(entry.target);
-        if(idx >= 0) setCurrent(idx);
-      }
-    });
-  }, { root: main, threshold: [0.6] });
-  pages.forEach(function(p){ observer.observe(p); });
+  // Figures out which page is "current" from main's own scroll position
+  // instead of IntersectionObserver — more predictable across mobile
+  // browsers, especially right at the last page, where a dynamic address
+  // bar changing the real viewport height can make 100vh-based
+  // intersection thresholds miss entirely.
+  function updateCurrentFromScroll(){
+    var mid = main.scrollTop + main.clientHeight / 2;
+    var idx = 0;
+    for(var i = 0; i < pages.length; i++){
+      if(pages[i].offsetTop <= mid) idx = i;
+    }
+    setCurrent(idx);
+  }
+  var scrollTimer = null;
+  main.addEventListener('scroll', function(){
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(updateCurrentFromScroll, 100);
+  });
 
   speakBtn.addEventListener('click', function(){
     if(speaking){ stopSpeech(); return; }
