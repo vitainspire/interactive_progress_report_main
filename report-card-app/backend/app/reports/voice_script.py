@@ -21,12 +21,11 @@ same philosophy as the rest of this app's "AI" text — no LLM call.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
 
+from app.reports.greeting import time_greeting_romanized, time_greeting_telugu
 from app.reports.numfmt import fmt_num
 
 GRADE_POINTS = {"A1": 10, "A2": 9, "B1": 8, "B2": 7, "C1": 6, "C2": 5, "D1": 4, "D2": 3}
-IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def _is_num(v) -> bool:
@@ -106,17 +105,7 @@ def build_voice_script_telugu(student: dict, exam_order: list[str], class_streng
         return ""
     school = f.school or "పాఠశాల"
 
-    hour = datetime.now(IST).hour
-    if 5 <= hour < 12:
-        greeting = "శుభోదయం!"
-    elif 12 <= hour < 17:
-        greeting = "శుభ మధ్యాహ్నం!"
-    elif 17 <= hour < 21:
-        greeting = "శుభ సాయంత్రం!"
-    else:
-        greeting = "నమస్కారం!"
-
-    lines = [greeting, f"ఇది {school} నుండి ఫోన్ కాల్."]
+    lines = [time_greeting_telugu(), f"ఇది {school} నుండి ఫోన్ కాల్."]
     if f.parent_name:
         lines.append(f"{f.parent_name} గారు, నమస్కారం.")
     lines.append(f"{f.student_name} యొక్క పరీక్షా ఫలితాల గురించి మీకు తెలియజేయడానికి ఈ కాల్ చేస్తున్నాము.")
@@ -159,17 +148,7 @@ def build_voice_script_romanized(student: dict, exam_order: list[str], class_str
         return ""
     school = f.school or "school"
 
-    hour = datetime.now(IST).hour
-    if 5 <= hour < 12:
-        greeting = "Shubhodayam!"
-    elif 12 <= hour < 17:
-        greeting = "Shubha madhyahnam!"
-    elif 17 <= hour < 21:
-        greeting = "Shubha sayantram!"
-    else:
-        greeting = "Namaskaram!"
-
-    lines = [greeting, f"Idhi {school} nundi phone call."]
+    lines = [time_greeting_romanized(), f"Idhi {school} nundi phone call."]
     if f.parent_name:
         lines.append(f"{f.parent_name} garu, namaskaram.")
     lines.append(f"{f.student_name} yokka pariksha phalithala gurinchi meeku teliyajeyadaniki ee call chesthunnamu.")

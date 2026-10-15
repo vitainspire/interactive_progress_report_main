@@ -5,15 +5,31 @@ this module computes, for one subject at a time, the marks/grade history,
 a plain classification (good/mid/low/fail), and a trend, then turns that
 into both a short on-screen commentary line and a full spoken narration
 (Telugu + Romanized, same phonetic-fallback approach as voice_script.py).
+
+The spoken narration across all pages is written to read as ONE continuous
+phone call, not independent clips: the greeting/school/"this is your
+child's progress card" opening is spoken only once, on the first subject's
+page — every later page just transitions naturally ("Next, Maths...")
+instead of repeating who's calling and who it's about. The final
+conclusion page (build_conclusion_voice_*) is deliberately brief — it
+doesn't re-list every subject's detail again, since that was already
+covered page by page — and explicitly ends the call.
+
 Entirely rule-based, no LLM call — same philosophy as the rest of the app.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from app.reports.greeting import time_greeting_romanized, time_greeting_telugu
 from app.reports.numfmt import fmt_num
+from app.reports.voice_script import _compute_facts
 
 GRADE_POINTS = {"A1": 10, "A2": 9, "B1": 8, "B2": 7, "C1": 6, "C2": 5, "D1": 4, "D2": 3}
+
+
+def _is_num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
 @dataclass
@@ -127,15 +143,36 @@ def _ordinal(i: int, words: list[str]) -> str:
     return words[i] if 0 <= i < len(words) else str(i + 1)
 
 
-def build_subject_voice_telugu(facts: SubjectFacts, student_name: str, index: int = 0, total: int = 1, is_last: bool = True) -> str:
-    """Self-contained on purpose: a parent may listen to just this one page
-    without having heard any other, so it restates who/which subject/how
-    many subjects remain every time, rather than assuming prior context."""
+def build_subject_voice_telugu(
+    facts: SubjectFacts,
+    student_name: str,
+    index: int = 0,
+    total: int = 1,
+    is_last: bool = True,
+    school_name: str = "",
+    parent_name: str = "",
+) -> str:
+    """Only the FIRST subject page (index 0) opens with the greeting/school/
+    "this is a call about your child's progress card" framing — every later
+    page just transitions straight into the next subject, so listening
+    through the whole sequence sounds like one call, not eight repeats of
+    the same intro."""
     if not facts.history:
         return ""
-    lines = [
-        f"ఇది {student_name} యొక్క {facts.name} సబ్జెక్టు ఫలితం, మొత్తం {total} సబ్జెక్టులలో {_ordinal(index, _ORDINAL_TE)}ది."
-    ]
+
+    lines: list[str] = []
+    if index == 0:
+        school = (school_name or "").strip() or "పాఠశాల"
+        lines.append(time_greeting_telugu())
+        lines.append(f"ఇది {school} నుండి ఫోన్ కాల్.")
+        if parent_name:
+            lines.append(f"{parent_name} గారు, నమస్కారం.")
+        lines.append(f"{student_name} యొక్క ప్రోగ్రెస్ కార్డ్ ఫలితాల గురించి తెలియజేయడానికి ఈ కాల్ చేస్తున్నాము.")
+        lines.append(f"మొత్తం {total} సబ్జెక్టుల ఫలితాలు ఒక్కొక్కటిగా చెప్తాను, చివర్లో మొత్తం ఫలితం కూడా చెప్తాను.")
+        lines.append(f"మొదటిది, {facts.name} సబ్జెక్టు.")
+    else:
+        lines.append(f"తదుపరి సబ్జెక్టు, {facts.name}.")
+
     for i, h in enumerate(facts.history):
         exam_label = f"{_ordinal(i, _ORDINAL_TE)} పరీక్ష {h.exam_key}"
         if isinstance(h.marks, (int, float)):
@@ -153,12 +190,31 @@ def build_subject_voice_telugu(facts: SubjectFacts, student_name: str, index: in
     return " ".join(lines)
 
 
-def build_subject_voice_romanized(facts: SubjectFacts, student_name: str, index: int = 0, total: int = 1, is_last: bool = True) -> str:
+def build_subject_voice_romanized(
+    facts: SubjectFacts,
+    student_name: str,
+    index: int = 0,
+    total: int = 1,
+    is_last: bool = True,
+    school_name: str = "",
+    parent_name: str = "",
+) -> str:
     if not facts.history:
         return ""
-    lines = [
-        f"Idhi {student_name} yokka {facts.name} subject phalitham, mottham {total} subjectullo {_ordinal(index, _ORDINAL_ROMAN)}di."
-    ]
+
+    lines: list[str] = []
+    if index == 0:
+        school = (school_name or "").strip() or "school"
+        lines.append(time_greeting_romanized())
+        lines.append(f"Idhi {school} nundi phone call.")
+        if parent_name:
+            lines.append(f"{parent_name} garu, namaskaram.")
+        lines.append(f"{student_name} yokka progress card phalithala gurinchi teliyajeyadaniki ee call chesthunnamu.")
+        lines.append(f"Mottham {total} subjectula phalithalu okkokati cheptanu, chivarlo mottham phalitham kooda cheptanu.")
+        lines.append(f"Modatidi, {facts.name} subject.")
+    else:
+        lines.append(f"Thadupari subject, {facts.name}.")
+
     for i, h in enumerate(facts.history):
         exam_label = f"{_ordinal(i, _ORDINAL_ROMAN)} pariksha {h.exam_key}"
         if isinstance(h.marks, (int, float)):
@@ -173,4 +229,64 @@ def build_subject_voice_romanized(facts: SubjectFacts, student_name: str, index:
         lines.append("Tharuvatha page lo mottham phalitham undi, chudataniki paiki swipe cheyandi.")
     else:
         lines.append("Thadupari subject kosam paiki swipe cheyandi.")
+    return " ".join(lines)
+
+
+def build_conclusion_voice_telugu(student: dict, exam_order: list[str], class_strength: int, school_name: str) -> str:
+    """Deliberately brief and distinct from the per-subject pages' own
+    narration — every subject's own good/weak detail was already spoken on
+    its own page, so this only restates the overall total/grade/result/
+    rank/attendance, then explicitly ends the call."""
+    f = _compute_facts(student, exam_order, class_strength, school_name)
+    if f is None:
+        return ""
+
+    lines = ["ఇప్పుడు క్లుప్తంగా మొత్తం ఫలితం చెప్తాను."]
+    if _is_num(f.total):
+        lines.append(f"{f.student_name} మొత్తం {fmt_num(f.total)} మార్కులు సాధించారు, గ్రేడ్ {f.grade}.")
+    else:
+        lines.append(f"{f.student_name} గ్రేడ్ {f.grade} సాధించారు.")
+
+    if f.grade == "D2" or "FAIL" in f.result_text.upper():
+        lines.append("ఫలితం: ఫెయిల్; ముందు చెప్పిన సబ్జెక్టులపై ప్రత్యేక శ్రద్ధ అవసరం.")
+    else:
+        lines.append("ఫలితం: పాస్.")
+
+    if f.last_rank is not None:
+        lines.append(f"తరగతిలో మొత్తం {f.class_strength} మందిలో {fmt_num(f.last_rank)} వ ర్యాంకు.")
+
+    if f.attendance_pct is not None:
+        lines.append(f"హాజరు శాతం {f.attendance_pct} శాతం.")
+        if f.attendance_pct < 75:
+            lines.append("దయచేసి మీ పిల్లలను ప్రతిరోజూ పాఠశాలకు పంపించండి.")
+
+    lines.append("ఈ కాల్ ముగిస్తున్నాము. పూర్తి వివరాల కోసం పైన కనిపించే వివరాలు చూడగలరు. ధన్యవాదాలు, శుభాకాంక్షలు!")
+    return " ".join(lines)
+
+
+def build_conclusion_voice_romanized(student: dict, exam_order: list[str], class_strength: int, school_name: str) -> str:
+    f = _compute_facts(student, exam_order, class_strength, school_name)
+    if f is None:
+        return ""
+
+    lines = ["Ippudu klupthamga mottham phalitham cheptanu."]
+    if _is_num(f.total):
+        lines.append(f"{f.student_name} mottham {fmt_num(f.total)} marks sadhinchaaru, grade {f.grade}.")
+    else:
+        lines.append(f"{f.student_name} grade {f.grade} sadhinchaaru.")
+
+    if f.grade == "D2" or "FAIL" in f.result_text.upper():
+        lines.append("Phalitham: fail; mundu cheppina subjectulapai pratyeka shraddha avasaram.")
+    else:
+        lines.append("Phalitham: pass.")
+
+    if f.last_rank is not None:
+        lines.append(f"tharagathilo mottham {f.class_strength} mandilo {fmt_num(f.last_rank)} va rank.")
+
+    if f.attendance_pct is not None:
+        lines.append(f"hajaru shatam {f.attendance_pct} shatam.")
+        if f.attendance_pct < 75:
+            lines.append("dayachesi mee pillalani prathirojuu pathashalaki pampinchandi.")
+
+    lines.append("Ee call mugistunnamu. Poorthi vivaralu kosam paina kanipinche vivaralu chudagalaru. Dhanyavadalu, shubhakankshalu!")
     return " ".join(lines)

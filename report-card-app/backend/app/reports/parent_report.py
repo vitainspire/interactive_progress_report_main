@@ -31,12 +31,14 @@ import re
 
 from app.reports.numfmt import fmt_num
 from app.reports.parent_subject import (
+    build_conclusion_voice_romanized,
+    build_conclusion_voice_telugu,
     build_subject_voice_romanized,
     build_subject_voice_telugu,
     compute_subject_facts,
     subject_commentary_telugu,
 )
-from app.reports.voice_script import build_voice_script_romanized, build_voice_script_telugu, _compute_facts
+from app.reports.voice_script import _compute_facts
 
 NAVY = "#1e3a8a"
 
@@ -295,7 +297,7 @@ def _discover_subjects(student: dict, exam_defs: list[dict]) -> list[str]:
     return subjects
 
 
-def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject_name: str, index: int, total: int) -> str:
+def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject_name: str, index: int, total: int, school_name: str) -> str:
     is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
 
     def max_marks(key: str) -> float:
@@ -304,8 +306,9 @@ def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject
     exam_order = [e["key"] for e in exam_defs]
     facts = compute_subject_facts(student, exam_order, subject_name, max_marks)
     is_last = index == total - 1
-    speech_te = build_subject_voice_telugu(facts, student["name"], index, total, is_last)
-    speech_roman = build_subject_voice_romanized(facts, student["name"], index, total, is_last)
+    parent_name = (student.get("father") or "").strip()
+    speech_te = build_subject_voice_telugu(facts, student["name"], index, total, is_last, school_name, parent_name)
+    speech_roman = build_subject_voice_romanized(facts, student["name"], index, total, is_last, school_name, parent_name)
     icon = _subject_icon(subject_name)
 
     h = (
@@ -345,8 +348,8 @@ def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: 
     exam_order = [e["key"] for e in exam_defs]
     class_strength = settings.class_strength_override or len(all_students)
     facts = _compute_facts(student, exam_order, class_strength, school_name)
-    speech_te = build_voice_script_telugu(student, exam_order, class_strength, school_name)
-    speech_roman = build_voice_script_romanized(student, exam_order, class_strength, school_name)
+    speech_te = build_conclusion_voice_telugu(student, exam_order, class_strength, school_name)
+    speech_roman = build_conclusion_voice_romanized(student, exam_order, class_strength, school_name)
 
     h = (
         '<div class="hero">'
@@ -416,7 +419,7 @@ def render_parent_report_page(
     READ_ALOUD_SCRIPT to call the real-audio voice route."""
     subjects = _discover_subjects(student, exam_defs)
 
-    pages_html = [_render_subject_page(student, exam_defs, settings, name, i, len(subjects)) for i, name in enumerate(subjects)]
+    pages_html = [_render_subject_page(student, exam_defs, settings, name, i, len(subjects), school_name) for i, name in enumerate(subjects)]
     pages_html.append(_render_conclusion_page(student, all_students, exam_defs, settings, school_name))
 
     step_icons = [_subject_icon(name) for name in subjects] + ["\U0001f3c1"]
@@ -445,7 +448,7 @@ def get_speech_text(student: dict, all_students: list[dict], exam_defs: list[dic
     if page == "conclusion":
         exam_order = [e["key"] for e in exam_defs]
         class_strength = settings.class_strength_override or len(all_students)
-        return build_voice_script_telugu(student, exam_order, class_strength, school_name) or None
+        return build_conclusion_voice_telugu(student, exam_order, class_strength, school_name) or None
 
     subjects = _discover_subjects(student, exam_defs)
     if page not in subjects:
@@ -462,4 +465,5 @@ def get_speech_text(student: dict, all_students: list[dict], exam_defs: list[dic
     facts = compute_subject_facts(student, exam_order, page, max_marks)
     if not facts.history:
         return None
-    return build_subject_voice_telugu(facts, student["name"], index, len(subjects), is_last) or None
+    parent_name = (student.get("father") or "").strip()
+    return build_subject_voice_telugu(facts, student["name"], index, len(subjects), is_last, school_name, parent_name) or None
