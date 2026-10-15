@@ -19,22 +19,38 @@ page's wording, the text hash changes too — so without this, the old
 audio for last cycle's wording would simply sit in the table forever,
 unused. On every cache miss, the previous row for the same content_key is
 deleted before the new one is inserted.
+
+Rows also expire outright after CACHE_TTL_DAYS, regardless of content_key —
+parents mostly (re-)listen in the days right after an exam, so there's
+little point keeping audio around indefinitely just in case. Once a row
+expires, the next "Listen" tap simply re-synthesizes it (one extra Bhashini
+call) rather than erroring — expiry trades a slightly slower occasional
+replay for not growing the database forever. There's no separate scheduled
+job for this; expired rows are swept opportunistically whenever any cache
+miss already has to write to this table.
 """
 from __future__ import annotations
 
 import array
 import hashlib
 import struct
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import lameenc
 import psycopg
 
 from app.integrations import bhashini
 
+CACHE_TTL_DAYS = 7
+
 
 def _hash_key(text: str, language: str, gender: str) -> str:
     return hashlib.sha256(f"{language}:{gender}:{text}".encode("utf-8")).hexdigest()
+
+
+def _delete_expired(conn: psycopg.Connection) -> None:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=CACHE_TTL_DAYS)).isoformat()
+    conn.execute("DELETE FROM tts_audio_cache WHERE created_at < %s", (cutoff,))
 
 
 def _parse_wav(wav_bytes: bytes) -> tuple[int, int, int, int, bytes]:
@@ -102,6 +118,7 @@ def get_or_synthesize(
         # fall back to storing it uncompressed rather than losing the audio.
         audio_format, audio_bytes = "wav", wav_audio
 
+    _delete_expired(conn)
     conn.execute("DELETE FROM tts_audio_cache WHERE content_key = %s AND text_hash != %s", (content_key, key))
     conn.execute(
         "INSERT INTO tts_audio_cache (text_hash, content_key, audio_format, audio_bytes, created_at) VALUES (%s, %s, %s, %s, %s) "
