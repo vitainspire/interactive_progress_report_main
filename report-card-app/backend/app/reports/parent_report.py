@@ -30,6 +30,7 @@ import html
 import math
 import re
 
+from app.reports.analysis import build_analysis
 from app.reports.greeting import time_greeting_telugu
 from app.reports.numfmt import fmt_num
 from app.reports.parent_subject import (
@@ -190,6 +191,19 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
 .action-btn{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.06);color:#fff;font:inherit;font-weight:600;font-size:.88em;border-radius:99px;padding:.7em 1.4em;cursor:pointer}
 .action-btn:active{opacity:.7}
 .action-btn.primary{background:var(--gold);border-color:var(--gold);color:var(--navy-deep)}
+
+/* Full-analysis bottom sheet — its own scroll container (overflow-y:auto
+   on .analysis-sheet), completely independent of main's scroll-snap, so
+   this can be as long as the real analysis text needs to be without ever
+   risking content past an unreachable snap boundary. */
+.analysis-modal{position:fixed;inset:0;z-index:10;background:rgba(14,27,77,.72);display:flex;align-items:flex-end;justify-content:center}
+.analysis-modal[hidden]{display:none}
+.analysis-sheet{position:relative;background:#fff;color:var(--ink);width:100%;max-width:480px;max-height:80vh;overflow-y:auto;border-radius:18px 18px 0 0;padding:1.6em 1.4em 2.2em;box-shadow:0 -8px 30px rgba(0,0,0,.25)}
+.analysis-sheet h2{margin:0 0 .9em;font-size:1.15em;color:var(--navy);padding-right:2em}
+.analysis-sheet p{font-size:.95em;line-height:1.6;margin:0 0 1em;color:var(--ink)}
+.analysis-sheet p.intro{font-weight:600;color:var(--navy)}
+.analysis-sheet p:last-child{margin-bottom:0}
+.analysis-close{position:absolute;top:1.1em;right:1.2em;width:2em;height:2em;border-radius:50%;border:none;background:var(--line);color:var(--ink);font-size:1em;line-height:1;cursor:pointer}
 
 .bottom-fade{position:fixed;left:0;right:0;bottom:0;height:8.5em;background:linear-gradient(to bottom,rgba(246,247,249,0) 0%,#f6f7f9 65%);pointer-events:none;z-index:4}
 .listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:1px solid rgba(233,164,0,.55);font:inherit;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.6em;border-radius:99px;padding:.85em 1.6em;background:var(--navy-deep);color:#fff;font-size:.96em;box-shadow:0 6px 18px rgba(14,27,77,.35);transition:transform .12s ease,background .2s ease}
@@ -485,6 +499,16 @@ READ_ALOUD_SCRIPT = """
     });
   }
 
+  var analysisToggle = document.getElementById('analysisToggle');
+  var analysisModal = document.getElementById('analysisModal');
+  var analysisClose = document.getElementById('analysisClose');
+  if(analysisToggle && analysisModal){
+    analysisToggle.addEventListener('click', function(){ analysisModal.hidden = false; });
+    if(analysisClose) analysisClose.addEventListener('click', function(){ analysisModal.hidden = true; });
+    // Tapping the dimmed backdrop (not the sheet itself) also closes it.
+    analysisModal.addEventListener('click', function(e){ if(e.target === analysisModal) analysisModal.hidden = true; });
+  }
+
   pageLabel.textContent = '1 / ' + pages.length;
   swipeHint.classList.toggle('hidden', pages.length <= 1);
   activatePage(pages[0]);
@@ -754,13 +778,32 @@ def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: 
     if facts.attendance_pct is not None:
         share_parts.append(f"Attendance {facts.attendance_pct}%")
     share_text = " · ".join(share_parts)
-    h += (
-        '<div class="action-row">'
-        f'<button type="button" class="action-btn primary" id="shareBtn" data-share-text="{_esc(share_text)}">'
-        "షేర్ / Share</button>"
-        "</div>"
-    )
+    h += '<div class="action-row">'
+    h += f'<button type="button" class="action-btn primary" id="shareBtn" data-share-text="{_esc(share_text)}">షేర్ / Share</button>'
+
+    # The full written analysis (same rule-based text already shown on the
+    # teacher's printed card — see analysis.py) is long enough that inlining
+    # it on this page, even collapsed-then-expanded, would risk pushing
+    # content past a scroll-snap boundary where it can't be reached (the
+    # exact bug already hit twice with shorter content). A bottom-sheet
+    # modal sidesteps that entirely — it scrolls on its own, independent of
+    # the page's scroll-snap, so arbitrarily long text is always reachable.
+    analysis = build_analysis(student, exam_order, class_strength)
+    if analysis["points"]:
+        h += '<button type="button" class="action-btn" id="analysisToggle">పూర్తి విశ్లేషణ / Full analysis</button>'
     h += "</div>"
+    h += "</div>"
+
+    if analysis["points"]:
+        h += '<div class="analysis-modal" id="analysisModal" hidden>'
+        h += '<div class="analysis-sheet">'
+        h += '<button type="button" class="analysis-close" id="analysisClose" aria-label="Close">✕</button>'
+        h += '<h2>పూర్తి విశ్లేషణ / Full Analysis</h2>'
+        if analysis["intro"]:
+            h += f'<p class="intro">{_esc(analysis["intro"])}</p>'
+        for point in analysis["points"]:
+            h += f"<p>{_esc(point)}</p>"
+        h += "</div></div>"
 
     return f'<section class="page" data-page-id="conclusion" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
 
