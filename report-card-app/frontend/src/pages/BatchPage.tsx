@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import {
   BarChartIcon,
-  ExternalLinkIcon,
   FitScreenIcon,
   PrinterIcon,
   SearchIcon,
@@ -399,7 +398,6 @@ function Toolbar({
   onToggleAll,
   onToggleOne,
   onPrint,
-  reportUrl,
   onSendToParents,
   sending,
 }: {
@@ -408,7 +406,6 @@ function Toolbar({
   onToggleAll: (checked: boolean) => void;
   onToggleOne: (id: number, checked: boolean) => void;
   onPrint: () => void;
-  reportUrl: string;
   onSendToParents: () => void;
   sending: boolean;
 }) {
@@ -474,19 +471,6 @@ function Toolbar({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="pill">
-          Showing {selected.size} of {students.length}
-        </span>
-        <a
-          href={reportUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
-          style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
-        >
-          <ExternalLinkIcon size={14} />
-          Open in new tab
-        </a>
         <button
           onClick={onPrint}
           className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99]"
@@ -753,7 +737,6 @@ export function BatchPage() {
         onToggleAll={toggleAll}
         onToggleOne={toggleOne}
         onPrint={printSelected}
-        reportUrl={reportUrl}
         onSendToParents={sendToParents}
         sending={sending}
       />
