@@ -73,12 +73,16 @@ body{background:#f7f8fa;font:16px/1.55 'Noto Sans','Noto Sans Telugu',system-ui,
 main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
 .page{min-height:100%;display:flex;flex-direction:column;scroll-snap-align:start;scroll-snap-stop:always}
 .hero{flex:none;padding:1.6em 1.2em 1.3em;text-align:center;background:#fff;border-bottom:1px solid #e7eaf0}
-.hero-icon{width:3.2em;height:3.2em;margin:0 auto .6em;border-radius:12px;background:#1e3a8a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.7em}
+.hero-icon{width:3.2em;height:3.2em;margin:0 auto .6em;border-radius:12px;background:#1e3a8a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.7em;box-shadow:0 2px 6px rgba(30,58,138,.25)}
 .hero h1{margin:0;font-size:1.5em;font-weight:800;letter-spacing:.2px;color:#0f172a}
 .hero .sub{font-size:.85em;font-weight:600;color:#64748b;margin-top:.3em}
+.trend-badge{display:inline-flex;align-items:center;gap:.3em;margin-top:.5em;font-size:.78em;font-weight:700;padding:.25em .7em;border-radius:99px}
+.trend-badge.up{background:#eafaf0;color:#166534}
+.trend-badge.down{background:#fdecec;color:#991b1b}
+.trend-badge.flat{background:#f1f5f9;color:#475569}
 .body-pad{padding:1.1em 1.1em 8em;flex:1;display:flex;flex-direction:column}
 .exam-rows{display:flex;flex-direction:column;gap:.7em;margin-top:1.1em}
-.exam-row{background:#fff;border:1px solid #e7eaf0;border-radius:10px;padding:.7em .85em;display:flex;align-items:center;gap:.8em}
+.exam-row{background:#fff;border:1px solid #e7eaf0;border-radius:12px;padding:.7em .85em;display:flex;align-items:center;gap:.8em;box-shadow:0 1px 2px rgba(15,23,42,.04),0 2px 10px -4px rgba(15,23,42,.1)}
 .ring{--pct:0%;width:3em;height:3em;border-radius:50%;flex:none;background:conic-gradient(var(--ring-color,#1e3a8a) var(--pct),#e7eaf0 0);display:flex;align-items:center;justify-content:center}
 .ring-inner{width:2.25em;height:2.25em;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:.7em;font-weight:800;color:#1e293b}
 .exam-meta{flex:1}
@@ -87,41 +91,115 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
 .gr{display:inline-block;min-width:2.3em;text-align:center;border-radius:6px;padding:.2em .5em;color:#fff;font-weight:800;font-size:.85em}
 .ga{background:#16a34a}.gb{background:#1e3a8a}.gc{background:#d97706}.gd{background:#ea580c}.gf{background:#dc2626}
 .stars{margin-top:.6em;text-align:center;font-size:1.3em;letter-spacing:.15em}
-.commentary{margin-top:1.1em;border-radius:10px;padding:1em 1.05em;font-size:1.05em;font-weight:600;line-height:1.5;display:flex;gap:.7em;align-items:flex-start}
+.commentary{margin-top:1.1em;border-radius:12px;padding:1em 1.05em;font-size:1.05em;font-weight:600;line-height:1.5;display:flex;flex-direction:column;gap:.5em;box-shadow:0 1px 2px rgba(15,23,42,.04),0 2px 10px -4px rgba(15,23,42,.1)}
+.commentary .ctitle{font-size:.72em;text-transform:uppercase;letter-spacing:.5px;font-weight:800;opacity:.75}
+.commentary .crow{display:flex;gap:.7em;align-items:flex-start}
 .commentary .bubble{flex:none;width:1.9em;height:1.9em;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.1em;background:rgba(255,255,255,.6)}
 .commentary.good{background:#eafaf0;color:#166534;border:1px solid #bbf7d0}
 .commentary.mid{background:#fef9e8;color:#854d0e;border:1px solid #fde68a}
 .commentary.low{background:#fff4ea;color:#9a3412;border:1px solid #fed7aa}
 .commentary.fail{background:#fdecec;color:#991b1b;border:1px solid #fecaca}
 .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8em;margin-top:1.2em}
-.summary-box{background:#fff;border:1px solid #e7eaf0;border-radius:10px;padding:1em .8em;text-align:center}
+.summary-box{background:#fff;border:1px solid #e7eaf0;border-radius:12px;padding:1em .8em;text-align:center;box-shadow:0 1px 2px rgba(15,23,42,.04),0 2px 10px -4px rgba(15,23,42,.1)}
 .summary-box .icon{font-size:1.5em;margin-bottom:.15em}
 .summary-box .label{font-size:.76em;color:#64748b;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
 .summary-box .value{font-size:1.45em;font-weight:800;color:#0f172a;margin-top:.15em}
 .result-pill{display:inline-block;border-radius:6px;padding:.25em 1em;font-weight:800;color:#fff;font-size:1.15em;margin-top:.2em}
 .result-pill.pass{background:#16a34a}
 .result-pill.fail{background:#dc2626}
-.celebrate{margin-top:1.2em;text-align:center;background:#fff8e8;border:1px solid #fde68a;border-radius:10px;padding:1em 1em .9em}
+.celebrate{margin-top:1.2em;text-align:center;background:#fff8e8;border:1px solid #fde68a;border-radius:12px;padding:1em 1em .9em;box-shadow:0 1px 2px rgba(15,23,42,.04),0 2px 10px -4px rgba(15,23,42,.1)}
 .celebrate .emoji-row{font-size:1.8em;letter-spacing:.2em;margin-bottom:.15em}
 .celebrate .msg{font-weight:800;color:#92400e;font-size:1.1em}
 .recap{margin-top:1.2em;display:flex;flex-direction:column;gap:.55em}
-.recap-line{background:#fff;border:1px solid #e7eaf0;border-radius:10px;padding:.65em .9em;font-size:.95em;display:flex;gap:.5em;align-items:flex-start}
+.recap-line{background:#fff;border:1px solid #e7eaf0;border-radius:10px;padding:.65em .9em;font-size:.95em;display:flex;gap:.5em;align-items:flex-start;box-shadow:0 1px 2px rgba(15,23,42,.04)}
 .recap-line b{color:#1e3a8a}
 .closing{margin-top:1.1em;background:#eef2fb;border:1px solid #dbe3f5;border-radius:10px;padding:1em 1.1em;font-size:1em;line-height:1.55}
 .grow{flex:1 0 auto}
+
+/* Finale page: the one page that departs from the white/navy-accent
+   pattern on purpose — a navy panel with gold accents, since this is the
+   page a parent is most likely to screenshot and forward to family. */
+.hero.finale{background:linear-gradient(145deg,#1e3a8a 0%,#15265e 100%);border-bottom:none;position:relative;overflow:hidden}
+.hero.finale .hero-icon{background:#e9a400;color:#1e3a8a;box-shadow:0 2px 10px rgba(233,164,0,.45)}
+.hero.finale h1{color:#fff}
+.hero.finale .sub{color:#cbd5f5}
+.spark{position:absolute;font-size:1.1em;opacity:0;pointer-events:none}
+.spark:nth-child(1){top:18%;left:12%}
+.spark:nth-child(2){top:30%;right:14%}
+.spark:nth-child(3){top:60%;left:20%}
+.spark:nth-child(4){top:70%;right:22%}
+.spark:nth-child(5){top:15%;right:35%}
+.spark:nth-child(6){top:75%;left:45%}
+.hero.finale.sparkle .spark{animation:spark-pop 1.1s ease-out forwards}
+.hero.finale.sparkle .spark:nth-child(2){animation-delay:.08s}
+.hero.finale.sparkle .spark:nth-child(3){animation-delay:.16s}
+.hero.finale.sparkle .spark:nth-child(4){animation-delay:.24s}
+.hero.finale.sparkle .spark:nth-child(5){animation-delay:.32s}
+.hero.finale.sparkle .spark:nth-child(6){animation-delay:.4s}
+@keyframes spark-pop{0%{opacity:0;transform:scale(.3) rotate(-10deg)}35%{opacity:1;transform:scale(1.15) rotate(6deg)}100%{opacity:0;transform:scale(.9) translateY(-14px) rotate(0)}}
+
+.share-row{margin-top:1.2em;display:flex;justify-content:center}
+.share-btn{border:1px solid #dbe3f5;background:#fff;color:#1e3a8a;font:inherit;font-weight:700;font-size:.92em;border-radius:99px;padding:.6em 1.3em;cursor:pointer;display:inline-flex;align-items:center;gap:.5em}
+.share-btn:active{transform:scale(.97)}
+
 .bottom-fade{position:fixed;left:0;right:0;bottom:0;height:8.5em;background:linear-gradient(to bottom,rgba(247,248,250,0) 0%,#f7f8fa 65%);pointer-events:none;z-index:4}
-.listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:0;font:inherit;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5em;border-radius:99px;padding:.9em 1.6em;background:#1e3a8a;color:#fff;font-size:1em;box-shadow:3px 3px 0 0 #e9a400;transition:transform .12s ease}
+.listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:0;font:inherit;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5em;border-radius:99px;padding:.9em 1.6em;background:#1e3a8a;color:#fff;font-size:1em;box-shadow:3px 3px 0 0 #e9a400;transition:transform .12s ease,background .2s ease}
 .listen-fab:active{transform:translateX(-50%) scale(.97)}
+.listen-fab.loading{background:#334873;cursor:wait}
+.listen-fab.loading .spinner{width:1em;height:1em;border-radius:50%;border:.17em solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .7s linear infinite}
 .listen-fab.speaking{background:#dc2626;box-shadow:3px 3px 0 0 #fca5a5}
-.swipe-hint{position:fixed;left:50%;bottom:6.3em;transform:translateX(-50%);z-index:5;font-size:.78em;font-weight:600;color:#475569;background:rgba(255,255,255,.92);padding:.35em .9em;border-radius:99px;box-shadow:0 1px 6px rgba(0,0,0,.1);display:flex;align-items:center;gap:.35em;animation:hintbob 1.6s ease-in-out infinite}
-.swipe-hint.hidden{display:none}
+.listen-fab.error{background:#b45309;box-shadow:3px 3px 0 0 #fcd34d}
+@keyframes spin{to{transform:rotate(360deg)}}
+.swipe-hint{position:fixed;left:50%;bottom:6.3em;transform:translateX(-50%);z-index:5;font-size:.78em;font-weight:600;color:#475569;background:rgba(255,255,255,.92);padding:.35em .9em;border-radius:99px;box-shadow:0 1px 6px rgba(0,0,0,.1);display:flex;align-items:center;gap:.35em;animation:hintbob 1.6s ease-in-out infinite;transition:opacity .25s ease}
+.swipe-hint.hidden{opacity:0;pointer-events:none}
 @keyframes hintbob{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-4px)}}
+
+/* Base state for content that fades/settles in once its page becomes
+   current — never opacity:0 by default, so a page is always fully
+   visible even if JS never runs (no-JS / slow-script fallback). The
+   .enter class, added transiently by script, is what actually plays the
+   motion; removing this class (or JS not running) just leaves it visible. */
+.hero,.body-pad{opacity:1}
+.hero.enter,.body-pad.enter{animation:content-in .45s cubic-bezier(.22,.9,.3,1) both}
+@keyframes content-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+@media (prefers-reduced-motion: reduce){
+  .step,.ring,.listen-fab,.swipe-hint,.hero.enter,.body-pad.enter,.hero.finale.sparkle .spark{animation:none!important;transition:none!important}
+  .swipe-hint{animation:none}
+}
 """
 
 READ_ALOUD_SCRIPT = """
 <script>
 (function(){
-  var speaking = null;
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // speakState: null (idle) | 'loading' (request/synthesis in flight,
+  // nothing audible yet) | 'speaking' (actually playing) | 'error'
+  // (both the real-audio fetch and the browser fallback failed).
+  var speakState = null;
+  var speakBtn = document.getElementById('speakBtn');
+  var idleLabel = speakBtn.textContent;
+  var errorTimer = null;
+
+  function setSpeakState(state){
+    speakState = state;
+    clearTimeout(errorTimer);
+    speakBtn.classList.remove('loading', 'speaking', 'error');
+    if(state === 'loading'){
+      speakBtn.innerHTML = '<span class="spinner"></span> లోడ్ అవుతోంది…';
+      speakBtn.classList.add('loading');
+    } else if(state === 'speaking'){
+      speakBtn.textContent = '\\u23f9 Stop';
+      speakBtn.classList.add('speaking');
+    } else if(state === 'error'){
+      speakBtn.textContent = '\\u26a0\\ufe0f వినలేకపోయాం';
+      speakBtn.classList.add('error');
+      errorTimer = setTimeout(function(){ if(speakState === 'error') setSpeakState(null); }, 2200);
+    } else {
+      speakBtn.textContent = idleLabel;
+    }
+  }
 
   function getVoicesAsync(){
     return new Promise(function(resolve){
@@ -134,18 +212,21 @@ READ_ALOUD_SCRIPT = """
   }
 
   var audioEl = null; // currently-playing real Bhashini audio, if any
+  var speakToken = 0; // bumped on every stop/new request so stale async callbacks are ignored
 
   function stopSpeech(){
+    speakToken += 1;
     if('speechSynthesis' in window) speechSynthesis.cancel();
     if(audioEl){ audioEl.pause(); audioEl.src = ''; audioEl = null; }
-    if(speaking){ speaking.classList.remove('speaking'); speaking.textContent = speaking.dataset.label; speaking = null; }
+    setSpeakState(null);
   }
 
   // Falls back to the browser's own voice when real audio isn't available
   // (Bhashini not configured, a failed call, or no token on this page).
-  function speakWithBrowser(page){
-    if(!('speechSynthesis' in window)){ stopSpeech(); alert('Reading aloud is not supported in this browser.'); return; }
+  function speakWithBrowser(page, myToken){
+    if(!('speechSynthesis' in window)){ setSpeakState('error'); return; }
     getVoicesAsync().then(function(voices){
+      if(myToken !== speakToken) return; // superseded by a stop/new request
       var teluguVoice = voices.filter(function(v){ return /^te/i.test(v.lang); })[0];
       var text, lang;
       if(teluguVoice){
@@ -156,10 +237,12 @@ READ_ALOUD_SCRIPT = """
         var enInVoice = voices.filter(function(v){ return /^en-in/i.test(v.lang); })[0];
         lang = enInVoice ? enInVoice.lang : 'en-US';
       }
-      if(!text){ stopSpeech(); return; }
+      if(!text){ setSpeakState('error'); return; }
       var utter = new SpeechSynthesisUtterance(text);
       utter.lang = lang;
-      utter.onend = utter.onerror = function(){ stopSpeech(); };
+      utter.onstart = function(){ if(myToken === speakToken) setSpeakState('speaking'); };
+      utter.onend = function(){ if(myToken === speakToken) setSpeakState(null); };
+      utter.onerror = function(){ if(myToken === speakToken) setSpeakState('error'); };
       speechSynthesis.speak(utter);
     });
   }
@@ -168,21 +251,62 @@ READ_ALOUD_SCRIPT = """
   var pages = Array.prototype.slice.call(document.querySelectorAll('.page'));
   var steps = Array.prototype.slice.call(document.querySelectorAll('.step'));
   var current = 0;
-  var speakBtn = document.getElementById('speakBtn');
+  var hasSwiped = false;
   var pageLabel = document.getElementById('pageLabel');
   var swipeHint = document.getElementById('swipeHint');
   var publicToken = main.dataset.token || '';
+
+  function animateRing(ring){
+    var target = parseFloat(ring.getAttribute('data-pct') || '0');
+    var inner = ring.querySelector('.ring-inner');
+    if(reduceMotion){ ring.style.setProperty('--pct', target + '%'); return; }
+    ring.style.setProperty('--pct', '0%');
+    if(inner) inner.textContent = '0%';
+    var start = null, duration = 700;
+    function step(ts){
+      if(start === null) start = ts;
+      var p = Math.min(1, (ts - start) / duration);
+      var eased = 1 - Math.pow(1 - p, 3);
+      var val = target * eased;
+      ring.style.setProperty('--pct', val + '%');
+      if(inner) inner.textContent = Math.round(val) + '%';
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  // Plays a page's entrance once (ring fill, content settle-in, and — for
+  // the finale page only, when the result is a pass — a brief sparkle).
+  // Guarded by data-animated so revisiting an already-seen page by
+  // scrolling back up doesn't replay the animation every time.
+  function activatePage(page){
+    if(page.dataset.animated) return;
+    page.dataset.animated = '1';
+    var hero = page.querySelector('.hero');
+    var body = page.querySelector('.body-pad');
+    if(!reduceMotion){
+      if(hero){ hero.classList.add('enter'); hero.addEventListener('animationend', function(){ hero.classList.remove('enter'); }, { once: true }); }
+      if(body){ body.classList.add('enter'); body.addEventListener('animationend', function(){ body.classList.remove('enter'); }, { once: true }); }
+    }
+    Array.prototype.forEach.call(page.querySelectorAll('.ring'), animateRing);
+    if(hero && hero.classList.contains('finale') && hero.dataset.pass === '1' && !reduceMotion){
+      hero.classList.add('sparkle');
+      setTimeout(function(){ hero.classList.remove('sparkle'); }, 1300);
+    }
+  }
 
   // Navigation is native vertical scroll-snap (swipe up/down, like a
   // reels/shorts feed) rather than click-driven — this just tracks which
   // page the scroll has landed on, for the dots/label/stopping audio.
   function setCurrent(i){
-    if(i === current) return;
+    if(i === current){ activatePage(pages[i]); return; }
     stopSpeech();
+    if(current !== i) hasSwiped = true;
     current = i;
     steps.forEach(function(d, idx){ d.classList.toggle('active', idx === i); });
     pageLabel.textContent = (i + 1) + ' / ' + pages.length;
-    swipeHint.classList.toggle('hidden', i === pages.length - 1);
+    swipeHint.classList.toggle('hidden', hasSwiped || i === pages.length - 1);
+    activatePage(pages[i]);
   }
 
   // Figures out which page is "current" from main's own scroll position
@@ -205,17 +329,15 @@ READ_ALOUD_SCRIPT = """
   });
 
   speakBtn.addEventListener('click', function(){
-    if(speaking){ stopSpeech(); return; }
+    if(speakState === 'loading' || speakState === 'speaking'){ stopSpeech(); return; }
+    var myToken = ++speakToken;
     var page = pages[current];
     var pageId = page.getAttribute('data-page-id');
 
-    speakBtn.dataset.label = speakBtn.dataset.label || speakBtn.textContent;
-    speakBtn.textContent = '\\u23f9 Stop';
-    speakBtn.classList.add('speaking');
-    speaking = speakBtn;
+    setSpeakState('loading');
 
     if(!pageId || !publicToken){
-      speakWithBrowser(page);
+      speakWithBrowser(page, myToken);
       return;
     }
 
@@ -228,18 +350,43 @@ READ_ALOUD_SCRIPT = """
         return resp.blob();
       })
       .then(function(blob){
-        if(speaking !== speakBtn) return; // user already stopped/switched pages
+        if(myToken !== speakToken) return; // user already stopped/switched pages/pages
         audioEl = new Audio(URL.createObjectURL(blob));
-        audioEl.onended = audioEl.onerror = function(){ stopSpeech(); };
-        audioEl.play();
+        audioEl.onended = function(){ if(myToken === speakToken) stopSpeech(); };
+        audioEl.onerror = function(){ if(myToken === speakToken) speakWithBrowser(page, myToken); };
+        // The play() Promise resolving is the reliable cross-browser signal
+        // that playback actually started — the 'playing' event alone isn't
+        // consistently fired for a freshly created Audio() in every engine.
+        audioEl.play().then(function(){
+          if(myToken === speakToken) setSpeakState('speaking');
+        }).catch(function(){
+          if(myToken === speakToken) speakWithBrowser(page, myToken);
+        });
       })
       .catch(function(){
-        if(speaking === speakBtn) speakWithBrowser(page);
+        if(myToken === speakToken) speakWithBrowser(page, myToken);
       });
   });
 
+  var shareBtn = document.getElementById('shareBtn');
+  if(shareBtn){
+    shareBtn.addEventListener('click', function(){
+      var text = shareBtn.getAttribute('data-share-text') || '';
+      if(navigator.share){
+        navigator.share({ text: text }).catch(function(){});
+      } else if(navigator.clipboard){
+        navigator.clipboard.writeText(text).then(function(){
+          var label = shareBtn.textContent;
+          shareBtn.textContent = '\\u2705 కాపీ అయ్యింది';
+          setTimeout(function(){ shareBtn.textContent = label; }, 1600);
+        }).catch(function(){});
+      }
+    });
+  }
+
   pageLabel.textContent = '1 / ' + pages.length;
   swipeHint.classList.toggle('hidden', pages.length <= 1);
+  activatePage(pages[0]);
   window.addEventListener('beforeunload', function(){ try { speechSynthesis.cancel(); } catch(e){} });
 })();
 </script>
@@ -249,6 +396,8 @@ PAGE_SHELL = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700;800&family=Noto+Sans+Telugu:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>{css}</style></head>
 <body>
@@ -284,6 +433,12 @@ def _grade_class(g: str) -> str:
 
 
 _GRADE_RING_COLOR = {"ga": "#16a34a", "gb": NAVY, "gc": "#d97706", "gd": "#ea580c", "gf": "#dc2626"}
+
+_TREND_BADGE = {
+    "up": "▲ మెరుగుపడింది",
+    "down": "▼ తగ్గింది",
+    "flat": "➡ స్థిరంగా ఉంది",
+}
 
 
 def _render_grade_badge(g: str) -> str:
@@ -325,8 +480,10 @@ def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject
         f'<div class="hero-icon">{icon}</div>'
         f'<h1>{_esc(subject_name)}</h1>'
         '<div class="sub">ఈ సబ్జెక్టులో ప్రదర్శన</div>'
-        "</div>"
     )
+    if facts.trend:
+        h += f'<div class="trend-badge {facts.trend}">{_TREND_BADGE[facts.trend]}</div>'
+    h += "</div>"
     h += '<div class="body-pad"><div class="exam-rows">'
     for e in facts.history:
         ring_color = _GRADE_RING_COLOR.get(_grade_class(e.grade), NAVY) if e.grade != "-" else "#94a3b8"
@@ -335,7 +492,7 @@ def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject
             pct = max(0.0, min(100.0, e.marks * 100 / e.max_marks))
         h += (
             '<div class="exam-row">'
-            f'<div class="ring" style="--pct:{pct:.0f}%;--ring-color:{ring_color}">'
+            f'<div class="ring" data-pct="{pct:.0f}" style="--pct:{pct:.0f}%;--ring-color:{ring_color}">'
             f'<div class="ring-inner">{round(pct)}%</div></div>'
             '<div class="exam-meta">'
             f'<div class="exam-name">{_esc(e.exam_key)}</div>'
@@ -347,10 +504,27 @@ def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject
     h += "</div>"
     if facts.classification == "good":
         h += '<div class="stars">⭐⭐⭐</div>'
-    h += f'<div class="commentary {facts.classification}"><span class="bubble">{icon}</span><span>{_esc(subject_commentary_telugu(facts))}</span></div>'
+    h += (
+        f'<div class="commentary {facts.classification}">'
+        '<div class="ctitle">ఎలా చేశారు? / How they did</div>'
+        f'<div class="crow"><span class="bubble">{icon}</span><span>{_esc(subject_commentary_telugu(facts))}</span></div>'
+        "</div>"
+    )
     h += '<div class="grow"></div></div>'
 
     return f'<section class="page" data-page-id="{_esc(subject_name)}" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
+
+
+def _render_finale_hero(is_pass: bool) -> str:
+    sparks = '<span class="spark">✨</span>' * 6 if is_pass else ""
+    return (
+        f'<div class="hero finale" data-pass="{1 if is_pass else 0}">'
+        f"{sparks}"
+        '<div class="hero-icon">\U0001f3c6</div>'
+        "<h1>మొత్తం గ్రేడ్ &amp; ఫలితం</h1>"
+        '<div class="sub">Overall Result</div>'
+        "</div>"
+    )
 
 
 def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str) -> str:
@@ -360,17 +534,8 @@ def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: 
     speech_te = build_conclusion_voice_telugu(student, exam_order, class_strength, school_name)
     speech_roman = build_conclusion_voice_romanized(student, exam_order, class_strength, school_name)
 
-    h = (
-        '<div class="hero">'
-        '<div class="hero-icon">\U0001f3c6</div>'
-        "<h1>మొత్తం గ్రేడ్ &amp; ఫలితం</h1>"
-        '<div class="sub">Overall Result</div>'
-        "</div>"
-    )
-    h += '<div class="body-pad">'
-
     if facts is None:
-        h += '<div class="grow"></div></div>'
+        h = _render_finale_hero(False) + '<div class="body-pad"><div class="grow"></div></div>'
         return f'<section class="page" data-page-id="conclusion" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
 
     is_pass = facts.grade not in ("D2", "-") or bool(re.search(r"PASS", facts.result_text or "", re.I))
@@ -382,6 +547,8 @@ def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: 
     else:
         result_html = "-"
 
+    h = _render_finale_hero(is_pass)
+    h += '<div class="body-pad">'
     h += '<div class="summary-grid">'
     h += f'<div class="summary-box"><div class="icon">\U0001f4ca</div><div class="label">మార్కులు / Marks</div><div class="value">{_render_marks_cell(facts.total)}</div></div>'
     h += f'<div class="summary-box"><div class="icon">\U0001f396️</div><div class="label">గ్రేడ్ / Grade</div><div class="value">{_render_grade_badge(facts.grade) or "-"}</div></div>'
@@ -413,6 +580,29 @@ def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: 
     if facts.attendance_pct is not None and facts.attendance_pct < 75:
         h += '<div class="closing">⚠️ హాజరు తక్కువగా ఉంది; దయచేసి మీ పిల్లలను ప్రతిరోజూ పాఠశాలకు పంపించండి.</div>'
     h += '<div class="closing">❤️ పూర్తి వివరాల కోసం పైన వివరాలను వినండి, మీ పిల్లవాడి భవిష్యత్తు కోసం శుభాకాంక్షలు!</div>'
+
+    # Share text intentionally carries only what's already shown on this
+    # page — the student's own name and these same facts — never the
+    # private report link itself, so forwarding it can't hand someone
+    # else access to the report.
+    share_parts = [student["name"]]
+    if isinstance(facts.total, (int, float)):
+        share_parts.append(f"{fmt_num(facts.total)} marks")
+    if facts.grade != "-":
+        share_parts.append(f"Grade {facts.grade}")
+    share_parts.append("PASS" if is_pass else "FAIL")
+    if facts.last_rank is not None:
+        share_parts.append(f"Rank {fmt_num(facts.last_rank)}/{facts.class_strength}")
+    if facts.attendance_pct is not None:
+        share_parts.append(f"Attendance {facts.attendance_pct}%")
+    share_text = " · ".join(share_parts)
+    h += (
+        '<div class="share-row">'
+        f'<button type="button" class="share-btn" id="shareBtn" data-share-text="{_esc(share_text)}">'
+        "\U0001f4e4 షేర్ / Share</button>"
+        "</div>"
+    )
+
     h += '<div class="grow"></div></div>'
 
     return f'<section class="page" data-page-id="conclusion" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
