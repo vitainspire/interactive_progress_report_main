@@ -59,7 +59,8 @@ export interface ExamTrendPoint {
 }
 
 export interface ClassStats {
-  latest_exam: string | null;
+  selected_exam: string | null;
+  available_exams: string[];
   total_students: number;
   class_strength: number;
   graded_count: number;

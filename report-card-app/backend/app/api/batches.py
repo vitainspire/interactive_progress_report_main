@@ -113,14 +113,14 @@ def get_batch(batch_id: int, current_user=Depends(get_current_user)):
 
 
 @router.get("/{batch_id}/stats")
-def get_batch_stats(batch_id: int, current_user=Depends(get_current_user)):
+def get_batch_stats(batch_id: int, exam: str | None = None, current_user=Depends(get_current_user)):
     with session() as conn:
         row = repo.get_batch(conn, current_user["id"], batch_id)
         if not row:
             raise HTTPException(404, "Batch not found")
         all_students = repo.load_batch_students(conn, batch_id)
         settings = repo.settings_from_row(row)
-        return compute_class_stats(all_students, json.loads(row["exam_order"]), settings)
+        return compute_class_stats(all_students, json.loads(row["exam_order"]), settings, selected_exam=exam)
 
 
 class SettingsUpdate(BaseModel):

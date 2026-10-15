@@ -15,11 +15,16 @@ def _is_num(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
-def compute_class_stats(all_students: list[dict], exam_defs: list[dict], settings) -> dict:
+def compute_class_stats(all_students: list[dict], exam_defs: list[dict], settings, selected_exam: str | None = None) -> dict:
+    """`selected_exam` picks which exam the grade distribution/subject
+    averages/top-performers/needs-attention numbers describe — defaults to
+    the most recent exam in the sheet if omitted or not actually present.
+    `exam_trend` always covers every exam regardless, since that's the
+    point of a trend."""
     exam_order = [e["key"] for e in exam_defs]
     is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
     present_exams = [k for k in exam_order if any(k in s["exams"] for s in all_students)]
-    latest_key = present_exams[-1] if present_exams else None
+    latest_key = selected_exam if selected_exam in present_exams else (present_exams[-1] if present_exams else None)
 
     total = len(all_students)
     class_strength = settings.class_strength_override or total
@@ -109,7 +114,8 @@ def compute_class_stats(all_students: list[dict], exam_defs: list[dict], setting
         exam_trend.append({"exam": key, "avg_pct": avg_pct})
 
     return {
-        "latest_exam": latest_key,
+        "selected_exam": latest_key,
+        "available_exams": present_exams,
         "total_students": total,
         "class_strength": class_strength,
         "graded_count": graded_count,

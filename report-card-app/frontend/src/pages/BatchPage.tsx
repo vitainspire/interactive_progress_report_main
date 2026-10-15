@@ -242,7 +242,7 @@ function StudentLeaderboard({ title, students, tone }: { title: string; students
   );
 }
 
-function ClassOverview({ stats }: { stats: ClassStats | null }) {
+function ClassOverview({ stats, onChangeExam }: { stats: ClassStats | null; onChangeExam: (exam: string) => void }) {
   return (
     <div className="soft-card p-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -252,7 +252,23 @@ function ClassOverview({ stats }: { stats: ClassStats | null }) {
         <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
           Class overview
         </h2>
-        {stats?.latest_exam && <span className="pill">{stats.latest_exam}</span>}
+        {stats?.selected_exam && stats.available_exams.length > 1 ? (
+          <select
+            value={stats.selected_exam}
+            onChange={(e) => onChangeExam(e.target.value)}
+            aria-label="Exam to show analytics for"
+            className="rounded-md border px-2 py-1 text-sm font-medium"
+            style={{ borderColor: "var(--border)", background: "var(--page-plane)", color: "var(--text-primary)" }}
+          >
+            {stats.available_exams.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+        ) : (
+          stats?.selected_exam && <span className="pill">{stats.selected_exam}</span>
+        )}
         {stats && <TrendBadge trend={stats.exam_trend} />}
       </div>
 
@@ -592,6 +608,7 @@ export function BatchPage() {
 
   const [detail, setDetail] = useState<BatchDetail | null>(null);
   const [stats, setStats] = useState<ClassStats | null>(null);
+  const [examFilter, setExamFilter] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -628,6 +645,7 @@ export function BatchPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load this upload"));
 
     setStats(null);
+    setExamFilter(null);
     api
       .get<ClassStats>(`/batches/${batchId}/stats`)
       .then(setStats)
@@ -635,6 +653,19 @@ export function BatchPage() {
         /* overview is a bonus, not required for the page to work */
       });
   }, [batchId]);
+
+  function fetchStats(exam?: string) {
+    const qs = exam ? `?exam=${encodeURIComponent(exam)}` : "";
+    api
+      .get<ClassStats>(`/batches/${batchId}/stats${qs}`)
+      .then(setStats)
+      .catch(() => {});
+  }
+
+  function changeExam(exam: string) {
+    setExamFilter(exam);
+    fetchStats(exam);
+  }
 
   const selectedIds = useMemo(() => [...selected].sort((a, b) => a - b), [selected]);
   const reportUrl = useMemo(() => {
@@ -672,10 +703,7 @@ export function BatchPage() {
       const updated = await api.put<BatchDetail>(`/batches/${batchId}/settings`, payload);
       setDetail((prev) => (prev ? { ...prev, ...updated, students: prev.students } : prev));
       setReloadNonce((n) => n + 1);
-      api
-        .get<ClassStats>(`/batches/${batchId}/stats`)
-        .then(setStats)
-        .catch(() => {});
+      fetchStats(examFilter ?? undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save settings");
     } finally {
@@ -720,7 +748,7 @@ export function BatchPage() {
     <div className="space-y-5">
       <BatchHeader detail={detail} onDelete={deleteBatch} />
 
-      <ClassOverview stats={stats} />
+      <ClassOverview stats={stats} onChangeExam={changeExam} />
 
       <SettingsDrawer
         settings={settings}
