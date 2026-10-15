@@ -27,8 +27,10 @@ card_render.render_report_page — this module is only ever reached via
 from __future__ import annotations
 
 import html
+import math
 import re
 
+from app.reports.greeting import time_greeting_telugu
 from app.reports.numfmt import fmt_num
 from app.reports.parent_subject import (
     build_conclusion_voice_romanized,
@@ -39,8 +41,6 @@ from app.reports.parent_subject import (
     subject_commentary_telugu,
 )
 from app.reports.voice_script import _compute_facts
-
-NAVY = "#1e3a8a"
 
 # Optional per-subject background image for the hero section — faded behind
 # a near-opaque white wash (see .hero.themed) so it never competes with the
@@ -68,88 +68,134 @@ PARENT_CSS = """
 :root{
   color-scheme:light;
   --navy:#1e3a8a;
+  --navy-deep:#0e1b4d;
   --ink:#0f172a;
   --muted:#64748b;
   --line:#e5e7eb;
   --good:#15803d;
   --warn:#b45309;
   --bad:#b91c1c;
-  --gold:#b08a2e;
+  --gold:#e9a400;
+  --gold-soft:#f0c75e;
+  --ivory:#fbf8f2;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden}
 body{background:#f6f7f9;font:16px/1.5 'Noto Sans','Noto Sans Telugu',system-ui,sans-serif;color:var(--ink);display:flex;flex-direction:column;height:100vh;-webkit-font-smoothing:antialiased}
-.topbar{position:sticky;top:0;z-index:3;background:var(--navy);color:#fff;padding:.85em 1.2em .75em}
-.topbar .school{font-weight:600;font-size:.82em;text-align:center;opacity:.72;letter-spacing:.2px}
-.topbar .student{text-align:center;font-size:1.1em;font-weight:600;margin-top:.15em;letter-spacing:.1px}
+.topbar{position:sticky;top:0;z-index:3;background:var(--navy-deep);color:#fff;padding:.85em 1.2em .75em}
+.topbar .school{font-weight:600;font-size:.8em;text-align:center;opacity:.65;letter-spacing:.3px}
+.topbar .student{text-align:center;font-size:1.08em;font-weight:600;margin-top:.15em;letter-spacing:.1px}
 .progressbar{display:flex;gap:.3em;margin-top:.8em}
-.seg{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.22);overflow:hidden}
-.seg .fill{height:100%;width:0;background:#fff;transition:width .25s ease}
+.seg{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.18);overflow:hidden}
+.seg .fill{height:100%;width:0;background:var(--gold);transition:width .3s ease}
 .seg.active .fill{width:100%}
-.seg.done .fill{width:100%;background:rgba(255,255,255,.6)}
-.pagelabel{text-align:center;font-size:.72em;margin-top:.5em;opacity:.6;font-weight:500;letter-spacing:.4px}
+.seg.done .fill{width:100%;background:rgba(255,255,255,.55)}
+.pagelabel{text-align:center;font-size:.7em;margin-top:.5em;opacity:.55;font-weight:500;letter-spacing:.4px}
 main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
 .page{min-height:100%;display:flex;flex-direction:column;scroll-snap-align:start;scroll-snap-stop:always}
-.hero{flex:none;padding:2em 1.3em 1.5em;text-align:center;background:#fff;border-bottom:1px solid var(--line)}
+
+/* ---- Hero: a real editorial moment, not a header bar. Dark by default
+   (navy, or a navy-duotone photo when a subject has one), with the score
+   ring as the dominant visual element — this is the "score as hero" the
+   brief asked for, and the dark-to-light handoff into .body-pad is the
+   one recurring piece of visual drama every subject page shares. ---- */
+.hero{position:relative;flex:none;padding:1.7em 1.4em 1.6em;text-align:center;background:linear-gradient(165deg,var(--navy) 0%,var(--navy-deep) 100%);color:#fff;overflow:hidden}
 .hero.themed{background-size:cover;background-position:center}
-.eyebrow{font-size:.72em;font-weight:600;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
-.hero h1{margin:.3em 0 0;font-size:1.6em;font-weight:700;letter-spacing:.1px;color:var(--ink)}
-.hero .sub{font-size:.85em;font-weight:400;color:var(--muted);margin-top:.35em}
-.trend-note{margin-top:.7em;font-size:.82em;font-weight:500;color:var(--muted)}
-.trend-note.up{color:var(--good)}
-.trend-note.down{color:var(--bad)}
-.body-pad{padding:1.3em 1.2em 8em;flex:1;display:flex;flex-direction:column}
-.panel{background:#fff;border:1px solid var(--line);border-radius:14px;margin-top:1.3em}
-.panel:first-child{margin-top:0}
-.exam-row{padding:.95em 1.05em;display:flex;align-items:center;gap:.9em}
-.exam-row+.exam-row{border-top:1px solid var(--line)}
-.ring{--pct:0%;width:2.7em;height:2.7em;border-radius:50%;flex:none;background:conic-gradient(var(--ring-color,var(--navy)) var(--pct),var(--line) 0);display:flex;align-items:center;justify-content:center}
-.ring-inner{width:2.05em;height:2.05em;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:.65em;font-weight:600;color:var(--ink)}
-.exam-meta{flex:1}
-.exam-meta .exam-name{font-weight:600;color:var(--ink);font-size:1em}
-.exam-meta .exam-marks{font-size:.84em;color:var(--muted);margin-top:.1em}
+.hero-welcome{font-size:.78em;color:var(--gold-soft);font-weight:600;margin-bottom:.7em;letter-spacing:.2px;line-height:1.35}
+.eyebrow{font-size:.7em;font-weight:600;letter-spacing:2px;color:var(--gold-soft);text-transform:uppercase}
+.hero h1{margin:.3em 0 0;font-size:1.9em;font-weight:700;letter-spacing:.2px;color:#fff;line-height:1.1}
+.hero .sub{font-size:.8em;font-weight:400;color:rgba(255,255,255,.6);margin-top:.3em}
+.trend-note{display:inline-block;margin-top:.6em;font-size:.76em;font-weight:600;color:rgba(255,255,255,.75);background:rgba(255,255,255,.1);padding:.28em .75em;border-radius:99px}
+.trend-note.up{color:#86efac}
+.trend-note.down{color:#fca5a5}
+
+/* Score ring: real SVG, not a CSS hack — lets the fill animate smoothly
+   via stroke-dashoffset and carry a genuine gold gradient stroke. */
+.score-wrap{position:relative;width:7.6em;height:7.6em;margin:1em auto 0}
+.score-ring{width:100%;height:100%;transform:rotate(-90deg)}
+.score-ring .track{fill:none;stroke:rgba(255,255,255,.14);stroke-width:7}
+.score-ring .fill{fill:none;stroke:url(#scoreGoldGrad);stroke-width:7;stroke-linecap:round;transition:stroke-dashoffset 1.1s cubic-bezier(.16,.84,.26,1)}
+.score-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.score-num .big{font-size:2em;font-weight:700;color:#fff;line-height:1}
+.score-num .big sup{font-size:.42em;font-weight:600;margin-left:.05em;opacity:.85}
+.score-num .exam{font-size:.65em;color:rgba(255,255,255,.6);margin-top:.25em;font-weight:600;letter-spacing:.3px}
+.hero-grade{margin-top:.7em}
+.hero-grade .gr{font-size:1.05em;padding:.3em 1em}
+
+/* ---- Exam timeline: compact chips for every exam on record (handles 1
+   or many exams the same way), sitting on the light stage below. ---- */
+.body-pad{padding:1.1em 1.2em 8em;flex:1;display:flex;flex-direction:column;background:var(--ivory)}
+.timeline{display:flex;flex-wrap:wrap;gap:.6em}
+.chip{flex:1;min-width:7.2em;background:#fff;border:1px solid var(--line);border-radius:12px;padding:.85em .9em;box-shadow:0 1px 2px rgba(15,23,42,.03)}
+.chip .exam-name{font-size:.72em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.chip .exam-marks{font-size:1.15em;font-weight:700;color:var(--ink);margin-top:.3em}
+.chip .gr{margin-top:.5em}
 .gr{display:inline-block;min-width:2.1em;text-align:center;border-radius:5px;padding:.2em .5em;color:#fff;font-weight:600;font-size:.8em}
 .ga{background:var(--good)}.gb{background:var(--navy)}.gc{background:var(--warn)}.gd{background:#c2410c}.gf{background:var(--bad)}
-.commentary{margin-top:1.3em;background:#fff;border:1px solid var(--line);border-left:3px solid var(--line);border-radius:10px;padding:1.05em 1.1em}
-.commentary .ctitle{font-size:.7em;text-transform:uppercase;letter-spacing:.6px;font-weight:600;color:var(--muted)}
-.commentary .ctext{margin-top:.4em;font-size:.98em;line-height:1.5;color:var(--ink)}
-.commentary.good{border-left-color:var(--good)}
-.commentary.mid{border-left-color:var(--warn)}
-.commentary.low{border-left-color:var(--warn)}
-.commentary.fail{border-left-color:var(--bad)}
-.summary-grid{display:grid;grid-template-columns:1fr 1fr;padding:.3em}
-.summary-box{padding:1em .7em;text-align:center}
-.summary-box .label{font-size:.72em;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
-.summary-box .value{font-size:1.4em;font-weight:600;color:var(--ink);margin-top:.25em}
-.result-pill{display:inline-block;border-radius:5px;padding:.2em .85em;font-weight:600;color:#fff;font-size:1.05em;margin-top:.1em}
-.result-pill.pass{background:var(--good)}
-.result-pill.fail{background:var(--bad)}
-.recap-line{padding:.8em 1.05em;font-size:.95em;line-height:1.5}
-.recap-line+.recap-line{border-top:1px solid var(--line)}
-.recap-line .tag{display:inline-block;font-size:.7em;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-right:.5em}
-.closing{margin-top:1.3em;padding:1em 0 0;font-size:.92em;line-height:1.55;color:var(--muted)}
+
+/* Commentary styled as a personal note, not a dashboard tile — a large
+   quote glyph and serif-leaning italic give it a written, human voice. */
+.commentary{margin-top:1.2em;position:relative;padding:.3em 0 0 1.4em}
+.commentary::before{content:'\\201C';position:absolute;left:-.1em;top:-.25em;font-size:3em;font-weight:700;color:var(--navy);opacity:.18;line-height:1}
+.commentary .ctitle{font-size:.7em;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted)}
+.commentary .ctext{margin-top:.5em;font-size:1.08em;line-height:1.6;color:var(--ink);font-style:italic}
+.commentary.good .ctitle{color:var(--good)}
+.commentary.low .ctitle,.commentary.mid .ctitle{color:var(--warn)}
+.commentary.fail .ctitle{color:var(--bad)}
 .grow{flex:1 0 auto}
 
-/* Finale page: a single deliberate departure from white — a solid navy
-   band (no gradient, no decoration), distinguished by restraint rather
-   than ornament. A thin gold rule is the only accent, used once. */
-.hero.finale{background:var(--navy);border-bottom:none}
-.hero.finale h1{color:#fff}
-.hero.finale .sub{color:#c7d0e8}
-.hero.finale .rule{width:2.4em;height:2px;background:var(--gold);margin:.9em auto 0;border-radius:1px}
+/* ---- Finale: the payoff. Full dark stage, oversized typography, gold
+   light instead of a boxed stat grid. ---- */
+.hero.finale{min-height:100%;flex:1;padding:3.2em 1.5em 3em;display:flex;flex-direction:column;justify-content:center;background:radial-gradient(120% 90% at 50% -10%,#24409e 0%,var(--navy-deep) 60%)}
+.finale-eyebrow{font-size:.74em;font-weight:700;letter-spacing:3px;color:var(--gold-soft);text-transform:uppercase}
+.finale-name{margin-top:.5em;font-size:1.3em;font-weight:600;color:#fff}
+.finale-total{margin-top:.5em;font-size:4em;font-weight:700;color:#fff;line-height:1;letter-spacing:-.01em}
+.finale-total .unit{font-size:.28em;font-weight:600;color:rgba(255,255,255,.55);margin-left:.15em}
+.finale-grade-row{margin-top:1em;display:flex;gap:.6em;align-items:center;justify-content:center;flex-wrap:wrap}
+.result-tag{display:inline-block;border-radius:5px;padding:.25em .9em;font-weight:700;color:#fff;font-size:.95em;letter-spacing:.3px}
+.result-tag.pass{background:var(--good)}
+.result-tag.fail{background:var(--bad)}
+.finale-stat{margin-top:1.8em;display:flex;justify-content:center;gap:2em;flex-wrap:wrap}
+.finale-stat .item{text-align:center}
+.finale-stat .n{font-size:1.5em;font-weight:700;color:#fff}
+.finale-stat .l{font-size:.68em;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.5px;margin-top:.2em}
+.finale-msg{margin-top:1.8em;font-size:1em;line-height:1.6;color:rgba(255,255,255,.85);max-width:28em;margin-left:auto;margin-right:auto}
+.finale-recap{margin-top:1.4em;font-size:.88em;line-height:1.6;color:rgba(255,255,255,.65)}
+.finale-recap b{color:#fff;font-weight:600}
 
-.share-row{margin-top:1.4em;display:flex;justify-content:center}
-.share-btn{border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-weight:500;font-size:.88em;border-radius:8px;padding:.6em 1.2em;cursor:pointer}
-.share-btn:active{opacity:.7}
+.spark{position:absolute;width:5px;height:5px;background:var(--gold-soft);opacity:0;border-radius:1px;transform:rotate(45deg)}
+.spark:nth-child(1){top:14%;left:18%}
+.spark:nth-child(2){top:22%;right:16%}
+.spark:nth-child(3){top:62%;left:10%}
+.spark:nth-child(4){top:70%;right:14%}
+.spark:nth-child(5){top:40%;left:50%}
+.hero.finale.sparkle .spark{animation:spark-glint 1.6s ease-out forwards}
+.hero.finale.sparkle .spark:nth-child(2){animation-delay:.15s}
+.hero.finale.sparkle .spark:nth-child(3){animation-delay:.3s}
+.hero.finale.sparkle .spark:nth-child(4){animation-delay:.45s}
+.hero.finale.sparkle .spark:nth-child(5){animation-delay:.6s}
+@keyframes spark-glint{0%{opacity:0;transform:rotate(45deg) scale(.4)}40%{opacity:1;transform:rotate(45deg) scale(1.3)}100%{opacity:0;transform:rotate(45deg) scale(.6)}}
+
+.action-row{margin-top:2em;display:flex;gap:.7em;justify-content:center}
+.action-btn{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.06);color:#fff;font:inherit;font-weight:600;font-size:.88em;border-radius:99px;padding:.7em 1.4em;cursor:pointer}
+.action-btn:active{opacity:.7}
+.action-btn.primary{background:var(--gold);border-color:var(--gold);color:var(--navy-deep)}
 
 .bottom-fade{position:fixed;left:0;right:0;bottom:0;height:8.5em;background:linear-gradient(to bottom,rgba(246,247,249,0) 0%,#f6f7f9 65%);pointer-events:none;z-index:4}
-.listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:0;font:inherit;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5em;border-radius:99px;padding:.85em 1.6em;background:var(--navy);color:#fff;font-size:.96em;box-shadow:0 4px 14px rgba(30,58,138,.3);transition:transform .12s ease,background .2s ease}
+.listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:1px solid rgba(233,164,0,.55);font:inherit;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.6em;border-radius:99px;padding:.85em 1.6em;background:var(--navy-deep);color:#fff;font-size:.96em;box-shadow:0 6px 18px rgba(14,27,77,.35);transition:transform .12s ease,background .2s ease}
 .listen-fab:active{transform:translateX(-50%) scale(.97)}
-.listen-fab.loading{background:#475569;cursor:wait}
+.listen-fab.loading{background:#334155;border-color:rgba(255,255,255,.2);cursor:wait}
 .listen-fab.loading .spinner{width:1em;height:1em;border-radius:50%;border:.15em solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .7s linear infinite}
-.listen-fab.speaking{background:var(--bad)}
-.listen-fab.error{background:var(--warn)}
+.listen-fab.speaking{background:var(--navy-deep);border-color:var(--gold)}
+.listen-fab.error{background:var(--warn);border-color:var(--warn)}
 @keyframes spin{to{transform:rotate(360deg)}}
+.wave{display:inline-flex;align-items:center;gap:.16em;height:1em}
+.wave span{display:block;width:.16em;background:var(--gold);border-radius:1px;animation:wave-bounce .9s ease-in-out infinite}
+.wave span:nth-child(1){animation-delay:0s}
+.wave span:nth-child(2){animation-delay:.15s}
+.wave span:nth-child(3){animation-delay:.3s}
+.wave span:nth-child(4){animation-delay:.45s}
+@keyframes wave-bounce{0%,100%{height:.3em}50%{height:1em}}
 .swipe-hint{position:fixed;left:50%;bottom:6.3em;transform:translateX(-50%);z-index:5;font-size:.76em;font-weight:500;color:var(--muted);background:rgba(255,255,255,.95);padding:.35em .9em;border-radius:99px;box-shadow:0 1px 6px rgba(0,0,0,.08);transition:opacity .25s ease}
 .swipe-hint.hidden{opacity:0;pointer-events:none}
 
@@ -159,11 +205,37 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
    .enter class, added transiently by script, is what actually plays the
    motion; removing this class (or JS not running) just leaves it visible. */
 .hero,.body-pad{opacity:1}
-.hero.enter,.body-pad.enter{animation:content-in .4s ease both}
-@keyframes content-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.hero.enter{animation:content-in .5s ease both}
+.body-pad.enter{animation:content-in .5s ease .08s both}
+.hero.enter .hero-grade,.hero.enter .trend-note{animation:content-in .5s ease .25s both}
+@keyframes content-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
 @media (prefers-reduced-motion: reduce){
-  .ring,.listen-fab,.swipe-hint,.hero.enter,.body-pad.enter,.seg .fill{animation:none!important;transition:none!important}
+  .score-ring .fill,.listen-fab,.swipe-hint,.hero.enter,.body-pad.enter,.hero.enter .hero-grade,.hero.enter .trend-note,.seg .fill,.wave span,.spark{animation:none!important;transition:none!important}
+}
+
+/* Shorter phones (common budget Android, iPhone SE, anything under ~720px
+   tall) can't absorb the full hero without pushing the commentary past
+   the last scroll-snap boundary, where it becomes unreachable — vertical
+   space is compacted specifically, not just scaled down uniformly. */
+@media (max-height: 720px){
+  .hero-welcome{font-size:.72em;margin-bottom:.45em}
+  .hero{padding:1.1em 1.3em 1em}
+  .eyebrow{font-size:.64em}
+  .hero h1{font-size:1.5em;margin-top:.2em}
+  .hero .sub{font-size:.72em;margin-top:.2em}
+  .trend-note{margin-top:.4em;font-size:.68em;padding:.2em .6em}
+  .score-wrap{width:5.6em;height:5.6em;margin-top:.6em}
+  .score-num .big{font-size:1.5em}
+  .score-num .exam{font-size:.55em;margin-top:.1em}
+  .hero-grade{margin-top:.45em}
+  .body-pad{padding:.7em 1.2em 6.6em}
+  .timeline{gap:.4em}
+  .chip{padding:.55em .65em}
+  .commentary{margin-top:.7em}
+  .finale-total{font-size:3em}
+  .finale-stat{margin-top:1.2em}
+  .finale-msg{margin-top:1.1em}
 }
 """
 
@@ -188,7 +260,7 @@ READ_ALOUD_SCRIPT = """
       speakBtn.innerHTML = '<span class="spinner"></span> లోడ్ అవుతోంది…';
       speakBtn.classList.add('loading');
     } else if(state === 'speaking'){
-      speakBtn.textContent = '\\u23f9 Stop';
+      speakBtn.innerHTML = '<span class="wave"><span></span><span></span><span></span><span></span></span> Stop';
       speakBtn.classList.add('speaking');
     } else if(state === 'error'){
       speakBtn.textContent = '\\u26a0\\ufe0f వినలేకపోయాం';
@@ -254,28 +326,31 @@ READ_ALOUD_SCRIPT = """
   var swipeHint = document.getElementById('swipeHint');
   var publicToken = main.dataset.token || '';
 
+  // The ring's fill circle already carries its real, correct
+  // stroke-dashoffset from the server (so it's right even if this script
+  // never runs). To animate it, the trick is just: briefly force it to
+  // the fully-unfilled offset, then — on the next frame, so the browser
+  // registers that as a real style change — set it back to the real
+  // value. The CSS transition on stroke-dashoffset does the rest.
   function animateRing(ring){
-    var target = parseFloat(ring.getAttribute('data-pct') || '0');
-    var inner = ring.querySelector('.ring-inner');
-    if(reduceMotion){ ring.style.setProperty('--pct', target + '%'); return; }
-    ring.style.setProperty('--pct', '0%');
-    if(inner) inner.textContent = '0%';
-    var start = null, duration = 700;
-    function step(ts){
-      if(start === null) start = ts;
-      var p = Math.min(1, (ts - start) / duration);
-      var eased = 1 - Math.pow(1 - p, 3);
-      var val = target * eased;
-      ring.style.setProperty('--pct', val + '%');
-      if(inner) inner.textContent = Math.round(val) + '%';
-      if(p < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
+    if(reduceMotion) return;
+    var fill = ring.querySelector('.fill');
+    if(!fill) return;
+    var target = fill.getAttribute('data-offset');
+    var circumference = fill.getAttribute('data-circumference');
+    fill.style.transition = 'none';
+    fill.style.strokeDashoffset = circumference;
+    // Force a reflow so the "none" transition + reset value actually commits
+    // before re-enabling the transition and setting the real target.
+    void fill.getBoundingClientRect();
+    fill.style.transition = '';
+    requestAnimationFrame(function(){ fill.style.strokeDashoffset = target; });
   }
 
-  // Plays a page's entrance once (ring fill, content settle-in). Guarded
-  // by data-animated so revisiting an already-seen page by scrolling back
-  // up doesn't replay the animation every time.
+  // Plays a page's entrance once (ring fill, content settle-in, and — on
+  // the finale page, only for a pass — a brief gold sparkle). Guarded by
+  // data-animated so revisiting an already-seen page by scrolling back up
+  // doesn't replay the animation every time.
   function activatePage(page){
     if(page.dataset.animated) return;
     page.dataset.animated = '1';
@@ -285,7 +360,11 @@ READ_ALOUD_SCRIPT = """
       if(hero){ hero.classList.add('enter'); hero.addEventListener('animationend', function(){ hero.classList.remove('enter'); }, { once: true }); }
       if(body){ body.classList.add('enter'); body.addEventListener('animationend', function(){ body.classList.remove('enter'); }, { once: true }); }
     }
-    Array.prototype.forEach.call(page.querySelectorAll('.ring'), animateRing);
+    Array.prototype.forEach.call(page.querySelectorAll('.score-ring'), animateRing);
+    if(hero && hero.classList.contains('finale') && hero.dataset.pass === '1' && !reduceMotion){
+      hero.classList.add('sparkle');
+      setTimeout(function(){ hero.classList.remove('sparkle'); }, 2200);
+    }
   }
 
   // Navigation is native vertical scroll-snap (swipe up/down, like a
@@ -428,8 +507,6 @@ def _grade_class(g: str) -> str:
     return "gc"
 
 
-_GRADE_RING_COLOR = {"ga": "#15803d", "gb": NAVY, "gc": "#b45309", "gd": "#c2410c", "gf": "#b91c1c"}
-
 _TREND_NOTE = {
     "up": "▲ మెరుగుపడింది",
     "down": "▼ తగ్గింది",
@@ -441,6 +518,35 @@ def _render_grade_badge(g: str) -> str:
     if g == "-":
         return ""
     return f'<span class="gr {_grade_class(g)}">{_esc(g)}</span>'
+
+
+_RING_R = 50
+_RING_CIRCUMFERENCE = 2 * math.pi * _RING_R
+
+
+def _render_score_ring(pct: float, exam_label: str) -> str:
+    """A real SVG ring (not the old conic-gradient trick) — correct,
+    static stroke-dashoffset by default (so it reads right even with no
+    JS), animated by script.js briefly resetting it to fully-unfilled and
+    letting the CSS transition carry it back to this value."""
+    pct = max(0.0, min(100.0, pct))
+    offset = _RING_CIRCUMFERENCE * (1 - pct / 100)
+    return (
+        '<div class="score-wrap">'
+        '<svg class="score-ring" viewBox="0 0 120 120" aria-hidden="true">'
+        '<defs><linearGradient id="scoreGoldGrad" x1="0" y1="1" x2="1" y2="0">'
+        '<stop offset="0%" stop-color="#e9a400"/><stop offset="100%" stop-color="#f6d97a"/>'
+        "</linearGradient></defs>"
+        f'<circle class="track" cx="60" cy="60" r="{_RING_R}"></circle>'
+        f'<circle class="fill" cx="60" cy="60" r="{_RING_R}" '
+        f'stroke-dasharray="{_RING_CIRCUMFERENCE:.2f}" stroke-dashoffset="{offset:.2f}" '
+        f'data-circumference="{_RING_CIRCUMFERENCE:.2f}" data-offset="{offset:.2f}"></circle>'
+        "</svg>"
+        '<div class="score-num">'
+        f'<div class="big">{round(pct)}<sup>%</sup></div>'
+        f'<div class="exam">{_esc(exam_label)}</div>'
+        "</div></div>"
+    )
 
 
 def _render_marks_cell(v) -> str:
@@ -472,12 +578,23 @@ def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject
 
     bg = _subject_background(subject_name)
     if bg:
+        # Darkened toward navy, not washed toward white — the photo stays
+        # genuinely visible (the earlier near-opaque white wash made it
+        # look like it was barely there), while staying dark enough for
+        # white text to sit on top of it cleanly.
         hero_style = (
-            f' style="background-image:linear-gradient(rgba(255,255,255,.88),rgba(255,255,255,.88)),url(\'{_esc(bg)}\')"'
+            " style=\"background-image:linear-gradient(165deg,rgba(30,58,138,.55) 0%,rgba(14,27,77,.88) 100%),"
+            f"url('{_esc(bg)}')\""
         )
         h = f'<div class="hero themed"{hero_style}>'
     else:
         h = '<div class="hero">'
+
+    if index == 0:
+        h += (
+            f'<div class="hero-welcome">{_esc(time_greeting_telugu())} '
+            f'{_esc(student["name"])} యొక్క ప్రోగ్రెస్ కార్డ్‌కు స్వాగతం</div>'
+        )
     h += (
         f'<div class="eyebrow">Subject {index + 1} of {total}</div>'
         f'<h1>{_esc(subject_name)}</h1>'
@@ -485,21 +602,22 @@ def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject
     )
     if facts.trend:
         h += f'<div class="trend-note {facts.trend}">{_TREND_NOTE[facts.trend]}</div>'
-    h += "</div>"
-    h += '<div class="body-pad"><div class="panel">'
-    for e in facts.history:
-        ring_color = _GRADE_RING_COLOR.get(_grade_class(e.grade), NAVY) if e.grade != "-" else "#94a3b8"
+    if facts.history:
+        latest = facts.history[-1]
         pct = 0.0
-        if isinstance(e.marks, (int, float)) and e.max_marks:
-            pct = max(0.0, min(100.0, e.marks * 100 / e.max_marks))
+        if isinstance(latest.marks, (int, float)) and latest.max_marks:
+            pct = latest.marks * 100 / latest.max_marks
+        h += _render_score_ring(pct, latest.exam_key)
+        if latest.grade != "-":
+            h += f'<div class="hero-grade">{_render_grade_badge(latest.grade)}</div>'
+    h += "</div>"
+
+    h += '<div class="body-pad"><div class="timeline">'
+    for e in facts.history:
         h += (
-            '<div class="exam-row">'
-            f'<div class="ring" data-pct="{pct:.0f}" style="--pct:{pct:.0f}%;--ring-color:{ring_color}">'
-            f'<div class="ring-inner">{round(pct)}%</div></div>'
-            '<div class="exam-meta">'
+            '<div class="chip">'
             f'<div class="exam-name">{_esc(e.exam_key)}</div>'
-            f'<div class="exam-marks">{_render_marks_cell(e.marks)} / {_render_marks_cell(e.max_marks)} marks</div>'
-            "</div>"
+            f'<div class="exam-marks">{_render_marks_cell(e.marks)}/{_render_marks_cell(e.max_marks)}</div>'
             f"{_render_grade_badge(e.grade)}"
             "</div>"
         )
@@ -515,16 +633,6 @@ def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject
     return f'<section class="page" data-page-id="{_esc(subject_name)}" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
 
 
-def _render_finale_hero() -> str:
-    return (
-        '<div class="hero finale">'
-        "<h1>మొత్తం గ్రేడ్ &amp; ఫలితం</h1>"
-        '<div class="sub">Overall Result</div>'
-        '<div class="rule"></div>'
-        "</div>"
-    )
-
-
 def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str) -> str:
     exam_order = [e["key"] for e in exam_defs]
     class_strength = settings.class_strength_override or len(all_students)
@@ -533,43 +641,62 @@ def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: 
     speech_roman = build_conclusion_voice_romanized(student, exam_order, class_strength, school_name)
 
     if facts is None:
-        h = _render_finale_hero() + '<div class="body-pad"><div class="grow"></div></div>'
+        h = (
+            '<div class="hero finale" data-pass="0">'
+            '<div class="finale-eyebrow">Overall Result</div>'
+            f'<div class="finale-name">{_esc(student["name"])}</div>'
+            "</div>"
+        )
         return f'<section class="page" data-page-id="conclusion" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
 
     is_pass = facts.grade not in ("D2", "-") or bool(re.search(r"PASS", facts.result_text or "", re.I))
     if facts.grade == "D2" or re.search(r"FAIL", facts.result_text or "", re.I):
         is_pass = False
-        result_html = '<span class="result-pill fail">FAIL</span>'
+        result_html = '<span class="result-tag fail">FAIL</span>'
     elif facts.grade != "-" or re.search(r"PASS", facts.result_text or "", re.I):
-        result_html = '<span class="result-pill pass">PASS</span>'
+        result_html = '<span class="result-tag pass">PASS</span>'
     else:
-        result_html = "-"
+        result_html = ""
 
-    h = _render_finale_hero()
-    h += '<div class="body-pad">'
-    h += '<div class="panel"><div class="summary-grid">'
-    h += f'<div class="summary-box"><div class="label">Marks</div><div class="value">{_render_marks_cell(facts.total)}</div></div>'
-    h += f'<div class="summary-box"><div class="label">Grade</div><div class="value">{_render_grade_badge(facts.grade) or "-"}</div></div>'
-    h += f'<div class="summary-box"><div class="label">Result</div><div class="value">{result_html}</div></div>'
+    h = f'<div class="hero finale" data-pass="{1 if is_pass else 0}">'
+    if is_pass:
+        h += '<span class="spark"></span><span class="spark"></span><span class="spark"></span><span class="spark"></span><span class="spark"></span>'
+    h += '<div class="finale-eyebrow">Overall Result</div>'
+    h += f'<div class="finale-name">{_esc(student["name"])}</div>'
+    if isinstance(facts.total, (int, float)):
+        h += f'<div class="finale-total">{fmt_num(facts.total)}<span class="unit">marks</span></div>'
+    h += '<div class="finale-grade-row">'
+    if facts.grade != "-":
+        h += _render_grade_badge(facts.grade)
+    h += result_html
+    h += "</div>"
+
+    stats = []
     if facts.last_rank is not None:
-        h += f'<div class="summary-box"><div class="label">Rank</div><div class="value">{fmt_num(facts.last_rank)} / {facts.class_strength}</div></div>'
+        stats.append(("n", fmt_num(facts.last_rank) + " / " + str(facts.class_strength), "Rank"))
     if facts.attendance_pct is not None:
-        h += f'<div class="summary-box"><div class="label">Attendance</div><div class="value">{facts.attendance_pct}%</div></div>'
-    h += "</div></div>"
-
-    if facts.good or facts.fail or facts.low:
-        h += '<div class="panel">'
-        if facts.good:
-            h += f'<div class="recap-line"><span class="tag">Strong</span>{_esc(", ".join(facts.good))}</div>'
-        if facts.fail:
-            h += f'<div class="recap-line"><span class="tag">Failed</span>{_esc(", ".join(facts.fail))}</div>'
-        if facts.low:
-            h += f'<div class="recap-line"><span class="tag">Needs attention</span>{_esc(", ".join(facts.low))}</div>'
+        stats.append(("n", f"{facts.attendance_pct}%", "Attendance"))
+    if stats:
+        h += '<div class="finale-stat">'
+        for _, value, label in stats:
+            h += f'<div class="item"><div class="n">{value}</div><div class="l">{_esc(label)}</div></div>'
         h += "</div>"
 
     if facts.attendance_pct is not None and facts.attendance_pct < 75:
-        h += '<div class="closing">హాజరు తక్కువగా ఉంది; దయచేసి మీ పిల్లలను ప్రతిరోజూ పాఠశాలకు పంపించండి.</div>'
-    h += '<div class="closing">పూర్తి వివరాల కోసం పైన వివరాలను వినండి, మీ పిల్లవాడి భవిష్యత్తు కోసం శుభాకాంక్షలు!</div>'
+        h += '<div class="finale-msg">హాజరు తక్కువగా ఉంది; దయచేసి మీ పిల్లలను ప్రతిరోజూ పాఠశాలకు పంపించండి.</div>'
+    h += '<div class="finale-msg">పూర్తి వివరాల కోసం పైన వివరాలను వినండి, మీ పిల్లవాడి భవిష్యత్తు కోసం శుభాకాంక్షలు!</div>'
+
+    if facts.good or facts.fail or facts.low:
+        h += '<div class="finale-recap">'
+        parts = []
+        if facts.good:
+            parts.append(f'<b>Strong:</b> {_esc(", ".join(facts.good))}')
+        if facts.fail:
+            parts.append(f'<b>Failed:</b> {_esc(", ".join(facts.fail))}')
+        if facts.low:
+            parts.append(f'<b>Needs attention:</b> {_esc(", ".join(facts.low))}')
+        h += " &nbsp;&middot;&nbsp; ".join(parts)
+        h += "</div>"
 
     # Share text intentionally carries only what's already shown on this
     # page — the student's own name and these same facts — never the
@@ -587,13 +714,12 @@ def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: 
         share_parts.append(f"Attendance {facts.attendance_pct}%")
     share_text = " · ".join(share_parts)
     h += (
-        '<div class="share-row">'
-        f'<button type="button" class="share-btn" id="shareBtn" data-share-text="{_esc(share_text)}">'
+        '<div class="action-row">'
+        f'<button type="button" class="action-btn primary" id="shareBtn" data-share-text="{_esc(share_text)}">'
         "షేర్ / Share</button>"
         "</div>"
     )
-
-    h += '<div class="grow"></div></div>'
+    h += "</div>"
 
     return f'<section class="page" data-page-id="conclusion" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
 
