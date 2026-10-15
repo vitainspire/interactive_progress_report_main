@@ -42,6 +42,27 @@ from app.reports.voice_script import _compute_facts
 
 NAVY = "#1e3a8a"
 
+# Optional per-subject background image for the hero section — faded behind
+# a near-opaque white wash (see .hero.themed) so it never competes with the
+# heading or the marks table underneath. Matched by exact subject name
+# (upper-cased); a subject with no match just keeps the plain white hero.
+# Served from /static (see main.py's StaticFiles mount) — a decorative,
+# non-sensitive asset path, never one that touches student data.
+SUBJECT_BACKGROUNDS = {
+    "TELUGU": "/static/backgrounds/telugu.jpg",
+    "HINDI": "/static/backgrounds/hindi.jpg",
+    "ENGLISH": "/static/backgrounds/english.jpg",
+    "MATHS": "/static/backgrounds/maths.jpg",
+    "MATHEMATICS": "/static/backgrounds/maths.jpg",
+    "PHYSICAL SCIENCE": "/static/backgrounds/physical_science.jpg",
+    "SOCIAL": "/static/backgrounds/social.jpg",
+    "SOCIAL STUDIES": "/static/backgrounds/social.jpg",
+}
+
+
+def _subject_background(name: str) -> str | None:
+    return SUBJECT_BACKGROUNDS.get((name or "").strip().upper())
+
 
 PARENT_CSS = """
 :root{
@@ -70,6 +91,7 @@ body{background:#f6f7f9;font:16px/1.5 'Noto Sans','Noto Sans Telugu',system-ui,s
 main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
 .page{min-height:100%;display:flex;flex-direction:column;scroll-snap-align:start;scroll-snap-stop:always}
 .hero{flex:none;padding:2em 1.3em 1.5em;text-align:center;background:#fff;border-bottom:1px solid var(--line)}
+.hero.themed{background-size:cover;background-position:center}
 .eyebrow{font-size:.72em;font-weight:600;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
 .hero h1{margin:.3em 0 0;font-size:1.6em;font-weight:700;letter-spacing:.1px;color:var(--ink)}
 .hero .sub{font-size:.85em;font-weight:400;color:var(--muted);margin-top:.35em}
@@ -448,8 +470,15 @@ def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject
     speech_te = build_subject_voice_telugu(facts, student["name"], index, total, is_last, school_name, parent_name)
     speech_roman = build_subject_voice_romanized(facts, student["name"], index, total, is_last, school_name, parent_name)
 
-    h = (
-        '<div class="hero">'
+    bg = _subject_background(subject_name)
+    if bg:
+        hero_style = (
+            f' style="background-image:linear-gradient(rgba(255,255,255,.88),rgba(255,255,255,.88)),url(\'{_esc(bg)}\')"'
+        )
+        h = f'<div class="hero themed"{hero_style}>'
+    else:
+        h = '<div class="hero">'
+    h += (
         f'<div class="eyebrow">Subject {index + 1} of {total}</div>'
         f'<h1>{_esc(subject_name)}</h1>'
         '<div class="sub">ఈ సబ్జెక్టులో ప్రదర్శన</div>'
