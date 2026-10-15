@@ -202,7 +202,7 @@ function SubjectAverageBars({ data }: { data: ClassStats["subject_averages"] }) 
   );
 }
 
-function StudentRow({ student, tone }: { student: RankedStudent; tone: "good" | "warn" }) {
+function StudentRow({ student, tone, onSelect }: { student: RankedStudent; tone: "good" | "warn"; onSelect: (id: number) => void }) {
   return (
     <div
       className="group flex items-center gap-3 border-b py-2 last:border-b-0"
@@ -217,15 +217,31 @@ function StudentRow({ student, tone }: { student: RankedStudent; tone: "good" | 
       >
         {student.rank ?? "–"}
       </span>
-      <span className="flex-1 truncate text-sm" style={{ color: "var(--text-primary)" }}>
+      <button
+        type="button"
+        onClick={() => onSelect(student.id)}
+        className="flex-1 truncate text-left text-sm hover:underline"
+        style={{ color: "var(--text-primary)" }}
+        title="View this student's report"
+      >
         {student.name}
-      </span>
+      </button>
       <GradeChip grade={student.grade} />
     </div>
   );
 }
 
-function StudentLeaderboard({ title, students, tone }: { title: string; students: RankedStudent[]; tone: "good" | "warn" }) {
+function StudentLeaderboard({
+  title,
+  students,
+  tone,
+  onSelectStudent,
+}: {
+  title: string;
+  students: RankedStudent[];
+  tone: "good" | "warn";
+  onSelectStudent: (id: number) => void;
+}) {
   return (
     <div>
       <SectionLabel>{title}</SectionLabel>
@@ -235,14 +251,22 @@ function StudentLeaderboard({ title, students, tone }: { title: string; students
             Nothing to show yet.
           </p>
         ) : (
-          students.map((s) => <StudentRow key={s.id} student={s} tone={tone} />)
+          students.map((s) => <StudentRow key={s.id} student={s} tone={tone} onSelect={onSelectStudent} />)
         )}
       </div>
     </div>
   );
 }
 
-function ClassOverview({ stats, onChangeExam }: { stats: ClassStats | null; onChangeExam: (exam: string) => void }) {
+function ClassOverview({
+  stats,
+  onChangeExam,
+  onSelectStudent,
+}: {
+  stats: ClassStats | null;
+  onChangeExam: (exam: string) => void;
+  onSelectStudent: (id: number) => void;
+}) {
   return (
     <div className="soft-card p-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -314,8 +338,8 @@ function ClassOverview({ stats, onChangeExam }: { stats: ClassStats | null; onCh
           )}
 
           <div className="mt-5 grid grid-cols-1 gap-x-6 gap-y-5 border-t pt-5 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}>
-            <StudentLeaderboard title="Top performers" students={stats.top_students} tone="good" />
-            <StudentLeaderboard title="Needs attention" students={stats.attention_students} tone="warn" />
+            <StudentLeaderboard title="Top performers" students={stats.top_students} tone="good" onSelectStudent={onSelectStudent} />
+            <StudentLeaderboard title="Needs attention" students={stats.attention_students} tone="warn" onSelectStudent={onSelectStudent} />
           </div>
         </>
       )}
@@ -561,6 +585,7 @@ function ReportPreview({ reportUrl, iframeRef }: { reportUrl: string; iframeRef:
         >
           <div style={{ width: A4_WIDTH_PX, transform: `scale(${zoom})`, transformOrigin: "top left" }}>
             <iframe
+              key={reportUrl}
               ref={iframeRef}
               src={reportUrl}
               title="Report card preview"
@@ -686,6 +711,11 @@ export function BatchPage() {
     });
   }
 
+  function viewOneStudent(studentId: number) {
+    setSelected(new Set([studentId]));
+    requestAnimationFrame(() => iframeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
   async function saveSettings() {
     setSaving(true);
     setError(null);
@@ -748,7 +778,7 @@ export function BatchPage() {
     <div className="space-y-5">
       <BatchHeader detail={detail} onDelete={deleteBatch} />
 
-      <ClassOverview stats={stats} onChangeExam={changeExam} />
+      <ClassOverview stats={stats} onChangeExam={changeExam} onSelectStudent={viewOneStudent} />
 
       <SettingsDrawer
         settings={settings}
