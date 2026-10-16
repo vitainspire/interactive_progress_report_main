@@ -251,15 +251,23 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 .about-placeholder .ap-icon svg{width:1.7em;height:1.7em}
 .about-placeholder h1{font-size:1.2em;margin:.2em 0 0;color:var(--ink)}
 .about-placeholder p{font-size:.92em;color:var(--muted);max-width:22em;line-height:1.55;margin:.2em 0 0}
-.about-back{margin-top:1.2em;display:inline-block;font-size:.88em;font-weight:600;color:var(--navy);text-decoration:none;border:1px solid var(--line);border-radius:99px;padding:.6em 1.3em}
+.about-back{flex:none;align-self:center;display:inline-block;font-size:.82em;font-weight:600;color:var(--navy);text-decoration:none;border:1px solid var(--line);border-radius:99px;padding:.45em 1.1em}
 
-/* ---- "Know About Student" chat ---- */
-.chat-head{text-align:center;padding:0 0 1em}
+/* ---- "Know About Student" chat ----
+   A fixed app-shell, not a scrolling page: the chat's own <html>/<body>
+   classes (see render_report_about_page) skip the landing page's
+   height:auto override, so the base body{height:100vh;overflow:hidden}
+   rule applies — everything here has to fit in one screen by
+   construction. .chat-box flexes to fill whatever's left after the
+   header/head/back-link's natural height, and .chat-messages is the only
+   thing that ever scrolls, same as any real chat app. */
+.chat-shell{flex:1;min-height:0;display:flex;flex-direction:column;gap:.7em;background:#fff;padding:1em 1.1em;max-width:30em;margin:0 auto;width:100%}
+.chat-head{flex:none;text-align:center}
 .chat-head .eyebrow{font-size:.7em;font-weight:700;letter-spacing:1.5px;color:var(--navy);text-transform:uppercase}
-.chat-head h1{margin:.3em 0 0;font-size:1.15em;color:var(--ink)}
-.chat-head p{margin-top:.3em;font-size:.82em;color:var(--muted)}
-.chat-box{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.05)}
-.chat-messages{height:min(56vh,440px);overflow-x:hidden;overflow-y:auto;padding:1em;display:flex;flex-direction:column;gap:.6em;-webkit-overflow-scrolling:touch}
+.chat-head h1{margin:.3em 0 0;font-size:1.05em;color:var(--ink)}
+.chat-head p{margin-top:.25em;font-size:.78em;color:var(--muted)}
+.chat-box{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.chat-messages{flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;padding:1em;display:flex;flex-direction:column;gap:.6em;-webkit-overflow-scrolling:touch}
 .chat-bubble{max-width:82%;padding:.6em .85em;border-radius:14px;font-size:.92em;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-bubble.assistant{align-self:flex-start;background:var(--ivory);color:var(--ink);border-bottom-left-radius:4px}
 .chat-bubble.user{align-self:flex-end;background:var(--navy);color:#fff;border-bottom-right-radius:4px}
@@ -622,20 +630,24 @@ PAGE_SHELL = """<!doctype html>
 </body></html>
 """
 
-# A plain, non-scrolling-trick page — unlike PAGE_SHELL, content here is
-# normal document flow (the body can be taller than one viewport and just
-# scrolls), since neither the landing choice screen nor the "about student"
-# placeholder need the swipe/scroll-snap machinery built for the report
-# itself.
+# A page shell shared by the landing choice screen and the chat, neither of
+# which needs PAGE_SHELL's swipe/scroll-snap machinery. `html_class`/
+# `body_class` pick which body behavior a given page gets: the landing
+# page passes "landing-html"/"landing-body-root" (normal document flow —
+# its own height varies with whichever hero photo is set, so it just
+# scrolls like a regular page); the chat passes "" for both, which falls
+# through to the base body{height:100vh;overflow:hidden} rule instead, so
+# the chat is a fixed one-screen app shell where only its own message list
+# scrolls (see .chat-shell/.chat-box/.chat-messages in PARENT_CSS).
 SIMPLE_SHELL = """<!doctype html>
-<html lang="en" class="landing-html"><head><meta charset="utf-8">
+<html lang="en" class="{html_class}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700;800&family=Noto+Sans+Telugu:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>{css}</style></head>
-<body class="landing-body-root">
+<body class="{body_class}">
 {header}
 {content}
 </body></html>
@@ -1042,6 +1054,8 @@ def render_report_landing_page(student_name: str, school_name: str, token: str) 
     return SIMPLE_SHELL.format(
         title=_esc(f"{student_name} — Report"),
         css=PARENT_CSS,
+        html_class="landing-html",
+        body_class="landing-body-root",
         header=header,
         content=content,
     )
@@ -1070,7 +1084,7 @@ def render_report_about_page(student_name: str, school_name: str, token: str) ->
     header = TOPBAR_HEADER.format(school=_esc(school_name or "School"), student_name=_esc(student_name))
     chips = "".join(f'<button type="button" class="chat-chip" data-q="{_esc(q)}">{_esc(q)}</button>' for q in _DEFAULT_CHAT_QUESTIONS)
     content = (
-        f'<div class="landing-body" id="chatRoot" data-token="{_esc(token)}">'
+        f'<div class="chat-shell" id="chatRoot" data-token="{_esc(token)}">'
         '<div class="chat-head">'
         '<div class="eyebrow">Know About Student</div>'
         f'<h1>{_esc(student_name)} గురించి అడగండి / Ask about {_esc(student_name)}</h1>'
@@ -1114,11 +1128,18 @@ def render_report_about_page(student_name: str, school_name: str, token: str) ->
         "messages.scrollTop=messages.scrollHeight;"
         "return div;"
         "}"
-        "function send(question){"
+        # `usedChip` is the specific chip button clicked (if any) — only
+        # that one gets removed on send, so the rest stay available for a
+        # follow-up tap instead of the whole suggestions row disappearing
+        # after the first question (typed or tapped).
+        "function send(question,usedChip){"
         "question=(question||'').trim();"
         "if(busy||!question)return;"
         "busy=true;sendBtn.disabled=true;"
-        "if(suggestions)suggestions.style.display='none';"
+        "if(usedChip){"
+        "usedChip.remove();"
+        "if(suggestions&&!suggestions.querySelector('.chat-chip'))suggestions.style.display='none';"
+        "}"
         "addBubble('user',question);"
         "var typing=addTyping();"
         "var priorHistory=history.slice();"
@@ -1148,7 +1169,7 @@ def render_report_about_page(student_name: str, school_name: str, token: str) ->
         "send(q);"
         "});"
         "Array.prototype.forEach.call(document.querySelectorAll('.chat-chip'),function(btn){"
-        "btn.addEventListener('click',function(){send(btn.getAttribute('data-q'));});"
+        "btn.addEventListener('click',function(){send(btn.getAttribute('data-q'),btn);});"
         "});"
         "})();"
         "</script>"
@@ -1156,6 +1177,8 @@ def render_report_about_page(student_name: str, school_name: str, token: str) ->
     return SIMPLE_SHELL.format(
         title=_esc(f"{student_name} — Know About Student"),
         css=PARENT_CSS,
+        html_class="",
+        body_class="",
         header=header,
         content=content,
     )
