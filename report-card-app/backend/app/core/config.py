@@ -60,3 +60,10 @@ TWILIO_SMS_FROM = os.environ.get("TWILIO_SMS_FROM", "")
 # voice installed — many don't). See app/integrations/bhashini.py.
 BHASHINI_USER_ID = os.environ.get("BHASHINI_USER_ID", "")
 BHASHINI_ULCA_API_KEY = os.environ.get("BHASHINI_ULCA_API_KEY", "")
+
+# OpenRouter — powers the "Know About Student" chat, where a parent can ask
+# free-form questions about their child and get answers grounded in that
+# student's own report data (see app/integrations/chat.py and
+# app/reports/chat_context.py). Get a key at openrouter.ai/keys.
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "qwen/qwen3.8-flash")

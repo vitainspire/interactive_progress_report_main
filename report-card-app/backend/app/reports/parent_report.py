@@ -225,8 +225,8 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
    next to an afterthought — which is what reads as "designed" rather
    than a default template stack. ---- */
 html.landing-html,body.landing-body-root{height:auto;overflow:visible;background:#fff}
-.landing-hero{position:relative;height:11em;overflow:hidden}
-.landing-hero img{width:100%;height:100%;object-fit:cover;display:block}
+.landing-hero{position:relative;overflow:hidden;min-height:6em}
+.landing-hero img{width:100%;height:auto;display:block}
 .landing-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(14,27,77,.1) 0%,rgba(14,27,77,.85) 100%)}
 .landing-hero-caption{position:absolute;left:0;right:0;bottom:.9em;z-index:1;text-align:center;padding:0 1.2em}
 .landing-hero-caption .eyebrow{font-size:.68em;font-weight:700;letter-spacing:1.6px;color:var(--gold-soft);text-transform:uppercase}
@@ -252,6 +252,32 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 .about-placeholder h1{font-size:1.2em;margin:.2em 0 0;color:var(--ink)}
 .about-placeholder p{font-size:.92em;color:var(--muted);max-width:22em;line-height:1.55;margin:.2em 0 0}
 .about-back{margin-top:1.2em;display:inline-block;font-size:.88em;font-weight:600;color:var(--navy);text-decoration:none;border:1px solid var(--line);border-radius:99px;padding:.6em 1.3em}
+
+/* ---- "Know About Student" chat ---- */
+.chat-head{text-align:center;padding:0 0 1em}
+.chat-head .eyebrow{font-size:.7em;font-weight:700;letter-spacing:1.5px;color:var(--navy);text-transform:uppercase}
+.chat-head h1{margin:.3em 0 0;font-size:1.15em;color:var(--ink)}
+.chat-head p{margin-top:.3em;font-size:.82em;color:var(--muted)}
+.chat-box{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.chat-messages{height:min(56vh,440px);overflow-y:auto;padding:1em;display:flex;flex-direction:column;gap:.6em;-webkit-overflow-scrolling:touch}
+.chat-bubble{max-width:82%;padding:.6em .85em;border-radius:14px;font-size:.92em;line-height:1.5;white-space:pre-wrap}
+.chat-bubble.assistant{align-self:flex-start;background:var(--ivory);color:var(--ink);border-bottom-left-radius:4px}
+.chat-bubble.user{align-self:flex-end;background:var(--navy);color:#fff;border-bottom-right-radius:4px}
+.chat-bubble.error{align-self:flex-start;background:#fef2f2;color:var(--bad);border-bottom-left-radius:4px}
+.chat-bubble.typing{align-self:flex-start;background:var(--ivory);color:var(--muted);display:flex;gap:.3em;align-items:center;padding:.75em .9em}
+.chat-dot{width:.4em;height:.4em;border-radius:50%;background:var(--muted);animation:chat-dot-bounce 1s ease-in-out infinite}
+.chat-dot:nth-child(2){animation-delay:.15s}
+.chat-dot:nth-child(3){animation-delay:.3s}
+@keyframes chat-dot-bounce{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-2px)}}
+.chat-suggestions{display:flex;flex-wrap:wrap;gap:.5em;padding:.2em 1em .9em;border-top:1px solid var(--line)}
+.chat-chip{font-size:.78em;font-weight:500;color:var(--navy);background:var(--ivory);border:1px solid var(--line);border-radius:99px;padding:.5em .9em;cursor:pointer;text-align:left}
+.chat-chip:active{transform:scale(.97)}
+.chat-input-row{display:flex;gap:.5em;padding:.7em;border-top:1px solid var(--line)}
+.chat-input-row input{flex:1;border:1px solid var(--line);border-radius:99px;padding:.65em 1em;font:inherit;font-size:.9em;color:var(--ink);background:#fff}
+.chat-input-row input:focus{outline:none;border-color:var(--navy)}
+.chat-send{flex:none;width:2.6em;height:2.6em;border-radius:50%;border:none;background:var(--navy);color:#fff;font-size:1em;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.chat-send:disabled{opacity:.5;cursor:default}
+@media (prefers-reduced-motion: reduce){.chat-dot{animation:none}}
 
 .bottom-fade{position:fixed;left:0;right:0;bottom:0;height:8.5em;background:linear-gradient(to bottom,rgba(246,247,249,0) 0%,#f6f7f9 65%);pointer-events:none;z-index:4}
 .listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:1px solid rgba(233,164,0,.55);font:inherit;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.6em;border-radius:99px;padding:.85em 1.6em;background:var(--navy-deep);color:#fff;font-size:.96em;box-shadow:0 6px 18px rgba(14,27,77,.35);transition:transform .12s ease,background .2s ease}
@@ -1006,10 +1032,10 @@ def render_report_landing_page(student_name: str, school_name: str, token: str) 
         '<div class="lc-title">రిపోర్ట్ చూడండి<br>View Report</div>'
         '<div class="lc-sub">Marks, rank &amp; attendance</div>'
         "</a>"
-        f'<a class="landing-card soon" href="/api/public/report/{_esc(token)}/about">'
+        f'<a class="landing-card" href="/api/public/report/{_esc(token)}/about">'
         f'<div class="lc-icon">{_ICON_STUDENT}</div>'
         '<div class="lc-title">విద్యార్థి గురించి<br>Know About Student</div>'
-        '<span class="lc-badge">త్వరలో / Coming soon</span>'
+        '<div class="lc-sub">Ask a question, get an answer</div>'
         "</a>"
         "</div></div>"
     )
@@ -1021,18 +1047,111 @@ def render_report_landing_page(student_name: str, school_name: str, token: str) 
     )
 
 
-def render_report_about_placeholder(student_name: str, school_name: str, token: str) -> str:
-    """Stands in for the "Know About Student" page until that's actually
-    built — never a dead link/404, just an honest "not ready yet" with a
-    way back to the choice screen."""
+# The fixed set of starter questions offered as tappable chips before a
+# parent has typed anything — kept in Telugu exactly as specified, not
+# derived from this student's own data, since they're meant as generic
+# conversation starters that work for any student.
+_DEFAULT_CHAT_QUESTIONS = [
+    "మొత్తం ప్రగతి ఎలా ఉంది?",
+    "ఏ సబ్జెక్టులు మెరుగుపడాలి?",
+    "ర్యాంకు గురించి చెప్పండి",
+    "హాజరు ఎలా ఉంది?",
+    "ఇంకా బాగా చదవాలంటే ఏం చేయాలి?",
+]
+
+
+def render_report_about_page(student_name: str, school_name: str, token: str) -> str:
+    """The "Know About Student" chat: a parent types a free-form question
+    and gets an answer grounded in this one student's own report data (see
+    app/reports/chat_context.py + app/integrations/chat.py, called via
+    POST .../ask). Keeps no server-side conversation state — the page's own
+    script resends the growing `history` array with every question, same
+    statelessness as the rest of this API."""
     header = TOPBAR_HEADER.format(school=_esc(school_name or "School"), student_name=_esc(student_name))
+    chips = "".join(f'<button type="button" class="chat-chip" data-q="{_esc(q)}">{_esc(q)}</button>' for q in _DEFAULT_CHAT_QUESTIONS)
     content = (
-        '<div class="about-placeholder">'
-        f'<div class="ap-icon">{_ICON_STUDENT}</div>'
-        '<h1>విద్యార్థి గురించి తెలుసుకోండి / Know About Student</h1>'
-        '<p>ఈ విభాగం త్వరలో అందుబాటులోకి వస్తుంది. / This section is coming soon.</p>'
+        f'<div class="landing-body" id="chatRoot" data-token="{_esc(token)}">'
+        '<div class="chat-head">'
+        '<div class="eyebrow">Know About Student</div>'
+        f'<h1>{_esc(student_name)} గురించి అడగండి / Ask about {_esc(student_name)}</h1>'
+        '<p>మార్కులు, ర్యాంకు, హాజరు గురించి ఏదైనా అడగండి. / Ask anything about their marks, rank, or attendance.</p>'
+        "</div>"
+        '<div class="chat-box">'
+        '<div class="chat-messages" id="chatMessages">'
+        f'<div class="chat-bubble assistant">నమస్కారం! {_esc(student_name)} చదువు గురించి ఏదైనా అడగండి. / Hello! Ask me anything about {_esc(student_name)}\'s studies.</div>'
+        "</div>"
+        f'<div class="chat-suggestions" id="chatSuggestions">{chips}</div>'
+        '<form class="chat-input-row" id="chatForm">'
+        '<input type="text" id="chatInput" placeholder="మీ ప్రశ్న టైప్ చేయండి... / Type your question..." autocomplete="off">'
+        '<button type="submit" class="chat-send" id="chatSend" aria-label="Send">➤</button>'
+        "</form></div>"
         f'<a class="about-back" href="/api/public/report/{_esc(token)}">← వెనక్కి / Back</a>'
         "</div>"
+        "<script>"
+        "(function(){"
+        "var root=document.getElementById('chatRoot');"
+        "var token=root.dataset.token;"
+        "var messages=document.getElementById('chatMessages');"
+        "var suggestions=document.getElementById('chatSuggestions');"
+        "var form=document.getElementById('chatForm');"
+        "var input=document.getElementById('chatInput');"
+        "var sendBtn=document.getElementById('chatSend');"
+        "var history=[];"
+        "var busy=false;"
+        "function addBubble(cls,text){"
+        "var div=document.createElement('div');"
+        "div.className='chat-bubble '+cls;"
+        "div.textContent=text;"
+        "messages.appendChild(div);"
+        "messages.scrollTop=messages.scrollHeight;"
+        "return div;"
+        "}"
+        "function addTyping(){"
+        "var div=document.createElement('div');"
+        "div.className='chat-bubble typing';"
+        "div.innerHTML='<span class=\"chat-dot\"></span><span class=\"chat-dot\"></span><span class=\"chat-dot\"></span>';"
+        "messages.appendChild(div);"
+        "messages.scrollTop=messages.scrollHeight;"
+        "return div;"
+        "}"
+        "function send(question){"
+        "question=(question||'').trim();"
+        "if(busy||!question)return;"
+        "busy=true;sendBtn.disabled=true;"
+        "if(suggestions)suggestions.style.display='none';"
+        "addBubble('user',question);"
+        "var typing=addTyping();"
+        "var priorHistory=history.slice();"
+        "history.push({role:'user',content:question});"
+        "fetch('/api/public/report/'+token+'/ask',{"
+        "method:'POST',headers:{'Content-Type':'application/json'},"
+        "body:JSON.stringify({question:question,history:priorHistory})"
+        "}).then(function(r){return r.json().then(function(data){return {ok:r.ok,data:data};});})"
+        ".then(function(res){"
+        "typing.remove();"
+        "if(res.ok){"
+        "addBubble('assistant',res.data.answer);"
+        "history.push({role:'assistant',content:res.data.answer});"
+        "}else{"
+        "addBubble('error',res.data.detail||'సమాధానం పొందలేకపోయాం. / Could not get an answer. Please try again.');"
+        "}"
+        "}).catch(function(){"
+        "typing.remove();"
+        "addBubble('error','నెట్‌వర్క్ సమస్య. / Network error — please try again.');"
+        "}).finally(function(){"
+        "busy=false;sendBtn.disabled=false;"
+        "});"
+        "}"
+        "form.addEventListener('submit',function(e){"
+        "e.preventDefault();"
+        "var q=input.value;input.value='';"
+        "send(q);"
+        "});"
+        "Array.prototype.forEach.call(document.querySelectorAll('.chat-chip'),function(btn){"
+        "btn.addEventListener('click',function(){send(btn.getAttribute('data-q'));});"
+        "});"
+        "})();"
+        "</script>"
     )
     return SIMPLE_SHELL.format(
         title=_esc(f"{student_name} — Know About Student"),

@@ -2,18 +2,25 @@ import json
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel
 
 from app.db import batches as repo
 from app.db.database import session
-from app.integrations import bhashini, tts_cache
+from app.integrations import bhashini, chat, tts_cache
 from app.integrations.sharing import get_student_id_for_token
 from app.reports import card_render
+from app.reports.chat_context import build_student_context
 from app.reports.parent_report import (
     get_speech_text,
     render_parent_report_page,
-    render_report_about_placeholder,
+    render_report_about_page,
     render_report_landing_page,
 )
+
+
+class AskRequest(BaseModel):
+    question: str
+    history: list[dict] = []
 
 router = APIRouter(prefix="/public", tags=["public"])
 
@@ -67,13 +74,40 @@ def get_public_report(token: str):
 
 @router.get("/report/{token}/about", response_class=HTMLResponse)
 def get_public_report_about(token: str):
-    """Placeholder for the "Know About Student" card on the landing page —
-    not built yet, deliberately a real page rather than a 404 so the link
-    stays honest about what's coming."""
+    """The "Know About Student" chat — a parent can type a free-form
+    question and get an answer grounded in this one student's own report
+    data (see app/reports/chat_context.py and app/integrations/chat.py).
+    Always serves the chat UI even if OPENROUTER_API_KEY isn't set; /ask
+    below is what actually fails in that case, with a clear message rather
+    than this page 404ing or silently offering a feature that can't work."""
     with session() as conn:
         student, _all_students, batch_row = _resolve_report_context(conn, token)
-        html = render_report_about_placeholder(student["name"], batch_row["school_name"], token)
+        html = render_report_about_page(student["name"], batch_row["school_name"], token)
         return HTMLResponse(content=html)
+
+
+@router.post("/report/{token}/ask")
+def post_report_ask(token: str, req: AskRequest):
+    """Answers one parent question for the "Know About Student" chat.
+    Stateless like every other route here — the client resends the prior
+    turns as `history` each time; nothing about the conversation is kept
+    server-side. The student's report data is rebuilt fresh from the
+    database on every call (never cached), so answers can't go stale if
+    marks are corrected mid-conversation."""
+    if not req.question.strip():
+        raise HTTPException(422, "Question can't be empty.")
+    with session() as conn:
+        student, all_students, batch_row = _resolve_report_context(conn, token)
+        settings = repo.settings_from_row(batch_row)
+        exam_defs = json.loads(batch_row["exam_order"])
+        context = build_student_context(student, all_students, exam_defs, settings, batch_row["school_name"])
+    try:
+        answer = chat.ask_about_student(context, req.history, req.question.strip())
+    except chat.ChatNotConfigured as exc:
+        raise HTTPException(503, str(exc))
+    except chat.ChatSendError as exc:
+        raise HTTPException(502, f"Could not get an answer right now: {exc}")
+    return {"answer": answer}
 
 
 @router.get("/report/{token}/full", response_class=HTMLResponse)
