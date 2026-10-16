@@ -7,6 +7,8 @@ bhashini.py, so a missing key degrades to a clear message instead of a
 crash."""
 from __future__ import annotations
 
+import time
+
 import httpx
 
 from app.core.config import OPENROUTER_API_KEY, OPENROUTER_MODEL
@@ -29,11 +31,38 @@ class ChatNotConfigured(RuntimeError):
 
 
 class ChatSendError(RuntimeError):
-    pass
+    """`status_code` is the upstream HTTP status when known (e.g. 429 for
+    rate-limited), so callers can give a tailored message without parsing
+    the raw provider error text — which is never shown to a parent as-is,
+    only logged server-side via the original exception message."""
+
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def is_configured() -> bool:
     return bool(OPENROUTER_API_KEY)
+
+
+def _post(messages: list[dict]) -> httpx.Response:
+    return httpx.post(
+        OPENROUTER_URL,
+        json={
+            "model": OPENROUTER_MODEL,
+            "messages": messages,
+            "max_tokens": 1500,
+            # qwen3.8-flash reasons before answering, spending completion
+            # tokens on a hidden "reasoning" field before ever writing the
+            # visible one — capped separately so a long think can't eat
+            # the whole budget and leave content null (OpenRouter's
+            # unified reasoning config, works the same across providers
+            # that support it).
+            "reasoning": {"max_tokens": 600},
+        },
+        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+        timeout=30,
+    )
 
 
 def ask_about_student(context: str, history: list[dict], question: str) -> str:
@@ -50,27 +79,17 @@ def ask_about_student(context: str, history: list[dict], question: str) -> str:
     messages.append({"role": "user", "content": question})
 
     try:
-        response = httpx.post(
-            OPENROUTER_URL,
-            json={
-                "model": OPENROUTER_MODEL,
-                "messages": messages,
-                "max_tokens": 1500,
-                # qwen3.8-flash reasons before answering, spending completion
-                # tokens on a hidden "reasoning" field before ever writing the
-                # visible one — capped separately so a long think can't eat
-                # the whole budget and leave content null (OpenRouter's
-                # unified reasoning config, works the same across providers
-                # that support it).
-                "reasoning": {"max_tokens": 600},
-            },
-            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-            timeout=30,
-        )
+        response = _post(messages)
+        # The shared/free-tier key on this model gets transient 429s under
+        # light concurrent load — one short retry clears most of them
+        # without making every rate-limit a hard failure for the parent.
+        if response.status_code == 429:
+            time.sleep(2)
+            response = _post(messages)
     except httpx.HTTPError as exc:
         raise ChatSendError(f"Could not reach the chat service: {exc}") from exc
     if response.status_code >= 400:
-        raise ChatSendError(f"Chat service error ({response.status_code}): {response.text}")
+        raise ChatSendError(f"Chat service error ({response.status_code}): {response.text}", status_code=response.status_code)
 
     data = response.json()
     try:

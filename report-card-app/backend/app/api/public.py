@@ -106,7 +106,15 @@ def post_report_ask(token: str, req: AskRequest):
     except chat.ChatNotConfigured as exc:
         raise HTTPException(503, str(exc))
     except chat.ChatSendError as exc:
-        raise HTTPException(502, f"Could not get an answer right now: {exc}")
+        # The raw provider error (exc) is logged server-side via FastAPI's
+        # own exception logging — never shown to a parent as-is, since it
+        # can be a wall of upstream JSON (rate-limit bodies, stack-shaped
+        # error objects) that's meaningless to them and breaks the chat
+        # bubble's layout.
+        print(f"[chat] ask_about_student failed: {exc}")
+        if exc.status_code == 429:
+            raise HTTPException(503, "చాలా మంది అడుగుతున్నారు, కొంచెం సేపు తర్వాత మళ్ళీ ప్రయత్నించండి. / Lots of people are asking right now — please try again in a moment.")
+        raise HTTPException(502, "సమాధానం పొందలేకపోయాం. దయచేసి మళ్ళీ ప్రయత్నించండి. / Could not get an answer right now. Please try again.")
     return {"answer": answer}
 
 
