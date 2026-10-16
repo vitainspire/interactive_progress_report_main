@@ -7,6 +7,7 @@ import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
+import { StudentPage } from "./pages/StudentPage";
 import { UploadPage } from "./pages/UploadPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="upload" element={<UploadPage />} />
         <Route path="batches/:id" element={<BatchPage />} />
+        <Route path="batches/:id/students/:studentId" element={<StudentPage />} />
         <Route path="integrations" element={<IntegrationsPage />} />
       </Route>
     </Routes>
