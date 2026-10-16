@@ -75,15 +75,6 @@ def _migrate_tts_audio_cache(conn: psycopg.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tts_audio_cache_content_key ON tts_audio_cache (content_key)")
 
 
-def _migrate_batch_sheet_sync(conn: psycopg.Connection) -> None:
-    """Adds the columns a batch needs to be auto-synced from its original
-    Google Sheet (see sheet_sync.py) to a pre-existing `batch` table."""
-    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS sheet_url TEXT")
-    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS sheet_content_hash TEXT")
-    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS last_synced_at TEXT")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_batch_sheet_url ON batch(sheet_url) WHERE sheet_url IS NOT NULL")
-
-
 def init_db() -> None:
     with get_connection() as conn:
         schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
@@ -93,7 +84,6 @@ def init_db() -> None:
                 conn.execute(statement)
         _migrate_student_phone(conn)
         _migrate_tts_audio_cache(conn)
-        _migrate_batch_sheet_sync(conn)
         conn.commit()
 
 

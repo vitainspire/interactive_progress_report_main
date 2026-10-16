@@ -22,10 +22,7 @@ CREATE TABLE IF NOT EXISTS batch (
     class_strength_override INTEGER,
     source_filename TEXT,
     exam_order TEXT NOT NULL DEFAULT '[]',
-    created_at TEXT NOT NULL,
-    sheet_url TEXT,
-    sheet_content_hash TEXT,
-    last_synced_at TEXT
+    created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_batch_user ON batch(user_id);
 
