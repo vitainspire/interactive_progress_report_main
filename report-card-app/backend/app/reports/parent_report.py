@@ -205,6 +205,54 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
 .analysis-sheet p:last-child{margin-bottom:0}
 .analysis-close{position:absolute;top:1.1em;right:1.2em;width:2em;height:2em;border-radius:50%;border:none;background:var(--line);color:var(--ink);font-size:1em;line-height:1;cursor:pointer}
 
+/* Final page: the exact same dense card the teacher sees, embedded via
+   <iframe> so its own CARD_CSS/scripts stay fully isolated from this
+   page's styles (both define classes like .gr/.ga.. with different
+   rules — sharing one stylesheet would make them collide). The parent
+   can still pinch-zoom the iframe like any other page content since the
+   outer viewport meta never disables scaling. */
+.full-report-page{flex:1;display:flex;flex-direction:column;min-height:100%;background:var(--ivory)}
+.full-report-head{flex:none;padding:1.3em 1.2em .9em;text-align:center}
+.full-report-eyebrow{font-size:.7em;font-weight:700;letter-spacing:1.5px;color:var(--navy);text-transform:uppercase}
+.full-report-title{margin:.3em 0 0;font-size:1.15em;font-weight:700;color:var(--ink)}
+.full-report-sub{margin-top:.3em;font-size:.82em;color:var(--muted)}
+.full-report-frame{flex:1 1 auto;width:100%;border:0;background:#fff}
+
+/* ---- Landing/choice screen: the first thing a parent sees before
+   picking a path. A real photo up top (not an emoji) gives it the warmth
+   of an actual school rather than a generic app screen, while the two
+   options sit side by side as equal, calm choices — not one loud button
+   next to an afterthought — which is what reads as "designed" rather
+   than a default template stack. ---- */
+html.landing-html,body.landing-body-root{height:auto;overflow:visible;background:#fff}
+.landing-hero{position:relative;height:11em;overflow:hidden}
+.landing-hero img{width:100%;height:100%;object-fit:cover;display:block}
+.landing-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(14,27,77,.1) 0%,rgba(14,27,77,.85) 100%)}
+.landing-hero-caption{position:absolute;left:0;right:0;bottom:.9em;z-index:1;text-align:center;padding:0 1.2em}
+.landing-hero-caption .eyebrow{font-size:.68em;font-weight:700;letter-spacing:1.6px;color:var(--gold-soft);text-transform:uppercase}
+.landing-hero-caption .name{margin-top:.25em;font-size:1.15em;font-weight:700;color:#fff}
+.landing-body{flex:1;background:#fff;padding:1.5em 1.3em 2.6em;max-width:30em;margin:0 auto;width:100%}
+.landing-intro{text-align:center;font-size:.86em;color:var(--muted);margin-bottom:1.1em;line-height:1.5}
+.landing-options{display:grid;grid-template-columns:1fr 1fr;gap:.8em}
+.landing-card{display:flex;flex-direction:column;align-items:center;text-align:center;gap:.55em;text-decoration:none;border-radius:14px;padding:1.3em .9em 1.1em;border:1px solid var(--line);background:#fff;transition:transform .12s ease,border-color .15s ease,box-shadow .15s ease}
+.landing-card:active{transform:scale(.97)}
+.landing-card .lc-icon{flex:none;width:2.9em;height:2.9em;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#eef1f8;color:var(--navy)}
+.landing-card .lc-icon svg{width:1.5em;height:1.5em}
+.landing-card .lc-title{font-size:.86em;font-weight:700;color:var(--ink);line-height:1.3}
+.landing-card .lc-sub{font-size:.72em;color:var(--muted);line-height:1.4}
+.landing-card.primary{border-color:var(--navy);box-shadow:0 2px 10px rgba(14,27,77,.1)}
+.landing-card.primary .lc-icon{background:var(--navy);color:#fff}
+.landing-card.soon{color:inherit}
+.landing-card.soon .lc-icon{background:#f1f2f4;color:var(--muted)}
+.landing-card .lc-badge{font-size:.62em;font-weight:600;letter-spacing:.3px;color:var(--muted);background:#f1f2f4;border-radius:99px;padding:.25em .65em;margin-top:.1em}
+
+.about-placeholder{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2em 1.5em;gap:.6em}
+.about-placeholder .ap-icon{width:3.2em;height:3.2em;border-radius:50%;background:#eef1f8;color:var(--navy);display:flex;align-items:center;justify-content:center}
+.about-placeholder .ap-icon svg{width:1.7em;height:1.7em}
+.about-placeholder h1{font-size:1.2em;margin:.2em 0 0;color:var(--ink)}
+.about-placeholder p{font-size:.92em;color:var(--muted);max-width:22em;line-height:1.55;margin:.2em 0 0}
+.about-back{margin-top:1.2em;display:inline-block;font-size:.88em;font-weight:600;color:var(--navy);text-decoration:none;border:1px solid var(--line);border-radius:99px;padding:.6em 1.3em}
+
 .bottom-fade{position:fixed;left:0;right:0;bottom:0;height:8.5em;background:linear-gradient(to bottom,rgba(246,247,249,0) 0%,#f6f7f9 65%);pointer-events:none;z-index:4}
 .listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:1px solid rgba(233,164,0,.55);font:inherit;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.6em;border-radius:99px;padding:.85em 1.6em;background:var(--navy-deep);color:#fff;font-size:.96em;box-shadow:0 6px 18px rgba(14,27,77,.35);transition:transform .12s ease,background .2s ease}
 .listen-fab:active{transform:translateX(-50%) scale(.97)}
@@ -212,6 +260,7 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
 .listen-fab.loading .spinner{width:1em;height:1em;border-radius:50%;border:.15em solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .7s linear infinite}
 .listen-fab.speaking{background:var(--navy-deep);border-color:var(--gold)}
 .listen-fab.error{background:var(--warn);border-color:var(--warn)}
+.listen-fab.hidden,.bottom-fade.hidden{display:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 .wave{display:inline-flex;align-items:center;gap:.16em;height:1em}
 .wave span{display:block;width:.16em;background:var(--gold);border-radius:1px;animation:wave-bounce .9s ease-in-out infinite}
@@ -349,6 +398,7 @@ READ_ALOUD_SCRIPT = """
   var hasSwiped = false;
   var pageLabel = document.getElementById('pageLabel');
   var swipeHint = document.getElementById('swipeHint');
+  var bottomFade = document.querySelector('.bottom-fade');
   var publicToken = main.dataset.token || '';
 
   // The ring's fill circle already carries its real, correct
@@ -406,6 +456,12 @@ READ_ALOUD_SCRIPT = """
     });
     pageLabel.textContent = (i + 1) + ' / ' + pages.length;
     swipeHint.classList.toggle('hidden', hasSwiped || i === pages.length - 1);
+    // The full-report page has its own "Read aloud" button inside the
+    // embedded card (a different narration system entirely), so the
+    // page-by-page Listen FAB and its bottom fade don't apply there.
+    var isFullReport = pages[i].getAttribute('data-page-id') === 'full-report';
+    speakBtn.classList.toggle('hidden', isFullReport);
+    if(bottomFade) bottomFade.classList.toggle('hidden', isFullReport);
     activatePage(pages[i]);
   }
 
@@ -539,6 +595,30 @@ PAGE_SHELL = """<!doctype html>
 {script}
 </body></html>
 """
+
+# A plain, non-scrolling-trick page — unlike PAGE_SHELL, content here is
+# normal document flow (the body can be taller than one viewport and just
+# scrolls), since neither the landing choice screen nor the "about student"
+# placeholder need the swipe/scroll-snap machinery built for the report
+# itself.
+SIMPLE_SHELL = """<!doctype html>
+<html lang="en" class="landing-html"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700;800&family=Noto+Sans+Telugu:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>{css}</style></head>
+<body class="landing-body-root">
+{header}
+{content}
+</body></html>
+"""
+
+TOPBAR_HEADER = """<div class="topbar">
+  <div class="school">{school}</div>
+  <div class="student">{student_name}</div>
+</div>"""
 
 
 def _esc(v) -> str:
@@ -808,21 +888,73 @@ def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: 
     return f'<section class="page" data-page-id="conclusion" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
 
 
+def _render_full_report_page(token: str) -> str:
+    """Final page: the exact same dense report card the teacher sees in the
+    app (every exam, class rank, attendance, full AI analysis), embedded
+    via <iframe src="/api/public/report/{token}/full"> — that route reuses
+    card_render.render_report_page unchanged, so this is a byte-for-byte
+    match of the teacher's view for this one student, not a re-implementation
+    that could drift from it. No speech data: this page has its own "Read
+    aloud" button inside the card itself (a separate, pre-existing system —
+    see card_render.READ_ALOUD_SCRIPT), so the page-by-page Listen FAB hides
+    itself here instead (see setCurrent in READ_ALOUD_SCRIPT above)."""
+    h = (
+        '<div class="full-report-page">'
+        '<div class="full-report-head">'
+        '<div class="full-report-eyebrow">Full Report</div>'
+        '<div class="full-report-title">పూర్తి రిపోర్ట్ కార్డ్ / Complete report card</div>'
+        '<div class="full-report-sub">ఉపాధ్యాయులు చూసేది సరిగ్గా ఇదే — ప్రతి పరీక్ష, ర్యాంకు, హాజరు వివరాలు</div>'
+        "</div>"
+        f'<iframe class="full-report-frame" id="fullReportFrame" src="/api/public/report/{_esc(token)}/full" title="Full report card"></iframe>'
+        "</div>"
+        "<script>"
+        "(function(){"
+        "var frame=document.getElementById('fullReportFrame');"
+        "function fit(){"
+        "var doc=frame.contentDocument;var pv=doc&&doc.getElementById('pv');var pvw=doc&&doc.getElementById('pvw');"
+        "if(!pv||!pvw)return;"
+        # The card is a fixed-size print layout (210mm wide) — never
+        # reflowed for phones. Rather than leave it horizontally
+        # scrollable (cutting the table off mid-row on a phone, which is
+        # what this fit() replaces), it's scaled down to the iframe's own
+        # width via a CSS transform, then pvw/the iframe itself are resized
+        # to the resulting visual size — transforms don't affect layout
+        # sizing, so without this the page would still report (and leave
+        # scrollable) its full unscaled box despite painting smaller.
+        "var scale=frame.clientWidth/pv.scrollWidth;"
+        "pv.style.transformOrigin='top left';"
+        "pv.style.transform='scale('+scale+')';"
+        "pvw.style.overflow='hidden';"
+        "pvw.style.width=frame.clientWidth+'px';"
+        "var scaledHeight=Math.ceil(pv.scrollHeight*scale);"
+        "pvw.style.height=scaledHeight+'px';"
+        "frame.style.flex='none';"
+        "frame.style.height=scaledHeight+'px';"
+        "}"
+        "frame.addEventListener('load',fit);"
+        "window.addEventListener('resize',fit);"
+        "})();"
+        "</script>"
+    )
+    return f'<section class="page" data-page-id="full-report">{h}</section>'
+
+
 def render_parent_report_page(
     student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str, title: str = "Report Card", token: str = ""
 ) -> str:
     """`student` is the single student this link belongs to (parent links
     always resolve to exactly one student — see api/public.py). Builds
-    (number of subjects + 1) pages: one per subject in discovery order,
-    then a final overall/conclusion page. `token` is embedded for
-    READ_ALOUD_SCRIPT to call the real-audio voice route."""
+    (number of subjects + 2) pages: one per subject in discovery order,
+    an overall/conclusion page, then the full teacher-style report as a
+    final page. `token` is embedded for READ_ALOUD_SCRIPT to call the
+    real-audio voice route, and for the final page's embedded iframe."""
     subjects = _discover_subjects(student, exam_defs)
 
     pages_html = [_render_subject_page(student, exam_defs, settings, name, i, len(subjects), school_name) for i, name in enumerate(subjects)]
     pages_html.append(_render_conclusion_page(student, all_students, exam_defs, settings, school_name))
+    pages_html.append(_render_full_report_page(token))
 
-    total_pages = len(subjects) + 1
-    segs = "".join(f'<div class="seg{" active" if i == 0 else ""}"><div class="fill"></div></div>' for i in range(total_pages))
+    segs = "".join(f'<div class="seg{" active" if i == 0 else ""}"><div class="fill"></div></div>' for i in range(len(pages_html)))
 
     return PAGE_SHELL.format(
         title=_esc(title),
@@ -833,6 +965,80 @@ def render_parent_report_page(
         token=_esc(token),
         pages="".join(pages_html),
         script=READ_ALOUD_SCRIPT,
+    )
+
+
+# Simple line icons (not emoji — emoji render inconsistently across devices
+# and read as a toy/chat-app register rather than a school document).
+_ICON_REPORT = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+    '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>'
+    "</svg>"
+)
+_ICON_STUDENT = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+    '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5"/>'
+    "</svg>"
+)
+
+
+def render_report_landing_page(student_name: str, school_name: str, token: str) -> str:
+    """The first thing a parent sees when they open the link — a choice
+    between the full swipeable report (_render_full_report_page and friends,
+    now served from /view) and a not-yet-built "know about student" page
+    (/about, currently a placeholder). A real classroom photo stands in for
+    the usual flat topbar here, so the choice itself feels less like a
+    settings screen and more like opening a school document."""
+    header = (
+        '<div class="landing-hero">'
+        '<img src="/static/landing/school.jpg" alt="" loading="eager">'
+        '<div class="landing-hero-caption">'
+        f'<div class="eyebrow">{_esc(school_name or "School")}</div>'
+        f'<div class="name">{_esc(student_name)}</div>'
+        "</div></div>"
+    )
+    content = (
+        '<div class="landing-body">'
+        '<p class="landing-intro">మీరు ఏమి చూడాలనుకుంటున్నారో ఎంచుకోండి<br>Choose what you\'d like to see</p>'
+        '<div class="landing-options">'
+        f'<a class="landing-card primary" href="/api/public/report/{_esc(token)}/view">'
+        f'<div class="lc-icon">{_ICON_REPORT}</div>'
+        '<div class="lc-title">రిపోర్ట్ చూడండి<br>View Report</div>'
+        '<div class="lc-sub">Marks, rank &amp; attendance</div>'
+        "</a>"
+        f'<a class="landing-card soon" href="/api/public/report/{_esc(token)}/about">'
+        f'<div class="lc-icon">{_ICON_STUDENT}</div>'
+        '<div class="lc-title">విద్యార్థి గురించి<br>Know About Student</div>'
+        '<span class="lc-badge">త్వరలో / Coming soon</span>'
+        "</a>"
+        "</div></div>"
+    )
+    return SIMPLE_SHELL.format(
+        title=_esc(f"{student_name} — Report"),
+        css=PARENT_CSS,
+        header=header,
+        content=content,
+    )
+
+
+def render_report_about_placeholder(student_name: str, school_name: str, token: str) -> str:
+    """Stands in for the "Know About Student" page until that's actually
+    built — never a dead link/404, just an honest "not ready yet" with a
+    way back to the choice screen."""
+    header = TOPBAR_HEADER.format(school=_esc(school_name or "School"), student_name=_esc(student_name))
+    content = (
+        '<div class="about-placeholder">'
+        f'<div class="ap-icon">{_ICON_STUDENT}</div>'
+        '<h1>విద్యార్థి గురించి తెలుసుకోండి / Know About Student</h1>'
+        '<p>ఈ విభాగం త్వరలో అందుబాటులోకి వస్తుంది. / This section is coming soon.</p>'
+        f'<a class="about-back" href="/api/public/report/{_esc(token)}">← వెనక్కి / Back</a>'
+        "</div>"
+    )
+    return SIMPLE_SHELL.format(
+        title=_esc(f"{student_name} — Know About Student"),
+        css=PARENT_CSS,
+        header=header,
+        content=content,
     )
 
 
