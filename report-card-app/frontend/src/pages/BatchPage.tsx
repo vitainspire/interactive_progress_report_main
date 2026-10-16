@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import { BarChartIcon, PrinterIcon, SearchIcon, SendIcon, SettingsIcon, TrashIcon } from "../components/Icons";
+import { BarChartIcon, CheckIcon, CopyIcon, PrinterIcon, SearchIcon, SendIcon, SettingsIcon, TrashIcon } from "../components/Icons";
 import { ReportPreview } from "../components/ReportPreview";
 import type { BatchDetail, ClassStats, RankedStudent, SendResult, StudentBrief } from "../types";
 
@@ -538,6 +538,7 @@ export function BatchPage() {
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendResults, setSendResults] = useState<SendResult[] | null>(null);
+  const [copiedStudentId, setCopiedStudentId] = useState<number | null>(null);
 
   const [settings, setSettings] = useState<SettingsState>({
     name: "",
@@ -666,6 +667,13 @@ export function BatchPage() {
     }
   }
 
+  function copyLink(url: string, studentId: number) {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedStudentId(studentId);
+      setTimeout(() => setCopiedStudentId((id) => (id === studentId ? null : id)), 1500);
+    });
+  }
+
   const selectedWithoutPhone = detail ? detail.students.filter((s) => selected.has(s.id) && !s.phone.trim()).length : 0;
 
   if (error && !detail) return <p style={{ color: "var(--accent-mark)" }}>{error}</p>;
@@ -712,7 +720,8 @@ export function BatchPage() {
             Tries WhatsApp first, falls back to SMS if WhatsApp isn't set up or that send fails. Needs a WhatsApp
             Cloud API and/or Twilio SMS account configured on the server first — until then, sends show as
             "failed: not configured" below. Either way, each student's own private report link is generated
-            regardless, so you can open it yourself with "View link" to see exactly what a parent would see.
+            regardless — copy it below and send it yourself for now; once WhatsApp/SMS is connected, this will
+            go out automatically instead.
           </p>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -739,9 +748,36 @@ export function BatchPage() {
                     <td className="px-2 py-1.5" style={{ color: "var(--text-muted)" }}>{r.detail || "—"}</td>
                     <td className="px-2 py-1.5">
                       {r.report_url ? (
-                        <a href={r.report_url} target="_blank" rel="noreferrer" className="font-medium" style={{ color: "var(--accent)" }}>
-                          View link
-                        </a>
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={r.report_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-mono max-w-[14rem] truncate text-xs hover:underline"
+                            style={{ color: "var(--accent)" }}
+                            title={r.report_url}
+                          >
+                            {r.report_url}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => copyLink(r.report_url!, r.student_id)}
+                            className="flex flex-none items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+                            style={{ borderColor: "var(--border)", color: copiedStudentId === r.student_id ? "var(--status-good)" : "var(--text-secondary)" }}
+                          >
+                            {copiedStudentId === r.student_id ? (
+                              <>
+                                <CheckIcon size={11} />
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <CopyIcon size={11} />
+                                Copy
+                              </>
+                            )}
+                          </button>
+                        </div>
                       ) : (
                         <span style={{ color: "var(--text-muted)" }}>—</span>
                       )}
