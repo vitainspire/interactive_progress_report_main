@@ -9,6 +9,7 @@ from app.db.database import session
 from app.integrations import bhashini, chat, tts_cache
 from app.integrations.sharing import get_student_id_for_token
 from app.reports import card_render
+from app.reports.chat_canned import answer_canned_question
 from app.reports.chat_context import build_student_context
 from app.reports.parent_report import (
     get_speech_text,
@@ -94,15 +95,27 @@ def post_report_ask(token: str, req: AskRequest):
     server-side. The student's report data is rebuilt fresh from the
     database on every call (never cached), so answers can't go stale if
     marks are corrected mid-conversation."""
-    if not req.question.strip():
+    question = req.question.strip()
+    if not question:
         raise HTTPException(422, "Question can't be empty.")
     with session() as conn:
         student, all_students, batch_row = _resolve_report_context(conn, token)
         settings = repo.settings_from_row(batch_row)
         exam_defs = json.loads(batch_row["exam_order"])
+
+        # The five preset starter chips ask fixed, predictable questions —
+        # answered directly from this student's own data (same rule-based
+        # approach as analysis.py/voice_script.py) rather than spending an
+        # LLM call on them. Only a question that doesn't match one of those
+        # five (including a parent's own free-typed question, even if
+        # similarly worded) reaches the LLM below.
+        canned = answer_canned_question(question, student, all_students, exam_defs, settings)
+        if canned is not None:
+            return {"answer": canned}
+
         context = build_student_context(student, all_students, exam_defs, settings, batch_row["school_name"])
     try:
-        answer = chat.ask_about_student(context, req.history, req.question.strip())
+        answer = chat.ask_about_student(context, req.history, question)
     except chat.ChatNotConfigured as exc:
         raise HTTPException(503, str(exc))
     except chat.ChatSendError as exc:
