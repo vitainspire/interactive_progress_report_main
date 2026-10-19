@@ -225,7 +225,7 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
    options sit side by side as equal, calm choices — not one loud button
    next to an afterthought — which is what reads as "designed" rather
    than a default template stack. ---- */
-html.landing-html,body.landing-body-root{height:auto;overflow:visible;background:#fff}
+html.landing-html,html.scroll-html,body.landing-body-root,body.scroll-body-root{height:auto;overflow:visible;background:#fff}
 .landing-hero{position:relative;overflow:hidden;min-height:6em}
 .landing-hero img{width:100%;height:auto;display:block}
 .landing-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(14,27,77,.1) 0%,rgba(14,27,77,.85) 100%)}
@@ -265,12 +265,12 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
    construction. .chat-box flexes to fill whatever's left after the
    header/head/back-link's natural height, and .chat-messages is the only
    thing that ever scrolls, same as any real chat app. */
-.chat-shell{flex:1;min-height:0;display:flex;flex-direction:column;gap:.7em;background:#fff;padding:1em 1.1em;max-width:30em;margin:0 auto;width:100%}
+.chat-shell{display:flex;flex-direction:column;gap:.7em;background:#fff;padding:1em 1.1em 2em;max-width:30em;margin:0 auto;width:100%}
 .chat-head{flex:none;text-align:center}
 .chat-head .eyebrow{font-size:.7em;font-weight:700;letter-spacing:1.5px;color:var(--navy);text-transform:uppercase}
 .chat-head h1{margin:.3em 0 0;font-size:1.05em;color:var(--ink)}
 .chat-head p{margin-top:.25em;font-size:.78em;color:var(--muted)}
-.chat-box{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.chat-box{height:65vh;max-height:32em;min-height:19em;flex:none;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.05)}
 .chat-messages{flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;padding:1em;display:flex;flex-direction:column;gap:.6em;-webkit-overflow-scrolling:touch}
 .chat-bubble{max-width:82%;padding:.6em .85em;border-radius:14px;font-size:.92em;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-bubble.assistant{align-self:flex-start;background:var(--ivory);color:var(--ink);border-bottom-left-radius:4px}
@@ -1266,8 +1266,8 @@ def render_report_about_page(student: dict, all_students: list[dict], exam_defs:
     return SIMPLE_SHELL.format(
         title=_esc(f"{student_name} — Know About Student"),
         css=PARENT_CSS,
-        html_class="",
-        body_class="",
+        html_class="scroll-html",
+        body_class="scroll-body-root",
         header=header,
         content=content,
     )
