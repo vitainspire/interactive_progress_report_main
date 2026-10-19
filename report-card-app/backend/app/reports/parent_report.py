@@ -232,7 +232,10 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 .landing-hero-caption .eyebrow{font-size:.68em;font-weight:700;letter-spacing:1.6px;color:var(--gold-soft);text-transform:uppercase}
 .landing-hero-caption .name{margin-top:.25em;font-size:1.15em;font-weight:700;color:#fff}
 .landing-body{flex:1;background:#fff;padding:1.5em 1.3em 2.6em;max-width:30em;margin:0 auto;width:100%}
+.landing-badge{display:block;margin:0 auto .9em;width:fit-content}
+.landing-greeting{text-align:center;font-size:.98em;font-weight:600;color:var(--ink);margin-bottom:.3em;line-height:1.5}
 .landing-intro{text-align:center;font-size:.86em;color:var(--muted);margin-bottom:1.1em;line-height:1.5}
+.landing-privacy{text-align:center;font-size:.76em;color:var(--muted);margin-top:1.3em}
 .landing-options{display:grid;grid-template-columns:1fr 1fr;gap:.8em}
 .landing-card{display:flex;flex-direction:column;align-items:center;text-align:center;gap:.55em;text-decoration:none;border-radius:14px;padding:1.3em .9em 1.1em;border:1px solid var(--line);background:#fff;transition:transform .12s ease,border-color .15s ease,box-shadow .15s ease}
 .landing-card:active{transform:scale(.97)}
@@ -288,11 +291,11 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 @media (prefers-reduced-motion: reduce){.chat-dot{animation:none}}
 
 .bottom-fade{position:fixed;left:0;right:0;bottom:0;height:8.5em;background:linear-gradient(to bottom,rgba(246,247,249,0) 0%,#f6f7f9 65%);pointer-events:none;z-index:4}
-.listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:1px solid rgba(233,164,0,.55);font:inherit;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.6em;border-radius:99px;padding:.85em 1.6em;background:var(--navy-deep);color:#fff;font-size:.96em;box-shadow:0 6px 18px rgba(14,27,77,.35);transition:transform .12s ease,background .2s ease}
+.listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:2px dashed rgba(245,239,222,.55);font:inherit;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.6em;border-radius:14px;padding:.85em 1.7em;background:linear-gradient(165deg,#2f6b45 0%,#173823 100%);color:#fdfbf3;font-size:.94em;letter-spacing:.2px;box-shadow:0 6px 18px rgba(12,38,22,.4),inset 0 0 0 3px rgba(255,255,255,.06);transition:transform .12s ease,background .2s ease}
 .listen-fab:active{transform:translateX(-50%) scale(.97)}
 .listen-fab.loading{background:#334155;border-color:rgba(255,255,255,.2);cursor:wait}
 .listen-fab.loading .spinner{width:1em;height:1em;border-radius:50%;border:.15em solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .7s linear infinite}
-.listen-fab.speaking{background:var(--navy-deep);border-color:var(--gold)}
+.listen-fab.speaking{background:linear-gradient(165deg,#2f6b45 0%,#173823 100%);border-color:var(--gold)}
 .listen-fab.error{background:var(--warn);border-color:var(--warn)}
 .listen-fab.hidden,.bottom-fade.hidden{display:none}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -625,7 +628,7 @@ PAGE_SHELL = """<!doctype html>
 <main data-token="{token}">{pages}</main>
 <div class="bottom-fade"></div>
 <div class="swipe-hint" id="swipeHint">⬆ తదుపరి కోసం పైకి స్వైప్ చేయండి</div>
-<button type="button" class="listen-fab" id="speakBtn">\U0001f50a వినండి / Listen</button>
+<button type="button" class="listen-fab" id="speakBtn">\U0001f50a మొత్తం విశ్లేషణ వినండి</button>
 {script}
 </body></html>
 """
@@ -1037,6 +1040,8 @@ def render_report_landing_page(student_name: str, school_name: str, token: str) 
     )
     content = (
         '<div class="landing-body">'
+        '<span class="pill landing-badge">📘 డిజిటల్ ప్రోగ్రెస్ కార్డు</span>'
+        '<p class="landing-greeting">నమస్కారం! 🙏<br>మీ పిల్లల చదువు వివరాలు ఇక్కడ ఉన్నాయి.</p>'
         '<p class="landing-intro">మీరు ఏమి చూడాలనుకుంటున్నారో ఎంచుకోండి<br>Choose what you\'d like to see</p>'
         '<div class="landing-options">'
         f'<a class="landing-card primary" href="/api/public/report/{_esc(token)}/view">'
@@ -1049,7 +1054,9 @@ def render_report_landing_page(student_name: str, school_name: str, token: str) 
         '<div class="lc-title">విద్యార్థి గురించి<br>Know About Student</div>'
         '<div class="lc-sub">Ask a question, get an answer</div>'
         "</a>"
-        "</div></div>"
+        "</div>"
+        '<p class="landing-privacy">🔒 ఈ లింక్ మీ కోసం మాత్రమే / This link is only for you</p>'
+        "</div>"
     )
     return SIMPLE_SHELL.format(
         title=_esc(f"{student_name} — Report"),
