@@ -15,7 +15,10 @@ interface StudentLink {
  *   - WhatsApp: opens a wa.me click-to-chat link pre-filled with that
  *     student's private report link — this app never sends WhatsApp
  *     messages itself (no Cloud API configured here), it just hands the
- *     teacher's own WhatsApp a ready-to-send message.
+ *     teacher's own WhatsApp a ready-to-send message. Works even when no
+ *     phone number is on file: wa.me with no number opens WhatsApp's own
+ *     contact picker (on the phone this app is actually used from) so the
+ *     teacher can pick anyone to forward it to, not just a saved parent.
  *   - Eye: previews the exact parent-facing link before sending it.
  *   - Report: the full teacher-facing report (same view as the dedicated
  *     student page), for a quick look without leaving this list. */
@@ -38,9 +41,10 @@ export function StudentActionList({ batchId, students }: { batchId: number; stud
 
   async function openWhatsApp(student: StudentBrief) {
     const link = await fetchLink(student.id);
-    if (!link || !link.whatsapp_phone) return;
+    if (!link) return;
     const message = `${student.name} గారి ప్రోగ్రెస్ రిపోర్ట్ ఇక్కడ చూడండి: ${link.report_url}`;
-    window.open(`https://wa.me/${link.whatsapp_phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
+    const phonePart = link.whatsapp_phone ? link.whatsapp_phone : "";
+    window.open(`https://wa.me/${phonePart}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
   }
 
   async function previewParentLink(student: StudentBrief) {
@@ -80,8 +84,8 @@ export function StudentActionList({ batchId, students }: { batchId: number; stud
                 <button
                   type="button"
                   onClick={() => openWhatsApp(s)}
-                  disabled={!hasPhone || busy}
-                  title={hasPhone ? "Open this student's link in WhatsApp to send" : "No phone number on file"}
+                  disabled={busy}
+                  title={hasPhone ? "Open this student's link in WhatsApp to send" : "Open in WhatsApp and choose who to send it to"}
                   className="flex h-8 w-8 items-center justify-center rounded-full text-white transition-opacity duration-200 disabled:opacity-40"
                   style={{ background: "#25d366" }}
                 >
