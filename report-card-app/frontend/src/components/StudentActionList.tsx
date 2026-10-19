@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../api/client";
-import { ChatIcon, EyeIcon, SheetIcon } from "./Icons";
+import { ChatIcon, EyeIcon, SheetIcon, SmsIcon } from "./Icons";
 import type { StudentBrief } from "../types";
 
 interface StudentLink {
@@ -8,7 +8,7 @@ interface StudentLink {
   whatsapp_phone: string | null;
 }
 
-/** One row per student with three actions, replacing the old default view
+/** One row per student with four actions, replacing the old default view
  * of every selected student's full report concatenated into one long
  * iframe. Each action opens in a new tab so working down a long list of
  * students doesn't lose your place:
@@ -19,6 +19,11 @@ interface StudentLink {
  *     phone number is on file: wa.me with no number opens WhatsApp's own
  *     contact picker (on the phone this app is actually used from) so the
  *     teacher can pick anyone to forward it to, not just a saved parent.
+ *   - SMS: same idea via the device's own sms: URI instead of WhatsApp,
+ *     for a parent without a smartphone/WhatsApp. Unlike wa.me, most SMS
+ *     apps don't reliably open a contact picker with no number attached,
+ *     so this one stays disabled when there's no phone on file rather than
+ *     promising a fallback that may not actually work.
  *   - Eye: previews the exact parent-facing link before sending it.
  *   - Report: the full teacher-facing report (same view as the dedicated
  *     student page), for a quick look without leaving this list. */
@@ -45,6 +50,13 @@ export function StudentActionList({ batchId, students }: { batchId: number; stud
     const message = `${student.name} గారి ప్రోగ్రెస్ రిపోర్ట్ ఇక్కడ చూడండి: ${link.report_url}`;
     const phonePart = link.whatsapp_phone ? link.whatsapp_phone : "";
     window.open(`https://wa.me/${phonePart}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
+  }
+
+  async function openSms(student: StudentBrief) {
+    const link = await fetchLink(student.id);
+    if (!link || !link.whatsapp_phone) return;
+    const message = `${student.name} గారి ప్రోగ్రెస్ రిపోర్ట్ ఇక్కడ చూడండి: ${link.report_url}`;
+    window.open(`sms:+${link.whatsapp_phone}?body=${encodeURIComponent(message)}`, "_blank", "noopener");
   }
 
   async function previewParentLink(student: StudentBrief) {
@@ -90,6 +102,16 @@ export function StudentActionList({ batchId, students }: { batchId: number; stud
                   style={{ background: "#25d366" }}
                 >
                   <ChatIcon size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openSms(s)}
+                  disabled={!hasPhone || busy}
+                  title={hasPhone ? "Open this student's link in SMS to send" : "No phone number on file"}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-white transition-opacity duration-200 disabled:opacity-40"
+                  style={{ background: "var(--text-secondary)" }}
+                >
+                  <SmsIcon size={15} />
                 </button>
                 <button
                   type="button"

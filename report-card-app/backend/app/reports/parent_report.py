@@ -235,6 +235,7 @@ html.landing-html,html.scroll-html,body.landing-body-root,body.scroll-body-root{
 .summary-grade-row .gr{font-size:1.05em;padding:.3em 1em}
 .summary-stats{margin-top:1.1em;display:grid;grid-template-columns:repeat(2,1fr);gap:.7em}
 .stat-tile{border:1px solid var(--line);border-radius:12px;padding:.7em .8em;background:var(--ivory)}
+.stat-tile.wide{grid-column:1 / -1}
 .stat-tile .st-label{font-size:.66em;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
 .stat-tile .st-value{font-size:1.05em;font-weight:700;color:var(--ink);margin-top:.25em}
 
@@ -367,12 +368,46 @@ def _discover_subjects(student: dict, exam_defs: list[dict]) -> list[str]:
     return subjects
 
 
-def _render_summary_card(student: dict, exam_defs: list[dict], settings, facts, token: str) -> str:
+def _class_average_pct(all_students: list[dict], exam_key: str, max_total: float) -> float | None:
+    """Average of every OTHER student's own total-marks percentage for the
+    same exam — rank already tells a parent their position, this gives the
+    number behind it ("74% vs a class average of 68%") without exposing any
+    other student's name or individual marks."""
+    if not max_total:
+        return None
+    vals = []
+    for s in all_students:
+        exam = s.get("exams", {}).get(exam_key)
+        if not exam:
+            continue
+        total = exam.get("total_marks")
+        if isinstance(total, (int, float)):
+            vals.append(total * 100 / max_total)
+    return sum(vals) / len(vals) if vals else None
+
+
+def _subject_class_average_pct(all_students: list[dict], exam_key: str, subject_name: str, max_marks: float) -> float | None:
+    if not max_marks:
+        return None
+    vals = []
+    for s in all_students:
+        exam = s.get("exams", {}).get(exam_key)
+        if not exam:
+            continue
+        for x in exam.get("subjects", []):
+            if x["name"] == subject_name and isinstance(x.get("marks"), (int, float)):
+                vals.append(x["marks"] * 100 / max_marks)
+                break
+    return sum(vals) / len(vals) if vals else None
+
+
+def _render_summary_card(student: dict, all_students: list[dict], exam_defs: list[dict], settings, facts) -> str:
     """Top-of-page overview: father's name/roll as a two-column info row
     (matching the reference's FATHER'S NAME / CHILD ID header), the latest
     exam's score ring, grade + pass/fail tag, then stat tiles for total
-    marks, grade, rank and attendance — all from the same _Facts
-    (voice_script._compute_facts) the old conclusion page used."""
+    marks, grade, rank, attendance and a class-average comparison — all
+    from the same _Facts (voice_script._compute_facts) the old conclusion
+    page used."""
     father = (student.get("father") or "").strip()
     roll = str(student.get("roll") or "").strip()
     info_row = ""
@@ -413,20 +448,35 @@ def _render_summary_card(student: dict, exam_defs: list[dict], settings, facts, 
     h += result_html
     h += "</div></div></div>"
 
-    stats = []
+    stats: list[tuple[str, str, bool]] = []
     if isinstance(facts.total, (int, float)):
         max_label = fmt_num(max_total) if max_total else "-"
-        stats.append(("మొత్తం మార్కులు / Total Marks", f"{fmt_num(facts.total)}/{max_label}"))
+        stats.append(("మొత్తం మార్కులు / Total Marks", f"{fmt_num(facts.total)}/{max_label}", False))
     if facts.grade != "-":
-        stats.append(("గ్రేడ్ / Grade", facts.grade))
+        stats.append(("గ్రేడ్ / Grade", facts.grade, False))
     if facts.last_rank is not None:
-        stats.append(("ర్యాంకు / Rank", f"{fmt_num(facts.last_rank)} / {facts.class_strength}"))
+        stats.append(("ర్యాంకు / Rank", f"{fmt_num(facts.last_rank)} / {facts.class_strength}", False))
     if facts.attendance_pct is not None:
-        stats.append(("హాజరు / Attendance", f"{facts.attendance_pct}%"))
+        stats.append(("హాజరు / Attendance", f"{facts.attendance_pct}%", False))
+
+    class_avg = _class_average_pct(all_students, facts.last_key, max_total)
+    if class_avg is not None and isinstance(facts.total, (int, float)):
+        diff = round(pct - class_avg)
+        comp_color = "var(--good)" if diff >= 0 else "var(--warn)"
+        arrow = "▲" if diff >= 0 else "▼"
+        stats.append((
+            "తరగతి సగటుతో పోలిక / vs Class Average",
+            f'మీరు {round(pct)}% <span style="color:{comp_color};font-weight:700">{arrow} {abs(diff)}</span>'
+            f" &nbsp;·&nbsp; తరగతి సగటు {round(class_avg)}%",
+            True,
+        ))
+
     if stats:
         h += '<div class="summary-stats">'
-        for label, value in stats:
-            h += f'<div class="stat-tile"><div class="st-label">{_esc(label)}</div><div class="st-value">{_esc(value)}</div></div>'
+        for label, value, wide in stats:
+            tile_class = "stat-tile wide" if wide else "stat-tile"
+            value_html = value if wide else _esc(value)
+            h += f'<div class="{tile_class}"><div class="st-label">{_esc(label)}</div><div class="st-value">{value_html}</div></div>'
         h += "</div>"
 
     if facts.attendance_pct is not None and facts.attendance_pct < 75:
@@ -457,7 +507,7 @@ def _render_listen_section(student: dict, all_students: list[dict], exam_defs: l
     )
 
 
-def _render_subject_card(student: dict, exam_defs: list[dict], settings, subject_name: str) -> str:
+def _render_subject_card(student: dict, all_students: list[dict], exam_defs: list[dict], settings, subject_name: str) -> str:
     is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
 
     def max_marks(key: str) -> float:
@@ -488,6 +538,19 @@ def _render_subject_card(student: dict, exam_defs: list[dict], settings, subject
             "</div>"
         )
     h += "</div>"
+
+    class_avg = _subject_class_average_pct(all_students, latest.exam_key, subject_name, latest.max_marks)
+    if class_avg is not None and isinstance(latest.marks, (int, float)):
+        diff = round(pct - class_avg)
+        comp_color = "var(--good)" if diff >= 0 else "var(--warn)"
+        arrow = "▲" if diff >= 0 else "▼"
+        h += (
+            '<div style="margin-top:.7em;font-size:.78em;color:var(--muted)">'
+            f'తరగతి సగటు ({_esc(latest.exam_key)}): {round(class_avg)}% '
+            f'<span style="color:{comp_color};font-weight:700">{arrow} {abs(diff)}</span>'
+            "</div>"
+        )
+
     h += (
         f'<div class="commentary {facts.classification}">'
         f'<div class="ctext">{_esc(subject_commentary_telugu(facts))}</div>'
@@ -497,9 +560,9 @@ def _render_subject_card(student: dict, exam_defs: list[dict], settings, subject
     return h
 
 
-def _render_subjects_section(student: dict, exam_defs: list[dict], settings) -> str:
+def _render_subjects_section(student: dict, all_students: list[dict], exam_defs: list[dict], settings) -> str:
     subjects = _discover_subjects(student, exam_defs)
-    cards = [c for c in (_render_subject_card(student, exam_defs, settings, name) for name in subjects) if c]
+    cards = [c for c in (_render_subject_card(student, all_students, exam_defs, settings, name) for name in subjects) if c]
     if not cards:
         return ""
     return (
@@ -632,9 +695,9 @@ def render_parent_report_page(
     facts = _compute_facts(student, exam_order, class_strength, school_name)
 
     content = '<div class="view-shell">'
-    content += _render_summary_card(student, exam_defs, settings, facts, token)
+    content += _render_summary_card(student, all_students, exam_defs, settings, facts)
     content += _render_listen_section(student, all_students, exam_defs, settings)
-    content += _render_subjects_section(student, exam_defs, settings)
+    content += _render_subjects_section(student, all_students, exam_defs, settings)
     content += _render_attendance_section(student)
     content += _render_advice_section_inline(student, all_students, exam_defs, settings, student["name"])
     content += _render_view_footer(school_name, student["name"], token)

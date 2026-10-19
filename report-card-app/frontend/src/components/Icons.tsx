@@ -231,3 +231,12 @@ export function ChatIcon({ size = 18, className }: IconProps) {
     </svg>
   );
 }
+
+export function SmsIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...base} stroke="currentColor">
+      <path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4.4 3.2a.5.5 0 0 1-.8-.4V17H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" />
+      <path d="M7 10h10M7 13.5h6" />
+    </svg>
+  );
+}
