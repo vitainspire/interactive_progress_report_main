@@ -14,6 +14,7 @@ export interface BatchSummary {
   fa_marks_per_subject: number;
   sa_marks_per_subject: number;
   class_strength_override: number | null;
+  class_level: string;
   source_filename: string | null;
   exam_codes: string[];
   created_at: string;

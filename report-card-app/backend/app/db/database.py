@@ -76,6 +76,17 @@ def _migrate_tts_audio_cache(conn: psycopg.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tts_audio_cache_content_key ON tts_audio_cache (content_key)")
 
 
+def _migrate_class_level(conn: psycopg.Connection) -> None:
+    """Adds `class_level` to pre-existing `batch` and `syllabus_chapter`
+    tables (see schema.sql). Defaulting both to '10' means every batch and
+    syllabus row seeded before this migration — all of which really are
+    SSC/10th — keeps working with the syllabus-aware study plan without
+    needing a manual fix."""
+    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS class_level TEXT NOT NULL DEFAULT '10'")
+    conn.execute("ALTER TABLE syllabus_chapter ADD COLUMN IF NOT EXISTS class_level TEXT NOT NULL DEFAULT '10'")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_syllabus_chapter_lookup ON syllabus_chapter(class_level, subject)")
+
+
 def init_db() -> None:
     with get_connection() as conn:
         schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
@@ -85,6 +96,7 @@ def init_db() -> None:
                 conn.execute(statement)
         _migrate_student_phone(conn)
         _migrate_tts_audio_cache(conn)
+        _migrate_class_level(conn)
         seed_syllabus(conn)
         conn.commit()
 

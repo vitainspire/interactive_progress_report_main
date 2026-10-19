@@ -156,34 +156,40 @@ TELUGU = [
     dict(chapter_no=13, chapter_name="రామాయణం (ఉపవాచకం)", genre="ఇతిహాస కథ", theme="సంస్కృతి విలువలు", author="వాల్మీకి రామాయణం సంక్షిప్త వచనరూపం", month="జూలై-ఫిబ్రవరి", page_range="151-194"),
 ]
 
-# Keyed by the normalized (uppercase) subject name this app already uses
-# elsewhere (see exam_subject_result.subject / chat_canned.py's bucketing) —
-# aliases for alternate spellings a teacher's sheet might use are handled in
-# app/reports/study_plan.py, not duplicated here.
-SYLLABUS_BY_SUBJECT: dict[str, list[dict]] = {
-    "PHYSICAL SCIENCE": PHYSICAL_SCIENCE,
-    "BIOLOGY": BIOLOGY,
-    "MATHS": MATHS,
-    "SOCIAL": SOCIAL,
-    "ENGLISH": ENGLISH,
-    "HINDI": HINDI,
-    "TELUGU": TELUGU,
+# Keyed by (class_level, normalized subject name) — the subject spelling
+# matches what this app already uses elsewhere (see exam_subject_result.subject
+# / chat_canned.py's bucketing); aliases for alternate spellings a teacher's
+# sheet might use are handled in app/reports/study_plan.py, not duplicated
+# here. All seeded so far is "10" (SSC) — adding another class later just
+# means adding more entries under its own class_level key, e.g. ("9", "MATHS").
+SYLLABUS_BY_CLASS_SUBJECT: dict[tuple[str, str], list[dict]] = {
+    ("10", "PHYSICAL SCIENCE"): PHYSICAL_SCIENCE,
+    ("10", "BIOLOGY"): BIOLOGY,
+    ("10", "MATHS"): MATHS,
+    ("10", "SOCIAL"): SOCIAL,
+    ("10", "ENGLISH"): ENGLISH,
+    ("10", "HINDI"): HINDI,
+    ("10", "TELUGU"): TELUGU,
 }
 
 
 def seed(conn: psycopg.Connection) -> None:
-    """Inserts each subject's chapters only if that subject has no rows yet
-    — safe to call on every startup (see init_db), and never overwrites a
-    subject someone has already corrected/edited in the database."""
-    for subject, chapters in SYLLABUS_BY_SUBJECT.items():
-        existing = conn.execute("SELECT 1 FROM syllabus_chapter WHERE subject = %s LIMIT 1", (subject,)).fetchone()
+    """Inserts each (class, subject)'s chapters only if that pair has no
+    rows yet — safe to call on every startup (see init_db), and never
+    overwrites a subject someone has already corrected/edited in the
+    database."""
+    for (class_level, subject), chapters in SYLLABUS_BY_CLASS_SUBJECT.items():
+        existing = conn.execute(
+            "SELECT 1 FROM syllabus_chapter WHERE class_level = %s AND subject = %s LIMIT 1", (class_level, subject)
+        ).fetchone()
         if existing:
             continue
         for ch in chapters:
             conn.execute(
-                "INSERT INTO syllabus_chapter (subject, chapter_no, chapter_name, genre, theme, author, month, periods, page_range) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO syllabus_chapter (class_level, subject, chapter_no, chapter_name, genre, theme, author, month, periods, page_range) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
+                    class_level,
                     subject,
                     ch["chapter_no"],
                     ch["chapter_name"],

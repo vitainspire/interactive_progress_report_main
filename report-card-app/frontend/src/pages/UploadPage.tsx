@@ -15,6 +15,7 @@ export function UploadPage() {
   const [sheetUrl, setSheetUrl] = useState("");
   const [name, setName] = useState("");
   const [schoolName, setSchoolName] = useState(user?.default_school_name ?? "");
+  const [classLevel, setClassLevel] = useState("10");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -57,6 +58,7 @@ export function UploadPage() {
       if (mode === "link") form.append("sheet_url", sheetUrl.trim());
       if (name.trim()) form.append("name", name.trim());
       if (schoolName.trim()) form.append("school_name", schoolName.trim());
+      form.append("class_level", classLevel);
       const batch = await api.upload<BatchSummary>("/batches/upload", form);
       navigate(`/batches/${batch.id}`);
     } catch (err) {
@@ -117,6 +119,26 @@ export function UploadPage() {
             Batch name (optional — defaults to the filename)
           </label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Class 9 - Section A" />
+        </div>
+        <div>
+          <label className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            Class
+          </label>
+          <select
+            value={classLevel}
+            onChange={(e) => setClassLevel(e.target.value)}
+            className="w-full rounded-md border px-3 py-2.5 text-sm"
+            style={{ borderColor: "var(--border)", background: "var(--page-plane)", color: "var(--text-primary)" }}
+          >
+            {["6", "7", "8", "9", "10"].map((c) => (
+              <option key={c} value={c}>
+                {c}th
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+            Picks which class's real syllabus the AI study plan uses for this batch's students.
+          </p>
         </div>
 
         {mode === "file" && (

@@ -31,7 +31,7 @@ function BatchHeader({ detail, onDelete }: { detail: BatchDetail; onDelete: () =
             {detail.name}
           </h1>
           <span className="pill mt-2 inline-flex">
-            {detail.student_count} students · {detail.exam_codes.join(", ")}
+            {detail.class_level}th class · {detail.student_count} students · {detail.exam_codes.join(", ")}
           </span>
         </div>
         <button

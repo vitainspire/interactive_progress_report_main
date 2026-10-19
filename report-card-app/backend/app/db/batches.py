@@ -83,18 +83,21 @@ def create_batch(
     school_name: str,
     source_filename: str | None,
     parsed: dict,
+    class_level: str = "10",
 ) -> int:
     """Persists a freshly-parsed sheet (see sheet_parser.parse_worksheet)
     as a new batch, normalized across student/exam_subject_result/
     exam_summary/attendance_month/attendance_total. All child rows are
     collected first and sent in a handful of batched statements rather
-    than one round trip per row."""
+    than one round trip per row. `class_level` picks which class's syllabus
+    (see syllabus_chapter) the study plan feature looks up for this batch —
+    defaults to "10" since that's the only syllabus seeded so far."""
     exam_order = [e["key"] for e in parsed["exams"]]
     row = conn.execute(
         """INSERT INTO batch
            (user_id, name, school_name, fa_total, sa_total, fa_marks_per_subject, sa_marks_per_subject,
-            class_strength_override, source_filename, exam_order, created_at)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, %s, %s, %s) RETURNING id""",
+            class_strength_override, class_level, source_filename, exam_order, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s) RETURNING id""",
         (
             user_id,
             name,
@@ -103,6 +106,7 @@ def create_batch(
             DEFAULT_SA_TOTAL,
             DEFAULT_FA_MARKS_PER_SUBJECT,
             DEFAULT_SA_MARKS_PER_SUBJECT,
+            class_level,
             source_filename,
             json.dumps(parsed["exams"]),
             datetime.now(timezone.utc).isoformat(),
@@ -165,7 +169,7 @@ def get_batch(conn: psycopg.Connection, user_id: int, batch_id: int) -> dict | N
 def update_batch_settings(conn: psycopg.Connection, batch_id: int, fields: dict) -> None:
     cols = []
     values = []
-    for key in ("name", "school_name", "fa_total", "sa_total", "fa_marks_per_subject", "sa_marks_per_subject", "class_strength_override"):
+    for key in ("name", "school_name", "fa_total", "sa_total", "fa_marks_per_subject", "sa_marks_per_subject", "class_strength_override", "class_level"):
         if key in fields:
             cols.append(f"{key} = %s")
             values.append(fields[key])

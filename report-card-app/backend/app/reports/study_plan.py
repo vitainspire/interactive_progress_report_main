@@ -56,11 +56,11 @@ def weakest_subject(student: dict, exam_defs: list[dict]) -> str | None:
     return None
 
 
-def get_chapters(conn: psycopg.Connection, subject: str) -> list[dict]:
+def get_chapters(conn: psycopg.Connection, class_level: str, subject: str) -> list[dict]:
     rows = conn.execute(
         "SELECT chapter_no, chapter_name, genre, theme, month, periods FROM syllabus_chapter "
-        "WHERE subject = %s ORDER BY chapter_no",
-        (_normalize_subject(subject),),
+        "WHERE class_level = %s AND subject = %s ORDER BY chapter_no",
+        ((class_level or "").strip(), _normalize_subject(subject)),
     ).fetchall()
     return list(rows)
 
@@ -79,8 +79,8 @@ def _format_chapters(chapters: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _cache_key(subject: str, weak_summary: str) -> str:
-    return hashlib.sha256(f"{_normalize_subject(subject)}:{weak_summary}".encode("utf-8")).hexdigest()
+def _cache_key(class_level: str, subject: str, weak_summary: str) -> str:
+    return hashlib.sha256(f"{(class_level or '').strip()}:{_normalize_subject(subject)}:{weak_summary}".encode("utf-8")).hexdigest()
 
 
 _SYSTEM_PROMPT = (
@@ -94,22 +94,23 @@ _SYSTEM_PROMPT = (
 )
 
 
-def generate_study_plan(conn: psycopg.Connection, subject: str, student_name: str, weak_summary: str) -> str | None:
+def generate_study_plan(conn: psycopg.Connection, class_level: str, subject: str, student_name: str, weak_summary: str) -> str | None:
     """Returns a cached or freshly-generated syllabus-aware plan, or None if
-    there's no syllabus on file for this subject (caller shows nothing) or
-    the LLM call isn't configured/fails (same silent-fallback shape as the
-    rest of this app's optional AI features)."""
-    chapters = get_chapters(conn, subject)
+    there's no syllabus on file for this class+subject (caller shows
+    nothing) or the LLM call isn't configured/fails (same silent-fallback
+    shape as the rest of this app's optional AI features)."""
+    chapters = get_chapters(conn, class_level, subject)
     if not chapters:
         return None
 
-    key = _cache_key(subject, weak_summary)
+    key = _cache_key(class_level, subject, weak_summary)
     row = conn.execute("SELECT plan_text FROM study_plan_cache WHERE cache_key = %s", (key,)).fetchone()
     if row:
         return row["plan_text"]
 
     user_prompt = (
         f"Student: {student_name}\n"
+        f"Class: {class_level}\n"
         f"Weak subject: {subject}\n"
         f"What we already know about this weakness: {weak_summary}\n\n"
         f"Real syllabus chapters for {subject}:\n{_format_chapters(chapters)}"

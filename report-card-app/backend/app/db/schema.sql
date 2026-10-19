@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS batch (
     fa_marks_per_subject REAL NOT NULL DEFAULT 50,
     sa_marks_per_subject REAL NOT NULL DEFAULT 100,
     class_strength_override INTEGER,
+    -- Which class's syllabus applies to this batch (see syllabus_chapter) —
+    -- defaults to '10' since every syllabus seeded so far is SSC/10th.
+    -- A teacher uploading another class's marks sets this explicitly.
+    class_level TEXT NOT NULL DEFAULT '10',
     source_filename TEXT,
     exam_order TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL
@@ -116,14 +120,16 @@ CREATE TABLE IF NOT EXISTS tts_audio_cache (
     created_at TEXT NOT NULL
 );
 
--- Real AP SSC (10th class) syllabus chapters, one row per chapter per
--- subject — reference data shared by every batch/user (not tied to a
--- user_id or batch_id), since the syllabus is the same regardless of which
--- school uploaded marks. Seeded once from app/db/syllabus_seed.py, not
--- hand-entered per teacher. Powers the syllabus-aware study plan (see
--- app/reports/study_plan.py) instead of a generic "study more" tip.
+-- Real AP syllabus chapters, one row per chapter per (class, subject) —
+-- reference data shared by every batch/user (not tied to a user_id or
+-- batch_id), since a given class+subject's syllabus is the same regardless
+-- of which school uploaded marks. Seeded once from app/db/syllabus_seed.py,
+-- not hand-entered per teacher. Powers the syllabus-aware study plan (see
+-- app/reports/study_plan.py) instead of a generic "study more" tip — only
+-- for whichever (class_level, subject) pairs have actually been seeded.
 CREATE TABLE IF NOT EXISTS syllabus_chapter (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    class_level TEXT NOT NULL DEFAULT '10',
     subject TEXT NOT NULL,
     chapter_no INTEGER NOT NULL,
     chapter_name TEXT NOT NULL,
@@ -134,7 +140,10 @@ CREATE TABLE IF NOT EXISTS syllabus_chapter (
     periods INTEGER,
     page_range TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_syllabus_chapter_subject ON syllabus_chapter(subject);
+-- Index created in _migrate_class_level (database.py), not here — this
+-- table already existed before class_level did, so on an upgrade this
+-- CREATE TABLE is a no-op and the column/index only appear via that
+-- migration, which must run after this statement, not before it.
 
 -- Caches one generated study plan per (subject, weak-subject summary) pair
 -- so reloading the same student's report doesn't re-call the LLM every

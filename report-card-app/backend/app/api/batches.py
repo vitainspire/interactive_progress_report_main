@@ -21,6 +21,17 @@ from app.reports.class_stats import compute_class_stats
 
 router = APIRouter(prefix="/batches", tags=["batches"])
 
+# Classes with a syllabus actually seeded (see app/db/syllabus_seed.py) —
+# an unrecognized value just falls back to "10" rather than erroring, since
+# a wrong class_level only means the study-plan feature won't find a match,
+# never a broken upload.
+_KNOWN_CLASS_LEVELS = {"6", "7", "8", "9", "10"}
+
+
+def _normalize_class_level(value: str | None) -> str:
+    v = (value or "").strip()
+    return v if v in _KNOWN_CLASS_LEVELS else "10"
+
 
 def _batch_out(row, student_count: int | None = None) -> dict:
     exam_defs = json.loads(row["exam_order"])
@@ -33,6 +44,7 @@ def _batch_out(row, student_count: int | None = None) -> dict:
         "fa_marks_per_subject": row["fa_marks_per_subject"],
         "sa_marks_per_subject": row["sa_marks_per_subject"],
         "class_strength_override": row["class_strength_override"],
+        "class_level": row["class_level"],
         "source_filename": row["source_filename"],
         "exam_codes": [e["key"] for e in exam_defs],
         "created_at": row["created_at"],
@@ -46,6 +58,7 @@ async def upload_batch(
     sheet_url: str | None = Form(None),
     name: str | None = Form(None),
     school_name: str | None = Form(None),
+    class_level: str | None = Form(None),
     current_user=Depends(get_current_user),
 ):
     has_file = file is not None and bool(file.filename)
@@ -88,7 +101,9 @@ async def upload_batch(
     with session() as conn:
         if school_name and school_name.strip():
             set_default_school_name(conn, current_user["id"], school_name.strip())
-        batch_id = repo.create_batch(conn, current_user["id"], batch_name, effective_school_name, source_label, parsed)
+        batch_id = repo.create_batch(
+            conn, current_user["id"], batch_name, effective_school_name, source_label, parsed, _normalize_class_level(class_level)
+        )
         row = repo.get_batch(conn, current_user["id"], batch_id)
         return _batch_out(row, student_count=len(parsed["students"]))
 
@@ -132,6 +147,7 @@ class SettingsUpdate(BaseModel):
     sa_marks_per_subject: float | None = None
     class_strength_override: int | None = None
     clear_class_strength_override: bool = False
+    class_level: str | None = None
 
 
 @router.put("/{batch_id}/settings")
@@ -143,6 +159,8 @@ def update_settings(batch_id: int, req: SettingsUpdate, current_user=Depends(get
         fields = req.model_dump(exclude_unset=True, exclude={"clear_class_strength_override"})
         if req.clear_class_strength_override:
             fields["class_strength_override"] = None
+        if "class_level" in fields:
+            fields["class_level"] = _normalize_class_level(fields["class_level"])
         repo.update_batch_settings(conn, batch_id, fields)
         row = repo.get_batch(conn, current_user["id"], batch_id)
         students = repo.list_students_brief(conn, batch_id)
