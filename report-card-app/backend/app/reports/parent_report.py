@@ -1,24 +1,21 @@
 """Renders the PARENT-facing report page — a completely different
 presentation from card_render.py's dense printable card, built for a
 parent (often in a rural area, sometimes unable to read comfortably) to
-follow on a phone. Structure is fixed by design: one page per subject,
-plus a final overall/conclusion page — (number of subjects + 1) pages
-total — moved through via native vertical scroll-snap, one swipe up/down
-per page, the same gesture as a reels/shorts feed rather than a labeled
-Next/Back button. A floating "Listen" button narrates just the current
-page's content, and each page's own script is self-contained (names the
-student, the subject, and how many subjects remain) and ends by telling
-the listener to swipe up — so the whole report can be understood by
-listening alone, without ever needing to look at or read the screen.
+follow on a phone. A single scrolling page, matching a "Digital Progress
+Card" presentation style the teacher asked to match exactly: an overall
+summary (ring, marks, grade, rank, attendance) at top, a "listen to full
+analysis" action, every subject listed as its own card, a monthly
+attendance table, then the same Teacher's Advice cards shown on the Know
+About Student page (see render_report_about_page) — inline here rather
+than behind a toggle, since the page already scrolls. The free-form
+question chat intentionally isn't repeated here; it has its own page.
 
 Icon-led rather than a plain data table (circular mark-percentage rings,
-a celebratory conclusion banner) so it's something a parent actually wants
-to open, not just a readable one — but the palette itself is deliberately
-restrained: white surfaces with the product's own navy as the one accent
-color (matching the rest of the app), not a different gradient per page.
-Color is still used where it carries real meaning — grade badges, the
-pass/fail pill, the good/needs-attention commentary tint — just not as
-page-to-page decoration.
+numbered advice cards) so it's something a parent actually wants to open,
+not just a readable one — but the palette stays the product's own navy/
+ivory, not a different theme per section. Color still carries real
+meaning — grade badges, the pass/fail pill, the good/needs-attention
+commentary tint — never as page-to-page decoration.
 
 The teacher-facing /batches/{id}/report route is untouched and keeps using
 card_render.render_report_page — this module is only ever reached via
@@ -32,38 +29,14 @@ import re
 
 from app.reports.analysis import build_analysis
 from app.reports.chat_canned import answer_canned_question
-from app.reports.greeting import time_greeting_telugu
 from app.reports.numfmt import fmt_num
 from app.reports.parent_subject import (
-    build_conclusion_voice_romanized,
     build_conclusion_voice_telugu,
-    build_subject_voice_romanized,
     build_subject_voice_telugu,
     compute_subject_facts,
     subject_commentary_telugu,
 )
 from app.reports.voice_script import _compute_facts
-
-# Optional per-subject background image for the hero section — faded behind
-# a near-opaque white wash (see .hero.themed) so it never competes with the
-# heading or the marks table underneath. Matched by exact subject name
-# (upper-cased); a subject with no match just keeps the plain white hero.
-# Served from /static (see main.py's StaticFiles mount) — a decorative,
-# non-sensitive asset path, never one that touches student data.
-SUBJECT_BACKGROUNDS = {
-    "TELUGU": "/static/backgrounds/telugu.jpg",
-    "HINDI": "/static/backgrounds/hindi.jpg",
-    "ENGLISH": "/static/backgrounds/english.jpg",
-    "MATHS": "/static/backgrounds/maths.jpg",
-    "MATHEMATICS": "/static/backgrounds/maths.jpg",
-    "PHYSICAL SCIENCE": "/static/backgrounds/physical_science.jpg",
-    "SOCIAL": "/static/backgrounds/social.jpg",
-    "SOCIAL STUDIES": "/static/backgrounds/social.jpg",
-}
-
-
-def _subject_background(name: str) -> str | None:
-    return SUBJECT_BACKGROUNDS.get((name or "").strip().upper())
 
 
 PARENT_CSS = """
@@ -87,56 +60,20 @@ body{background:#f6f7f9;font:16px/1.5 'Noto Sans','Noto Sans Telugu',system-ui,s
 .topbar{position:sticky;top:0;z-index:3;background:var(--navy-deep);color:#fff;padding:.85em 1.2em .75em}
 .topbar .school{font-weight:600;font-size:.8em;text-align:center;opacity:.65;letter-spacing:.3px}
 .topbar .student{text-align:center;font-size:1.08em;font-weight:600;margin-top:.15em;letter-spacing:.1px}
-.progressbar{display:flex;gap:.3em;margin-top:.8em}
-.seg{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.18);overflow:hidden}
-.seg .fill{height:100%;width:0;background:var(--gold);transition:width .3s ease}
-.seg.active .fill{width:100%}
-.seg.done .fill{width:100%;background:rgba(255,255,255,.55)}
-.pagelabel{text-align:center;font-size:.7em;margin-top:.5em;opacity:.55;font-weight:500;letter-spacing:.4px}
-main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
-.page{min-height:100%;display:flex;flex-direction:column;scroll-snap-align:start;scroll-snap-stop:always}
-
-/* ---- Hero: a real editorial moment, not a header bar. Dark by default
-   (navy, or a navy-duotone photo when a subject has one), with the score
-   ring as the dominant visual element — this is the "score as hero" the
-   brief asked for, and the dark-to-light handoff into .body-pad is the
-   one recurring piece of visual drama every subject page shares. ---- */
-.hero{position:relative;flex:none;padding:1.7em 1.4em 1.6em;text-align:center;background:linear-gradient(165deg,var(--navy) 0%,var(--navy-deep) 100%);color:#fff;overflow:hidden}
-.hero.themed{background-size:cover;background-position:center}
-.hero-welcome{font-size:.78em;color:var(--gold-soft);font-weight:600;margin-bottom:.7em;letter-spacing:.2px;line-height:1.35}
-.eyebrow{font-size:.7em;font-weight:600;letter-spacing:2px;color:var(--gold-soft);text-transform:uppercase}
-.hero h1{margin:.3em 0 0;font-size:1.9em;font-weight:700;letter-spacing:.2px;color:#fff;line-height:1.1}
-.hero .sub{font-size:.8em;font-weight:400;color:rgba(255,255,255,.6);margin-top:.3em}
-.trend-note{display:inline-block;margin-top:.6em;font-size:.76em;font-weight:600;color:rgba(255,255,255,.75);background:rgba(255,255,255,.1);padding:.28em .75em;border-radius:99px}
-.trend-note.up{color:#86efac}
-.trend-note.down{color:#fca5a5}
-
 /* Score ring: real SVG, not a CSS hack — lets the fill animate smoothly
-   via stroke-dashoffset and carry a genuine gold gradient stroke. */
-.score-wrap{position:relative;width:7.6em;height:7.6em;margin:1em auto 0}
+   via stroke-dashoffset and carry a genuine gold gradient stroke. Sized
+   down via descendant selectors for the summary card (.summary-head) and
+   each subject card (.subject-card) — see the View Report section below. */
+.score-wrap{position:relative;width:7.6em;height:7.6em;margin:0 auto}
 .score-ring{width:100%;height:100%;transform:rotate(-90deg)}
-.score-ring .track{fill:none;stroke:rgba(255,255,255,.14);stroke-width:7}
+.score-ring .track{fill:none;stroke:rgba(30,58,138,.12);stroke-width:7}
 .score-ring .fill{fill:none;stroke:url(#scoreGoldGrad);stroke-width:7;stroke-linecap:round;transition:stroke-dashoffset 1.1s cubic-bezier(.16,.84,.26,1)}
 .score-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.score-num .big{font-size:2em;font-weight:700;color:#fff;line-height:1}
+.score-num .big{font-size:2em;font-weight:700;color:var(--ink);line-height:1}
 .score-num .big sup{font-size:.42em;font-weight:600;margin-left:.05em;opacity:.85}
-.score-num .exam{font-size:.65em;color:rgba(255,255,255,.6);margin-top:.25em;font-weight:600;letter-spacing:.3px}
-.hero-grade{margin-top:.7em;display:flex;align-items:center;justify-content:center;gap:.6em;flex-wrap:wrap}
-.hero-grade .gr{font-size:1.05em;padding:.3em 1em}
-.hero-marks{font-size:.85em;font-weight:600;color:rgba(255,255,255,.75)}
+.score-num .exam{font-size:.65em;color:var(--muted);margin-top:.25em;font-weight:600;letter-spacing:.3px}
 
-/* ---- Exam history: collapsed by default — the hero above already fully
-   covers the current/latest exam, so the page opens showing just that,
-   not a wall of every exam at once. "View previous exams" reveals the
-   rest on demand, as a single row of chips (never wraps — see .timeline,
-   same one-row-always reasoning as before, now just hidden until asked
-   for). ---- */
-.body-pad{padding:1.1em 1.2em 8em;flex:1;display:flex;flex-direction:column;background:var(--ivory)}
-.history-toggle{display:flex;align-items:center;justify-content:center;gap:.4em;width:100%;border:1px solid var(--line);background:#fff;color:var(--navy);font:inherit;font-weight:600;font-size:.85em;border-radius:10px;padding:.7em 1em;cursor:pointer}
-.history-toggle .chev{transition:transform .2s ease;font-size:.85em}
-.history-toggle.open .chev{transform:rotate(180deg)}
-.timeline{display:flex;flex-wrap:nowrap;gap:.6em;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-top:.8em}
-.timeline.collapsed{display:none}
+.timeline{display:flex;flex-wrap:nowrap;gap:.6em;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .timeline::-webkit-scrollbar{display:none}
 .chip{flex:1 1 auto;min-width:6.4em;background:#fff;border:1px solid var(--line);border-radius:12px;padding:.85em .9em;box-shadow:0 1px 2px rgba(15,23,42,.03)}
 .chip .exam-name{font-size:.72em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
@@ -154,49 +91,13 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
 .commentary.good .ctitle{color:var(--good)}
 .commentary.low .ctitle,.commentary.mid .ctitle{color:var(--warn)}
 .commentary.fail .ctitle{color:var(--bad)}
-.grow{flex:1 0 auto}
 
-/* ---- Finale: the payoff. Full dark stage, oversized typography, gold
-   light instead of a boxed stat grid. ---- */
-.hero.finale{min-height:100%;flex:1;padding:3.2em 1.5em 3em;display:flex;flex-direction:column;justify-content:center;background:radial-gradient(120% 90% at 50% -10%,#24409e 0%,var(--navy-deep) 60%)}
-.finale-eyebrow{font-size:.74em;font-weight:700;letter-spacing:3px;color:var(--gold-soft);text-transform:uppercase}
-.finale-name{margin-top:.5em;font-size:1.3em;font-weight:600;color:#fff}
-.finale-total{margin-top:.5em;font-size:4em;font-weight:700;color:#fff;line-height:1;letter-spacing:-.01em}
-.finale-total .unit{font-size:.28em;font-weight:600;color:rgba(255,255,255,.55);margin-left:.15em}
-.finale-grade-row{margin-top:1em;display:flex;gap:.6em;align-items:center;justify-content:center;flex-wrap:wrap}
 .result-tag{display:inline-block;border-radius:5px;padding:.25em .9em;font-weight:700;color:#fff;font-size:.95em;letter-spacing:.3px}
 .result-tag.pass{background:var(--good)}
 .result-tag.fail{background:var(--bad)}
-.finale-stat{margin-top:1.8em;display:flex;justify-content:center;gap:2em;flex-wrap:wrap}
-.finale-stat .item{text-align:center}
-.finale-stat .n{font-size:1.5em;font-weight:700;color:#fff}
-.finale-stat .l{font-size:.68em;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.5px;margin-top:.2em}
-.finale-msg{margin-top:1.8em;font-size:1em;line-height:1.6;color:rgba(255,255,255,.85);max-width:28em;margin-left:auto;margin-right:auto}
-.finale-recap{margin-top:1.4em;font-size:.88em;line-height:1.6;color:rgba(255,255,255,.65)}
-.finale-recap b{color:#fff;font-weight:600}
 
-.spark{position:absolute;width:5px;height:5px;background:var(--gold-soft);opacity:0;border-radius:1px;transform:rotate(45deg)}
-.spark:nth-child(1){top:14%;left:18%}
-.spark:nth-child(2){top:22%;right:16%}
-.spark:nth-child(3){top:62%;left:10%}
-.spark:nth-child(4){top:70%;right:14%}
-.spark:nth-child(5){top:40%;left:50%}
-.hero.finale.sparkle .spark{animation:spark-glint 1.6s ease-out forwards}
-.hero.finale.sparkle .spark:nth-child(2){animation-delay:.15s}
-.hero.finale.sparkle .spark:nth-child(3){animation-delay:.3s}
-.hero.finale.sparkle .spark:nth-child(4){animation-delay:.45s}
-.hero.finale.sparkle .spark:nth-child(5){animation-delay:.6s}
-@keyframes spark-glint{0%{opacity:0;transform:rotate(45deg) scale(.4)}40%{opacity:1;transform:rotate(45deg) scale(1.3)}100%{opacity:0;transform:rotate(45deg) scale(.6)}}
-
-.action-row{margin-top:2em;display:flex;gap:.7em;justify-content:center}
-.action-btn{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.06);color:#fff;font:inherit;font-weight:600;font-size:.88em;border-radius:99px;padding:.7em 1.4em;cursor:pointer}
-.action-btn:active{opacity:.7}
-.action-btn.primary{background:var(--gold);border-color:var(--gold);color:var(--navy-deep)}
-
-/* Full-analysis bottom sheet — its own scroll container (overflow-y:auto
-   on .analysis-sheet), completely independent of main's scroll-snap, so
-   this can be as long as the real analysis text needs to be without ever
-   risking content past an unreachable snap boundary. */
+/* Full-analysis bottom sheet — also reused as-is by the Teacher's Advice
+   modal on the Know About Student page (see .advice-* further down). */
 .analysis-modal{position:fixed;inset:0;z-index:10;background:rgba(14,27,77,.72);display:flex;align-items:flex-end;justify-content:center}
 .analysis-modal[hidden]{display:none}
 .analysis-sheet{position:relative;background:#fff;color:var(--ink);width:100%;max-width:480px;max-height:80vh;overflow-y:auto;border-radius:18px 18px 0 0;padding:1.6em 1.4em 2.2em;box-shadow:0 -8px 30px rgba(0,0,0,.25)}
@@ -205,19 +106,6 @@ main{flex:1;position:relative;overflow-y:auto;scroll-snap-type:y mandatory;scrol
 .analysis-sheet p.intro{font-weight:600;color:var(--navy)}
 .analysis-sheet p:last-child{margin-bottom:0}
 .analysis-close{position:absolute;top:1.1em;right:1.2em;width:2em;height:2em;border-radius:50%;border:none;background:var(--line);color:var(--ink);font-size:1em;line-height:1;cursor:pointer}
-
-/* Final page: the exact same dense card the teacher sees, embedded via
-   <iframe> so its own CARD_CSS/scripts stay fully isolated from this
-   page's styles (both define classes like .gr/.ga.. with different
-   rules — sharing one stylesheet would make them collide). The parent
-   can still pinch-zoom the iframe like any other page content since the
-   outer viewport meta never disables scaling. */
-.full-report-page{flex:1;display:flex;flex-direction:column;min-height:100%;background:var(--ivory)}
-.full-report-head{flex:none;padding:1.3em 1.2em .9em;text-align:center}
-.full-report-eyebrow{font-size:.7em;font-weight:700;letter-spacing:1.5px;color:var(--navy);text-transform:uppercase}
-.full-report-title{margin:.3em 0 0;font-size:1.15em;font-weight:700;color:var(--ink)}
-.full-report-sub{margin-top:.3em;font-size:.82em;color:var(--muted)}
-.full-report-frame{flex:1 1 auto;width:100%;border:0;background:#fff}
 
 /* ---- Landing/choice screen: the first thing a parent sees before
    picking a path. A real photo up top (not an emoji) gives it the warmth
@@ -312,14 +200,6 @@ html.landing-html,html.scroll-html,body.landing-body-root,body.scroll-body-root{
 .advice-title{font-size:.87em;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:.4em}
 .advice-text{font-size:.87em;color:var(--ink);line-height:1.55;margin-top:.35em}
 
-.bottom-fade{position:fixed;left:0;right:0;bottom:0;height:8.5em;background:linear-gradient(to bottom,rgba(246,247,249,0) 0%,#f6f7f9 65%);pointer-events:none;z-index:4}
-.listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:2px dashed rgba(245,239,222,.55);font:inherit;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.6em;border-radius:14px;padding:.85em 1.7em;background:linear-gradient(165deg,#2f6b45 0%,#173823 100%);color:#fdfbf3;font-size:.94em;letter-spacing:.2px;box-shadow:0 6px 18px rgba(12,38,22,.4),inset 0 0 0 3px rgba(255,255,255,.06);transition:transform .12s ease,background .2s ease}
-.listen-fab:active{transform:translateX(-50%) scale(.97)}
-.listen-fab.loading{background:#334155;border-color:rgba(255,255,255,.2);cursor:wait}
-.listen-fab.loading .spinner{width:1em;height:1em;border-radius:50%;border:.15em solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .7s linear infinite}
-.listen-fab.speaking{background:linear-gradient(165deg,#2f6b45 0%,#173823 100%);border-color:var(--gold)}
-.listen-fab.error{background:var(--warn);border-color:var(--warn)}
-.listen-fab.hidden,.bottom-fade.hidden{display:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 .wave{display:inline-flex;align-items:center;gap:.16em;height:1em}
 .wave span{display:block;width:.16em;background:var(--gold);border-radius:1px;animation:wave-bounce .9s ease-in-out infinite}
@@ -328,342 +208,80 @@ html.landing-html,html.scroll-html,body.landing-body-root,body.scroll-body-root{
 .wave span:nth-child(3){animation-delay:.3s}
 .wave span:nth-child(4){animation-delay:.45s}
 @keyframes wave-bounce{0%,100%{height:.3em}50%{height:1em}}
-.swipe-hint{position:fixed;left:50%;bottom:6.3em;transform:translateX(-50%);z-index:5;font-size:.76em;font-weight:500;color:var(--muted);background:rgba(255,255,255,.95);padding:.35em .9em;border-radius:99px;box-shadow:0 1px 6px rgba(0,0,0,.08);transition:opacity .25s ease}
-.swipe-hint.hidden{opacity:0;pointer-events:none}
-
-/* Base state for content that fades/settles in once its page becomes
-   current — never opacity:0 by default, so a page is always fully
-   visible even if JS never runs (no-JS / slow-script fallback). The
-   .enter class, added transiently by script, is what actually plays the
-   motion; removing this class (or JS not running) just leaves it visible. */
-.hero,.body-pad{opacity:1}
-.hero.enter{animation:content-in .5s ease both}
-.body-pad.enter{animation:content-in .5s ease .08s both}
-.hero.enter .hero-grade,.hero.enter .trend-note{animation:content-in .5s ease .25s both}
-@keyframes content-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
 @media (prefers-reduced-motion: reduce){
-  .score-ring .fill,.listen-fab,.swipe-hint,.hero.enter,.body-pad.enter,.hero.enter .hero-grade,.hero.enter .trend-note,.seg .fill,.wave span,.spark{animation:none!important;transition:none!important}
+  .score-ring .fill,.listen-static,.wave span{animation:none!important;transition:none!important}
 }
 
-/* Shorter phones (common budget Android, iPhone SE, anything under ~720px
-   tall) can't absorb the full hero without pushing the commentary past
-   the last scroll-snap boundary, where it becomes unreachable — vertical
-   space is compacted specifically, not just scaled down uniformly. */
-@media (max-height: 720px){
-  .hero-welcome{font-size:.72em;margin-bottom:.45em}
-  .hero{padding:1.1em 1.3em 1em}
-  .eyebrow{font-size:.64em}
-  .hero h1{font-size:1.5em;margin-top:.2em}
-  .hero .sub{font-size:.72em;margin-top:.2em}
-  .trend-note{margin-top:.4em;font-size:.68em;padding:.2em .6em}
-  .score-wrap{width:5.6em;height:5.6em;margin-top:.6em}
-  .score-num .big{font-size:1.5em}
-  .score-num .exam{font-size:.55em;margin-top:.1em}
-  .hero-grade{margin-top:.45em}
-  .body-pad{padding:.7em 1.2em 6.6em}
-  .history-toggle{padding:.55em 1em;font-size:.8em}
-  .timeline{gap:.4em;margin-top:.5em}
-  .chip{padding:.45em .6em}
-  .commentary{margin-top:.6em}
-  .finale-total{font-size:3em}
-  .finale-stat{margin-top:1.2em}
-  .finale-msg{margin-top:1.1em}
-}
+/* ---- View Report: a single scrolling page (matching a "Digital Progress
+   Card" presentation style the teacher asked to match) instead of the
+   earlier one-subject-per-swipe design — overall summary, one listen
+   action, every subject as its own card, a monthly attendance table, then
+   the same Teacher's Advice cards as the Know About Student page. ---- */
+.view-shell{max-width:30em;margin:0 auto;width:100%;padding:1.1em 1.1em 3em;display:flex;flex-direction:column;gap:1.1em}
+
+.summary-card{border:1px solid var(--line);border-radius:16px;background:#fff;padding:1.2em 1.1em;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.summary-info-row{display:flex;gap:.8em;margin-bottom:1.1em;padding-bottom:1.1em;border-bottom:1px solid var(--line)}
+.summary-info-row .si{flex:1;min-width:0}
+.summary-info-row .si-label{font-size:.64em;font-weight:700;letter-spacing:.5px;color:var(--muted);text-transform:uppercase}
+.summary-info-row .si-value{font-size:.88em;font-weight:600;color:var(--ink);margin-top:.25em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.summary-head{display:flex;align-items:center;gap:1.2em}
+.summary-head .score-wrap{width:5.6em;height:5.6em;flex:none;margin:0}
+.summary-head .score-num .big{font-size:1.5em}
+.summary-head .score-num .exam{font-size:.58em}
+.summary-result{flex:1;min-width:0}
+.summary-eyebrow{font-size:.7em;font-weight:700;letter-spacing:1px;color:var(--navy);text-transform:uppercase}
+.summary-grade-row{margin-top:.5em;display:flex;align-items:center;gap:.6em;flex-wrap:wrap}
+.summary-grade-row .gr{font-size:1.05em;padding:.3em 1em}
+.summary-stats{margin-top:1.1em;display:grid;grid-template-columns:repeat(2,1fr);gap:.7em}
+.stat-tile{border:1px solid var(--line);border-radius:12px;padding:.7em .8em;background:var(--ivory)}
+.stat-tile .st-label{font-size:.66em;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.stat-tile .st-value{font-size:1.05em;font-weight:700;color:var(--ink);margin-top:.25em}
+
+.listen-static{display:flex;align-items:center;justify-content:center;gap:.6em;width:100%;border:2px dashed rgba(245,239,222,.55);font:inherit;font-weight:700;cursor:pointer;border-radius:14px;padding:.9em 1.2em;background:linear-gradient(165deg,#2f6b45 0%,#173823 100%);color:#fdfbf3;font-size:.96em;letter-spacing:.2px;box-shadow:0 6px 18px rgba(12,38,22,.3),inset 0 0 0 3px rgba(255,255,255,.06);transition:transform .12s ease}
+.listen-static:active{transform:scale(.98)}
+.listen-static.loading{background:#334155;border-color:rgba(255,255,255,.2);cursor:wait}
+.listen-static.loading .spinner{width:1em;height:1em;border-radius:50%;border:.15em solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .7s linear infinite}
+.listen-static.speaking{border-color:var(--gold)}
+.listen-static.error{background:var(--warn);border-color:var(--warn)}
+
+.section-heading{font-size:.78em;font-weight:700;letter-spacing:.8px;color:var(--navy);text-transform:uppercase;display:flex;align-items:center;gap:.4em}
+.subjects-section{display:flex;flex-direction:column;gap:.9em}
+.subject-card{border:1px solid var(--line);border-radius:14px;background:#fff;padding:1em 1.1em;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.subject-card-top{display:flex;align-items:center;gap:1em}
+.subject-card .score-wrap{width:4em;height:4em;flex:none;margin:0}
+.subject-card .score-num .big{font-size:1.05em}
+.subject-card .score-num .exam{font-size:.5em}
+.subject-card .sc-name{flex:1;min-width:0;font-size:1em;font-weight:700;color:var(--ink)}
+.subject-card .timeline{margin-top:.9em}
+.subject-card .commentary{margin-top:.8em;padding-left:1.2em}
+.subject-card .commentary::before{font-size:2.4em}
+.subject-card .commentary .ctext{font-size:.92em}
+
+.attendance-card{border:1px solid var(--line);border-radius:14px;background:#fff;padding:1.1em}
+.attendance-total{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9em}
+.attendance-total .at-pct{font-size:1.4em;font-weight:700;color:var(--navy)}
+.attendance-table{width:100%;border-collapse:collapse;font-size:.76em}
+.attendance-table th,.attendance-table td{padding:.4em .25em;text-align:center;border-bottom:1px solid var(--line)}
+.attendance-table th{color:var(--muted);font-weight:600;font-size:.82em}
+.attendance-note{margin-top:.9em;font-size:.87em;line-height:1.55;color:var(--ink)}
+
+.view-advice-card{border:1px solid var(--line);border-radius:16px;background:#fff;padding:1.1em}
+
+.view-footer{text-align:center;padding-top:.6em;display:flex;flex-direction:column;align-items:center;gap:.6em}
+.view-footer .vf-school{font-size:.84em;font-weight:600;color:var(--ink)}
+.view-footer .vf-privacy{font-size:.76em;color:var(--muted)}
 """
 
-READ_ALOUD_SCRIPT = """
-<script>
-(function(){
-  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // speakState: null (idle) | 'loading' (request/synthesis in flight,
-  // nothing audible yet) | 'speaking' (actually playing) | 'error'
-  // (both the real-audio fetch and the browser fallback failed).
-  var speakState = null;
-  var speakBtn = document.getElementById('speakBtn');
-  var idleLabel = speakBtn.textContent;
-  var errorTimer = null;
-
-  function setSpeakState(state){
-    speakState = state;
-    clearTimeout(errorTimer);
-    speakBtn.classList.remove('loading', 'speaking', 'error');
-    if(state === 'loading'){
-      speakBtn.innerHTML = '<span class="spinner"></span> లోడ్ అవుతోంది…';
-      speakBtn.classList.add('loading');
-    } else if(state === 'speaking'){
-      speakBtn.innerHTML = '<span class="wave"><span></span><span></span><span></span><span></span></span> Stop';
-      speakBtn.classList.add('speaking');
-    } else if(state === 'error'){
-      speakBtn.textContent = '\\u26a0\\ufe0f వినలేకపోయాం';
-      speakBtn.classList.add('error');
-      errorTimer = setTimeout(function(){ if(speakState === 'error') setSpeakState(null); }, 2200);
-    } else {
-      speakBtn.textContent = idleLabel;
-    }
-  }
-
-  function getVoicesAsync(){
-    return new Promise(function(resolve){
-      var voices = speechSynthesis.getVoices();
-      if(voices && voices.length){ resolve(voices); return; }
-      var done = false;
-      speechSynthesis.onvoiceschanged = function(){ if(done) return; done = true; resolve(speechSynthesis.getVoices()); };
-      setTimeout(function(){ if(done) return; done = true; resolve(speechSynthesis.getVoices()); }, 1000);
-    });
-  }
-
-  var audioEl = null; // currently-playing real Bhashini audio, if any
-  var speakToken = 0; // bumped on every stop/new request so stale async callbacks are ignored
-
-  function stopSpeech(){
-    speakToken += 1;
-    if('speechSynthesis' in window) speechSynthesis.cancel();
-    if(audioEl){ audioEl.pause(); audioEl.src = ''; audioEl = null; }
-    setSpeakState(null);
-  }
-
-  // Falls back to the browser's own voice when real audio isn't available
-  // (Bhashini not configured, a failed call, or no token on this page).
-  function speakWithBrowser(page, myToken){
-    if(!('speechSynthesis' in window)){ setSpeakState('error'); return; }
-    getVoicesAsync().then(function(voices){
-      if(myToken !== speakToken) return; // superseded by a stop/new request
-      var teluguVoice = voices.filter(function(v){ return /^te/i.test(v.lang); })[0];
-      var text, lang;
-      if(teluguVoice){
-        text = page.getAttribute('data-speech-te') || '';
-        lang = teluguVoice.lang;
-      } else {
-        text = page.getAttribute('data-speech-roman') || '';
-        var enInVoice = voices.filter(function(v){ return /^en-in/i.test(v.lang); })[0];
-        lang = enInVoice ? enInVoice.lang : 'en-US';
-      }
-      if(!text){ setSpeakState('error'); return; }
-      var utter = new SpeechSynthesisUtterance(text);
-      utter.lang = lang;
-      utter.onstart = function(){ if(myToken === speakToken) setSpeakState('speaking'); };
-      utter.onend = function(){ if(myToken === speakToken) setSpeakState(null); };
-      utter.onerror = function(){ if(myToken === speakToken) setSpeakState('error'); };
-      speechSynthesis.speak(utter);
-    });
-  }
-
-  var main = document.querySelector('main');
-  var pages = Array.prototype.slice.call(document.querySelectorAll('.page'));
-  var segs = Array.prototype.slice.call(document.querySelectorAll('.seg'));
-  var current = 0;
-  var hasSwiped = false;
-  var pageLabel = document.getElementById('pageLabel');
-  var swipeHint = document.getElementById('swipeHint');
-  var bottomFade = document.querySelector('.bottom-fade');
-  var publicToken = main.dataset.token || '';
-
-  // The ring's fill circle already carries its real, correct
-  // stroke-dashoffset from the server (so it's right even if this script
-  // never runs). To animate it, the trick is just: briefly force it to
-  // the fully-unfilled offset, then — on the next frame, so the browser
-  // registers that as a real style change — set it back to the real
-  // value. The CSS transition on stroke-dashoffset does the rest.
-  function animateRing(ring){
-    if(reduceMotion) return;
-    var fill = ring.querySelector('.fill');
-    if(!fill) return;
-    var target = fill.getAttribute('data-offset');
-    var circumference = fill.getAttribute('data-circumference');
-    fill.style.transition = 'none';
-    fill.style.strokeDashoffset = circumference;
-    // Force a reflow so the "none" transition + reset value actually commits
-    // before re-enabling the transition and setting the real target.
-    void fill.getBoundingClientRect();
-    fill.style.transition = '';
-    requestAnimationFrame(function(){ fill.style.strokeDashoffset = target; });
-  }
-
-  // Plays a page's entrance once (ring fill, content settle-in, and — on
-  // the finale page, only for a pass — a brief gold sparkle). Guarded by
-  // data-animated so revisiting an already-seen page by scrolling back up
-  // doesn't replay the animation every time.
-  function activatePage(page){
-    if(page.dataset.animated) return;
-    page.dataset.animated = '1';
-    var hero = page.querySelector('.hero');
-    var body = page.querySelector('.body-pad');
-    if(!reduceMotion){
-      if(hero){ hero.classList.add('enter'); hero.addEventListener('animationend', function(){ hero.classList.remove('enter'); }, { once: true }); }
-      if(body){ body.classList.add('enter'); body.addEventListener('animationend', function(){ body.classList.remove('enter'); }, { once: true }); }
-    }
-    Array.prototype.forEach.call(page.querySelectorAll('.score-ring'), animateRing);
-    if(hero && hero.classList.contains('finale') && hero.dataset.pass === '1' && !reduceMotion){
-      hero.classList.add('sparkle');
-      setTimeout(function(){ hero.classList.remove('sparkle'); }, 2200);
-    }
-  }
-
-  // Navigation is native vertical scroll-snap (swipe up/down, like a
-  // reels/shorts feed) rather than click-driven — this just tracks which
-  // page the scroll has landed on, for the progress bar/label/stopping audio.
-  function setCurrent(i){
-    if(i === current){ activatePage(pages[i]); return; }
-    stopSpeech();
-    if(current !== i) hasSwiped = true;
-    current = i;
-    segs.forEach(function(s, idx){
-      s.classList.toggle('active', idx === i);
-      s.classList.toggle('done', idx < i);
-    });
-    pageLabel.textContent = (i + 1) + ' / ' + pages.length;
-    swipeHint.classList.toggle('hidden', hasSwiped || i === pages.length - 1);
-    // The full-report page has its own "Read aloud" button inside the
-    // embedded card (a different narration system entirely), so the
-    // page-by-page Listen FAB and its bottom fade don't apply there.
-    var isFullReport = pages[i].getAttribute('data-page-id') === 'full-report';
-    speakBtn.classList.toggle('hidden', isFullReport);
-    if(bottomFade) bottomFade.classList.toggle('hidden', isFullReport);
-    activatePage(pages[i]);
-  }
-
-  // Figures out which page is "current" from main's own scroll position
-  // instead of IntersectionObserver — more predictable across mobile
-  // browsers, especially right at the last page, where a dynamic address
-  // bar changing the real viewport height can make 100vh-based
-  // intersection thresholds miss entirely.
-  function updateCurrentFromScroll(){
-    var mid = main.scrollTop + main.clientHeight / 2;
-    var idx = 0;
-    for(var i = 0; i < pages.length; i++){
-      if(pages[i].offsetTop <= mid) idx = i;
-    }
-    setCurrent(idx);
-  }
-  var scrollTimer = null;
-  main.addEventListener('scroll', function(){
-    clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(updateCurrentFromScroll, 100);
-  });
-
-  speakBtn.addEventListener('click', function(){
-    if(speakState === 'loading' || speakState === 'speaking'){ stopSpeech(); return; }
-    var myToken = ++speakToken;
-    var page = pages[current];
-    var pageId = page.getAttribute('data-page-id');
-
-    setSpeakState('loading');
-
-    if(!pageId || !publicToken){
-      speakWithBrowser(page, myToken);
-      return;
-    }
-
-    // Try real Telugu audio (Bhashini) first; any failure — not
-    // configured, API error, network issue — falls back to the browser's
-    // own voice so "Listen" always does something either way.
-    fetch('/api/public/report/' + publicToken + '/voice/' + encodeURIComponent(pageId))
-      .then(function(resp){
-        if(!resp.ok) throw new Error('voice endpoint returned ' + resp.status);
-        return resp.blob();
-      })
-      .then(function(blob){
-        if(myToken !== speakToken) return; // user already stopped/switched pages/pages
-        audioEl = new Audio(URL.createObjectURL(blob));
-        audioEl.onended = function(){ if(myToken === speakToken) stopSpeech(); };
-        audioEl.onerror = function(){ if(myToken === speakToken) speakWithBrowser(page, myToken); };
-        // The play() Promise resolving is the reliable cross-browser signal
-        // that playback actually started — the 'playing' event alone isn't
-        // consistently fired for a freshly created Audio() in every engine.
-        audioEl.play().then(function(){
-          if(myToken === speakToken) setSpeakState('speaking');
-        }).catch(function(){
-          if(myToken === speakToken) speakWithBrowser(page, myToken);
-        });
-      })
-      .catch(function(){
-        if(myToken === speakToken) speakWithBrowser(page, myToken);
-      });
-  });
-
-  // Delegated (not per-button) since every subject page has its own
-  // independent "View previous exams" toggle — one listener handles them
-  // all, each only ever affecting its own adjacent .timeline.
-  main.addEventListener('click', function(e){
-    var btn = e.target.closest('.history-toggle');
-    if(!btn) return;
-    var timeline = btn.nextElementSibling;
-    var open = btn.classList.toggle('open');
-    if(timeline) timeline.classList.toggle('collapsed', !open);
-    var label = btn.querySelector('.label');
-    if(label) label.textContent = open
-      ? 'దాచండి / Hide'
-      : 'మునుపటి పరీక్షలు చూడండి / View previous exams';
-  });
-
-  var shareBtn = document.getElementById('shareBtn');
-  if(shareBtn){
-    shareBtn.addEventListener('click', function(){
-      var text = shareBtn.getAttribute('data-share-text') || '';
-      if(navigator.share){
-        navigator.share({ text: text }).catch(function(){});
-      } else if(navigator.clipboard){
-        navigator.clipboard.writeText(text).then(function(){
-          var label = shareBtn.textContent;
-          shareBtn.textContent = '\\u2705 కాపీ అయ్యింది';
-          setTimeout(function(){ shareBtn.textContent = label; }, 1600);
-        }).catch(function(){});
-      }
-    });
-  }
-
-  var analysisToggle = document.getElementById('analysisToggle');
-  var analysisModal = document.getElementById('analysisModal');
-  var analysisClose = document.getElementById('analysisClose');
-  if(analysisToggle && analysisModal){
-    analysisToggle.addEventListener('click', function(){ analysisModal.hidden = false; });
-    if(analysisClose) analysisClose.addEventListener('click', function(){ analysisModal.hidden = true; });
-    // Tapping the dimmed backdrop (not the sheet itself) also closes it.
-    analysisModal.addEventListener('click', function(e){ if(e.target === analysisModal) analysisModal.hidden = true; });
-  }
-
-  pageLabel.textContent = '1 / ' + pages.length;
-  swipeHint.classList.toggle('hidden', pages.length <= 1);
-  activatePage(pages[0]);
-  window.addEventListener('beforeunload', function(){ try { speechSynthesis.cancel(); } catch(e){} });
-})();
-</script>
-"""
-
-PAGE_SHELL = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700;800&family=Noto+Sans+Telugu:wght@400;600;700;800&display=swap" rel="stylesheet">
-<style>{css}</style></head>
-<body>
-<div class="topbar">
-  <div class="school">{school}</div>
-  <div class="student">{student_name}</div>
-  <div class="progressbar">{steps}</div>
-  <div class="pagelabel" id="pageLabel"></div>
-</div>
-<main data-token="{token}">{pages}</main>
-<div class="bottom-fade"></div>
-<div class="swipe-hint" id="swipeHint">⬆ తదుపరి కోసం పైకి స్వైప్ చేయండి</div>
-<button type="button" class="listen-fab" id="speakBtn">\U0001f50a మొత్తం విశ్లేషణ వినండి</button>
-{script}
-</body></html>
-"""
-
-# A page shell shared by the landing choice screen and the chat, neither of
-# which needs PAGE_SHELL's swipe/scroll-snap machinery. `html_class`/
-# `body_class` pick which body behavior a given page gets: the landing
-# page passes "landing-html"/"landing-body-root" (normal document flow —
-# its own height varies with whichever hero photo is set, so it just
-# scrolls like a regular page); the chat passes "" for both, which falls
-# through to the base body{height:100vh;overflow:hidden} rule instead, so
-# the chat is a fixed one-screen app shell where only its own message list
-# scrolls (see .chat-shell/.chat-box/.chat-messages in PARENT_CSS).
+# A page shell shared by every parent-facing page — the landing choice
+# screen, the chat, and the single-scroll report. `html_class`/`body_class`
+# pick which body behavior a given page gets: "landing-html"/"landing-body-root"
+# or "scroll-html"/"scroll-body-root" both mean normal document flow (the
+# page just scrolls, see that selector in PARENT_CSS); the chat passes ""
+# for both, which falls through to the base body{height:100vh;overflow:hidden}
+# rule instead, so it's a fixed one-screen app shell where only its own
+# message list scrolls (see .chat-shell/.chat-box/.chat-messages in PARENT_CSS).
 SIMPLE_SHELL = """<!doctype html>
 <html lang="en" class="{html_class}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -698,13 +316,6 @@ def _grade_class(g: str) -> str:
     if re.match(r"^B", g):
         return "gb"
     return "gc"
-
-
-_TREND_NOTE = {
-    "up": "▲ మెరుగుపడింది",
-    "down": "▼ తగ్గింది",
-    "flat": "స్థిరంగా ఉంది",
-}
 
 
 def _render_grade_badge(g: str) -> str:
@@ -756,106 +367,31 @@ def _discover_subjects(student: dict, exam_defs: list[dict]) -> list[str]:
     return subjects
 
 
-def _render_subject_page(student: dict, exam_defs: list[dict], settings, subject_name: str, index: int, total: int, school_name: str) -> str:
-    is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
-
-    def max_marks(key: str) -> float:
-        return settings.fa_marks_per_subject if is_fa_by_key[key] else settings.sa_marks_per_subject
-
-    exam_order = [e["key"] for e in exam_defs]
-    facts = compute_subject_facts(student, exam_order, subject_name, max_marks)
-    is_last = index == total - 1
-    parent_name = (student.get("father") or "").strip()
-    speech_te = build_subject_voice_telugu(facts, student["name"], index, total, is_last, school_name, parent_name)
-    speech_roman = build_subject_voice_romanized(facts, student["name"], index, total, is_last, school_name, parent_name)
-
-    bg = _subject_background(subject_name)
-    if bg:
-        # Darkened toward navy, not washed toward white — the photo stays
-        # genuinely visible (the earlier near-opaque white wash made it
-        # look like it was barely there), while staying dark enough for
-        # white text to sit on top of it cleanly.
-        hero_style = (
-            " style=\"background-image:linear-gradient(165deg,rgba(30,58,138,.55) 0%,rgba(14,27,77,.88) 100%),"
-            f"url('{_esc(bg)}')\""
-        )
-        h = f'<div class="hero themed"{hero_style}>'
-    else:
-        h = '<div class="hero">'
-
-    if index == 0:
-        h += (
-            f'<div class="hero-welcome">{_esc(time_greeting_telugu())} '
-            f'{_esc(student["name"])} యొక్క ప్రోగ్రెస్ కార్డ్‌కు స్వాగతం</div>'
-        )
-    h += (
-        f'<div class="eyebrow">Subject {index + 1} of {total}</div>'
-        f'<h1>{_esc(subject_name)}</h1>'
-        '<div class="sub">ఈ సబ్జెక్టులో ప్రదర్శన</div>'
-    )
-    if facts.trend:
-        h += f'<div class="trend-note {facts.trend}">{_TREND_NOTE[facts.trend]}</div>'
-    if facts.history:
-        latest = facts.history[-1]
-        pct = 0.0
-        if isinstance(latest.marks, (int, float)) and latest.max_marks:
-            pct = latest.marks * 100 / latest.max_marks
-        h += _render_score_ring(pct, latest.exam_key)
-        h += (
-            '<div class="hero-grade">'
-            f"{_render_grade_badge(latest.grade)}"
-            f'<span class="hero-marks">{_render_marks_cell(latest.marks)} / {_render_marks_cell(latest.max_marks)} marks</span>'
+def _render_summary_card(student: dict, exam_defs: list[dict], settings, facts, token: str) -> str:
+    """Top-of-page overview: father's name/roll as a two-column info row
+    (matching the reference's FATHER'S NAME / CHILD ID header), the latest
+    exam's score ring, grade + pass/fail tag, then stat tiles for total
+    marks, grade, rank and attendance — all from the same _Facts
+    (voice_script._compute_facts) the old conclusion page used."""
+    father = (student.get("father") or "").strip()
+    roll = str(student.get("roll") or "").strip()
+    info_row = ""
+    if father or roll:
+        info_row = (
+            '<div class="summary-info-row">'
+            f'<div class="si"><div class="si-label">Father’s Name</div><div class="si-value">{_esc(father) if father else "&mdash;"}</div></div>'
+            f'<div class="si"><div class="si-label">Roll No</div><div class="si-value">{_esc(roll) if roll else "&mdash;"}</div></div>'
             "</div>"
         )
-    h += "</div>"
-
-    h += '<div class="body-pad">'
-    if len(facts.history) > 1:
-        # The hero above already fully covers the latest exam — this only
-        # ever needs to render when there's actually more history to show
-        # behind the toggle, not for a subject with just one exam on record.
-        h += (
-            '<button type="button" class="history-toggle">'
-            '<span class="label">మునుపటి పరీక్షలు చూడండి / View previous exams</span>'
-            '<span class="chev">▾</span>'
-            "</button>"
-        )
-        h += '<div class="timeline collapsed">'
-        for e in facts.history:
-            h += (
-                '<div class="chip">'
-                f'<div class="exam-name">{_esc(e.exam_key)}</div>'
-                f'<div class="exam-marks">{_render_marks_cell(e.marks)}/{_render_marks_cell(e.max_marks)}</div>'
-                f"{_render_grade_badge(e.grade)}"
-                "</div>"
-            )
-        h += "</div>"
-    h += (
-        f'<div class="commentary {facts.classification}">'
-        '<div class="ctitle">How they did</div>'
-        f'<div class="ctext">{_esc(subject_commentary_telugu(facts))}</div>'
-        "</div>"
-    )
-    h += '<div class="grow"></div></div>'
-
-    return f'<section class="page" data-page-id="{_esc(subject_name)}" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
-
-
-def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str) -> str:
-    exam_order = [e["key"] for e in exam_defs]
-    class_strength = settings.class_strength_override or len(all_students)
-    facts = _compute_facts(student, exam_order, class_strength, school_name)
-    speech_te = build_conclusion_voice_telugu(student, exam_order, class_strength, school_name)
-    speech_roman = build_conclusion_voice_romanized(student, exam_order, class_strength, school_name)
 
     if facts is None:
-        h = (
-            '<div class="hero finale" data-pass="0">'
-            '<div class="finale-eyebrow">Overall Result</div>'
-            f'<div class="finale-name">{_esc(student["name"])}</div>'
-            "</div>"
-        )
-        return f'<section class="page" data-page-id="conclusion" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
+        return f'<div class="summary-card">{info_row}<div class="summary-eyebrow">మొత్తం ఫలితం / Overall Result</div></div>'
+
+    is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
+    max_total = settings.fa_total if is_fa_by_key.get(facts.last_key) else settings.sa_total
+    pct = 0.0
+    if isinstance(facts.total, (int, float)) and max_total:
+        pct = facts.total * 100 / max_total
 
     is_pass = facts.grade not in ("D2", "-") or bool(re.search(r"PASS", facts.result_text or "", re.I))
     if facts.grade == "D2" or re.search(r"FAIL", facts.result_text or "", re.I):
@@ -866,168 +402,252 @@ def _render_conclusion_page(student: dict, all_students: list[dict], exam_defs: 
     else:
         result_html = ""
 
-    h = f'<div class="hero finale" data-pass="{1 if is_pass else 0}">'
-    if is_pass:
-        h += '<span class="spark"></span><span class="spark"></span><span class="spark"></span><span class="spark"></span><span class="spark"></span>'
-    h += '<div class="finale-eyebrow">Overall Result</div>'
-    h += f'<div class="finale-name">{_esc(student["name"])}</div>'
-    if isinstance(facts.total, (int, float)):
-        h += f'<div class="finale-total">{fmt_num(facts.total)}<span class="unit">marks</span></div>'
-    h += '<div class="finale-grade-row">'
+    h = info_row
+    h += '<div class="summary-head">'
+    h += _render_score_ring(pct, facts.last_key)
+    h += '<div class="summary-result">'
+    h += '<div class="summary-eyebrow">మొత్తం ఫలితం / Overall Result</div>'
+    h += '<div class="summary-grade-row">'
     if facts.grade != "-":
         h += _render_grade_badge(facts.grade)
     h += result_html
-    h += "</div>"
+    h += "</div></div></div>"
 
     stats = []
+    if isinstance(facts.total, (int, float)):
+        max_label = fmt_num(max_total) if max_total else "-"
+        stats.append(("మొత్తం మార్కులు / Total Marks", f"{fmt_num(facts.total)}/{max_label}"))
+    if facts.grade != "-":
+        stats.append(("గ్రేడ్ / Grade", facts.grade))
     if facts.last_rank is not None:
-        stats.append(("n", fmt_num(facts.last_rank) + " / " + str(facts.class_strength), "Rank"))
+        stats.append(("ర్యాంకు / Rank", f"{fmt_num(facts.last_rank)} / {facts.class_strength}"))
     if facts.attendance_pct is not None:
-        stats.append(("n", f"{facts.attendance_pct}%", "Attendance"))
+        stats.append(("హాజరు / Attendance", f"{facts.attendance_pct}%"))
     if stats:
-        h += '<div class="finale-stat">'
-        for _, value, label in stats:
-            h += f'<div class="item"><div class="n">{value}</div><div class="l">{_esc(label)}</div></div>'
+        h += '<div class="summary-stats">'
+        for label, value in stats:
+            h += f'<div class="stat-tile"><div class="st-label">{_esc(label)}</div><div class="st-value">{_esc(value)}</div></div>'
         h += "</div>"
 
     if facts.attendance_pct is not None and facts.attendance_pct < 75:
-        h += '<div class="finale-msg">హాజరు తక్కువగా ఉంది; దయచేసి మీ పిల్లలను ప్రతిరోజూ పాఠశాలకు పంపించండి.</div>'
-    h += '<div class="finale-msg">పూర్తి వివరాల కోసం పైన వివరాలను వినండి, మీ పిల్లవాడి భవిష్యత్తు కోసం శుభాకాంక్షలు!</div>'
+        h += '<p style="margin-top:1em;font-size:.86em;color:var(--bad)">హాజరు తక్కువగా ఉంది; దయచేసి ప్రతిరోజూ పాఠశాలకు పంపించండి.</p>'
 
-    if facts.good or facts.fail or facts.low:
-        h += '<div class="finale-recap">'
-        parts = []
-        if facts.good:
-            parts.append(f'<b>Strong:</b> {_esc(", ".join(facts.good))}')
-        if facts.fail:
-            parts.append(f'<b>Failed:</b> {_esc(", ".join(facts.fail))}')
-        if facts.low:
-            parts.append(f'<b>Needs attention:</b> {_esc(", ".join(facts.low))}')
-        h += " &nbsp;&middot;&nbsp; ".join(parts)
-        h += "</div>"
+    return f'<div class="summary-card">{h}</div>'
 
-    # Share text intentionally carries only what's already shown on this
-    # page — the student's own name and these same facts — never the
-    # private report link itself, so forwarding it can't hand someone
-    # else access to the report.
-    share_parts = [student["name"]]
-    if isinstance(facts.total, (int, float)):
-        share_parts.append(f"{fmt_num(facts.total)} marks")
-    if facts.grade != "-":
-        share_parts.append(f"Grade {facts.grade}")
-    share_parts.append("PASS" if is_pass else "FAIL")
-    if facts.last_rank is not None:
-        share_parts.append(f"Rank {fmt_num(facts.last_rank)}/{facts.class_strength}")
-    if facts.attendance_pct is not None:
-        share_parts.append(f"Attendance {facts.attendance_pct}%")
-    share_text = " · ".join(share_parts)
-    h += '<div class="action-row">'
-    h += f'<button type="button" class="action-btn primary" id="shareBtn" data-share-text="{_esc(share_text)}">షేర్ / Share</button>'
 
-    # The full written analysis (same rule-based text already shown on the
-    # teacher's printed card — see analysis.py) is long enough that inlining
-    # it on this page, even collapsed-then-expanded, would risk pushing
-    # content past a scroll-snap boundary where it can't be reached (the
-    # exact bug already hit twice with shorter content). A bottom-sheet
-    # modal sidesteps that entirely — it scrolls on its own, independent of
-    # the page's scroll-snap, so arbitrarily long text is always reachable.
+def _render_listen_section(student: dict, all_students: list[dict], exam_defs: list[dict], settings) -> str:
+    """One "listen to full analysis" action for the whole page, replacing
+    the old page-by-page Listen FAB — speaks the same rule-based analysis
+    text already shown to the teacher (see analysis.py) via the browser's
+    own voice. The real-audio (Bhashini) system stays wired to
+    get_speech_text/the /voice route for any future reuse; this simpler
+    single-button page just uses the always-available browser voice."""
+    exam_order = [e["key"] for e in exam_defs]
+    class_strength = settings.class_strength_override or len(all_students)
     analysis = build_analysis(student, exam_order, class_strength)
-    if analysis["points"]:
-        h += '<button type="button" class="action-btn" id="analysisToggle">పూర్తి విశ్లేషణ / Full analysis</button>'
-    h += "</div>"
-    h += "</div>"
-
-    if analysis["points"]:
-        h += '<div class="analysis-modal" id="analysisModal" hidden>'
-        h += '<div class="analysis-sheet">'
-        h += '<button type="button" class="analysis-close" id="analysisClose" aria-label="Close">✕</button>'
-        h += '<h2>పూర్తి విశ్లేషణ / Full Analysis</h2>'
-        if analysis["intro"]:
-            h += f'<p class="intro">{_esc(analysis["intro"])}</p>'
-        for point in analysis["points"]:
-            h += f"<p>{_esc(point)}</p>"
-        h += "</div></div>"
-
-    return f'<section class="page" data-page-id="conclusion" data-speech-te="{_esc(speech_te)}" data-speech-roman="{_esc(speech_roman)}">{h}</section>'
-
-
-def _render_full_report_page(token: str) -> str:
-    """Final page: the exact same dense report card the teacher sees in the
-    app (every exam, class rank, attendance, full AI analysis), embedded
-    via <iframe src="/api/public/report/{token}/full"> — that route reuses
-    card_render.render_report_page unchanged, so this is a byte-for-byte
-    match of the teacher's view for this one student, not a re-implementation
-    that could drift from it. No speech data: this page has its own "Read
-    aloud" button inside the card itself (a separate, pre-existing system —
-    see card_render.READ_ALOUD_SCRIPT), so the page-by-page Listen FAB hides
-    itself here instead (see setCurrent in READ_ALOUD_SCRIPT above)."""
-    h = (
-        '<div class="full-report-page">'
-        '<div class="full-report-head">'
-        '<div class="full-report-eyebrow">Full Report</div>'
-        '<div class="full-report-title">పూర్తి రిపోర్ట్ కార్డ్ / Complete report card</div>'
-        '<div class="full-report-sub">ఉపాధ్యాయులు చూసేది సరిగ్గా ఇదే — ప్రతి పరీక్ష, ర్యాంకు, హాజరు వివరాలు</div>'
-        "</div>"
-        f'<iframe class="full-report-frame" id="fullReportFrame" src="/api/public/report/{_esc(token)}/full" title="Full report card"></iframe>'
-        "</div>"
-        "<script>"
-        "(function(){"
-        "var frame=document.getElementById('fullReportFrame');"
-        "function fit(){"
-        "var doc=frame.contentDocument;var pv=doc&&doc.getElementById('pv');var pvw=doc&&doc.getElementById('pvw');"
-        "if(!pv||!pvw)return;"
-        # The card is a fixed-size print layout (210mm wide) — never
-        # reflowed for phones. Rather than leave it horizontally
-        # scrollable (cutting the table off mid-row on a phone, which is
-        # what this fit() replaces), it's scaled down to the iframe's own
-        # width via a CSS transform, then pvw/the iframe itself are resized
-        # to the resulting visual size — transforms don't affect layout
-        # sizing, so without this the page would still report (and leave
-        # scrollable) its full unscaled box despite painting smaller.
-        "var scale=frame.clientWidth/pv.scrollWidth;"
-        "pv.style.transformOrigin='top left';"
-        "pv.style.transform='scale('+scale+')';"
-        "pvw.style.overflow='hidden';"
-        "pvw.style.width=frame.clientWidth+'px';"
-        "var scaledHeight=Math.ceil(pv.scrollHeight*scale);"
-        "pvw.style.height=scaledHeight+'px';"
-        "frame.style.flex='none';"
-        "frame.style.height=scaledHeight+'px';"
-        "}"
-        "frame.addEventListener('load',fit);"
-        "window.addEventListener('resize',fit);"
-        "})();"
-        "</script>"
+    parts = [analysis["intro"]] if analysis.get("intro") else []
+    parts.extend(analysis.get("points") or [])
+    speech = " ".join(p for p in parts if p)
+    if not speech:
+        return ""
+    return (
+        f'<button type="button" class="listen-static" id="viewListenBtn" data-speech-te="{_esc(speech)}">'
+        "\U0001f50a మొత్తం విశ్లేషణ వినండి"
+        "</button>"
     )
-    return f'<section class="page" data-page-id="full-report">{h}</section>'
+
+
+def _render_subject_card(student: dict, exam_defs: list[dict], settings, subject_name: str) -> str:
+    is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
+
+    def max_marks(key: str) -> float:
+        return settings.fa_marks_per_subject if is_fa_by_key[key] else settings.sa_marks_per_subject
+
+    exam_order = [e["key"] for e in exam_defs]
+    facts = compute_subject_facts(student, exam_order, subject_name, max_marks)
+    if not facts.history:
+        return ""
+
+    latest = facts.history[-1]
+    pct = 0.0
+    if isinstance(latest.marks, (int, float)) and latest.max_marks:
+        pct = latest.marks * 100 / latest.max_marks
+
+    h = '<div class="subject-card">'
+    h += '<div class="subject-card-top">'
+    h += _render_score_ring(pct, latest.exam_key)
+    h += f'<div class="sc-name">{_esc(subject_name)}</div>'
+    h += "</div>"
+    h += '<div class="timeline">'
+    for e in facts.history:
+        h += (
+            '<div class="chip">'
+            f'<div class="exam-name">{_esc(e.exam_key)}</div>'
+            f'<div class="exam-marks">{_render_marks_cell(e.marks)}/{_render_marks_cell(e.max_marks)}</div>'
+            f"{_render_grade_badge(e.grade)}"
+            "</div>"
+        )
+    h += "</div>"
+    h += (
+        f'<div class="commentary {facts.classification}">'
+        f'<div class="ctext">{_esc(subject_commentary_telugu(facts))}</div>'
+        "</div>"
+    )
+    h += "</div>"
+    return h
+
+
+def _render_subjects_section(student: dict, exam_defs: list[dict], settings) -> str:
+    subjects = _discover_subjects(student, exam_defs)
+    cards = [c for c in (_render_subject_card(student, exam_defs, settings, name) for name in subjects) if c]
+    if not cards:
+        return ""
+    return (
+        "<div>"
+        '<div class="section-heading">\U0001f4da సబ్జెక్టుల వారీగా / Subject-wise</div>'
+        f'<div class="subjects-section" style="margin-top:.8em">{"".join(cards)}</div>'
+        "</div>"
+    )
+
+
+def _render_attendance_section(student: dict) -> str:
+    att = student.get("attendance")
+    if not att or not att.get("months"):
+        return ""
+    total_working = att.get("total_working") or 0
+    total_present = att.get("total_present") or 0
+    pct = round(total_present * 100 / total_working) if total_working else 0
+
+    h = '<div class="attendance-card">'
+    h += '<div class="section-heading">\U0001f4c5 నెలవారీ హాజరు / Monthly Attendance</div>'
+    h += '<div class="attendance-total" style="margin-top:.8em">'
+    h += f"<span>{fmt_num(total_present)} / {fmt_num(total_working)} రోజులు</span>"
+    h += f'<span class="at-pct">{pct}%</span>'
+    h += "</div>"
+    h += '<div style="overflow-x:auto"><table class="attendance-table"><thead><tr><th>నెల</th>'
+    for m in att["months"]:
+        h += f'<th>{_esc(m["month"])}</th>'
+    h += "</tr></thead><tbody>"
+    h += "<tr><td>పని దినాలు</td>"
+    for m in att["months"]:
+        h += f'<td>{_render_marks_cell(m["working_days"])}</td>'
+    h += "</tr><tr><td>హాజరైనవి</td>"
+    for m in att["months"]:
+        attended = m.get("attended")
+        working = m.get("working_days")
+        cell = _render_marks_cell(attended)
+        if isinstance(attended, (int, float)) and isinstance(working, (int, float)) and working:
+            cell += f'<br><span style="color:var(--muted);font-size:.85em">{round(attended * 100 / working)}%</span>'
+        h += f"<td>{cell}</td>"
+    h += "</tr></tbody></table></div>"
+    if pct < 75:
+        h += '<p class="attendance-note" style="color:var(--bad)">హాజరు తక్కువగా ఉంది; దయచేసి ప్రతిరోజూ పాఠశాలకు పంపించండి.</p>'
+    else:
+        h += f'<p class="attendance-note">మొత్తం {fmt_num(total_working)} పని దినాలలో {fmt_num(total_present)} రోజులు ({pct}%) హాజరయ్యారు.</p>'
+    h += "</div>"
+    return h
+
+
+def _render_view_footer(school_name: str, student_name: str, token: str) -> str:
+    return (
+        '<div class="view-footer">'
+        f'<div class="vf-school">{_esc(school_name or "School")}</div>'
+        f'<a class="about-back" href="/api/public/report/{_esc(token)}/full" target="_blank" rel="noopener">\U0001f4c4 పూర్తి రిపోర్ట్ కార్డ్ / Full report card</a>'
+        f'<a class="about-back" href="/api/public/report/{_esc(token)}">← వెనక్కి / Back</a>'
+        f'<div class="vf-privacy">\U0001f512 ఈ రిపోర్ట్ {_esc(student_name)} తల్లిదండ్రుల కోసం మాత్రమే.</div>'
+        "</div>"
+    )
+
+
+VIEW_REPORT_SCRIPT = """
+<script>
+(function(){
+  var btn = document.getElementById('viewListenBtn');
+  if(!btn) return;
+  var idleLabel = btn.textContent;
+  var speaking = false;
+
+  function getVoicesAsync(){
+    return new Promise(function(resolve){
+      var voices = speechSynthesis.getVoices();
+      if(voices && voices.length){ resolve(voices); return; }
+      var done = false;
+      speechSynthesis.onvoiceschanged = function(){ if(done) return; done = true; resolve(speechSynthesis.getVoices()); };
+      setTimeout(function(){ if(done) return; done = true; resolve(speechSynthesis.getVoices()); }, 1000);
+    });
+  }
+
+  function setState(state){
+    btn.classList.remove('loading', 'speaking', 'error');
+    if(state === 'loading'){
+      btn.innerHTML = '<span class="spinner"></span> లోడ్ అవుతోంది…';
+      btn.classList.add('loading');
+    } else if(state === 'speaking'){
+      btn.innerHTML = '<span class="wave"><span></span><span></span><span></span><span></span></span> Stop';
+      btn.classList.add('speaking');
+    } else if(state === 'error'){
+      btn.textContent = '\\u26a0\\ufe0f వినలేకపోయామ్';
+      btn.classList.add('error');
+      setTimeout(function(){ setState(null); }, 2200);
+    } else {
+      btn.textContent = idleLabel;
+    }
+  }
+
+  btn.addEventListener('click', function(){
+    if(speaking){ speechSynthesis.cancel(); speaking = false; setState(null); return; }
+    if(!('speechSynthesis' in window)){ setState('error'); return; }
+    setState('loading');
+    getVoicesAsync().then(function(voices){
+      var teluguVoice = voices.filter(function(v){ return /^te/i.test(v.lang); })[0];
+      var text = btn.getAttribute('data-speech-te') || '';
+      if(!text){ setState('error'); return; }
+      var utter = new SpeechSynthesisUtterance(text);
+      utter.lang = teluguVoice ? teluguVoice.lang : 'en-IN';
+      utter.onstart = function(){ speaking = true; setState('speaking'); };
+      utter.onend = function(){ speaking = false; setState(null); };
+      utter.onerror = function(){ speaking = false; setState('error'); };
+      speechSynthesis.speak(utter);
+    });
+  });
+
+  window.addEventListener('beforeunload', function(){ try { speechSynthesis.cancel(); } catch(e){} });
+})();
+</script>
+"""
 
 
 def render_parent_report_page(
     student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str, title: str = "Report Card", token: str = ""
 ) -> str:
     """`student` is the single student this link belongs to (parent links
-    always resolve to exactly one student — see api/public.py). Builds
-    (number of subjects + 2) pages: one per subject in discovery order,
-    an overall/conclusion page, then the full teacher-style report as a
-    final page. `token` is embedded for READ_ALOUD_SCRIPT to call the
-    real-audio voice route, and for the final page's embedded iframe."""
-    subjects = _discover_subjects(student, exam_defs)
+    always resolve to exactly one student — see api/public.py). A single
+    scrolling page (see module docstring): overall summary, one "listen to
+    full analysis" action, every subject as its own card, a monthly
+    attendance table, then the same Teacher's Advice cards shown on the
+    Know About Student page."""
+    header = TOPBAR_HEADER.format(school=_esc(school_name or "School"), student_name=_esc(student["name"]))
+    exam_order = [e["key"] for e in exam_defs]
+    class_strength = settings.class_strength_override or len(all_students)
+    facts = _compute_facts(student, exam_order, class_strength, school_name)
 
-    pages_html = [_render_subject_page(student, exam_defs, settings, name, i, len(subjects), school_name) for i, name in enumerate(subjects)]
-    pages_html.append(_render_conclusion_page(student, all_students, exam_defs, settings, school_name))
-    pages_html.append(_render_full_report_page(token))
+    content = '<div class="view-shell">'
+    content += _render_summary_card(student, exam_defs, settings, facts, token)
+    content += _render_listen_section(student, all_students, exam_defs, settings)
+    content += _render_subjects_section(student, exam_defs, settings)
+    content += _render_attendance_section(student)
+    content += _render_advice_section_inline(student, all_students, exam_defs, settings, student["name"])
+    content += _render_view_footer(school_name, student["name"], token)
+    content += "</div>"
+    content += VIEW_REPORT_SCRIPT
 
-    segs = "".join(f'<div class="seg{" active" if i == 0 else ""}"><div class="fill"></div></div>' for i in range(len(pages_html)))
-
-    return PAGE_SHELL.format(
+    return SIMPLE_SHELL.format(
         title=_esc(title),
         css=PARENT_CSS,
-        school=_esc(school_name or "School"),
-        student_name=_esc(student["name"]),
-        steps=segs,
-        token=_esc(token),
-        pages="".join(pages_html),
-        script=READ_ALOUD_SCRIPT,
+        html_class="scroll-html",
+        body_class="scroll-body-root",
+        header=header,
+        content=content,
     )
 
 
@@ -1115,7 +735,11 @@ _ADVICE_META = [
 ]
 
 
-def _render_advice_section(student: dict, all_students: list[dict], exam_defs: list[dict], settings, student_name: str) -> str:
+def _build_advice_cards(student: dict, all_students: list[dict], exam_defs: list[dict], settings) -> list[str]:
+    """One card per canned chat answer that actually has something to say
+    for this student — shared by the Know About Student banner/modal and
+    the inline Teacher's Advice section on the single-scroll View Report
+    page, so both always show the exact same text."""
     cards = []
     for (icon, title), question in zip(_ADVICE_META, _DEFAULT_CHAT_QUESTIONS):
         answer = answer_canned_question(question, student, all_students, exam_defs, settings)
@@ -1126,6 +750,11 @@ def _render_advice_section(student: dict, all_students: list[dict], exam_defs: l
             f'<div class="advice-body"><div class="advice-title">{icon} {_esc(title)}</div>'
             f'<div class="advice-text">{_esc(answer)}</div></div></div>'
         )
+    return cards
+
+
+def _render_advice_section(student: dict, all_students: list[dict], exam_defs: list[dict], settings, student_name: str) -> str:
+    cards = _build_advice_cards(student, all_students, exam_defs, settings)
     if not cards:
         return ""
     return (
@@ -1144,6 +773,23 @@ def _render_advice_section(student: dict, all_students: list[dict], exam_defs: l
         f'<p class="advice-greeting">ప్రియమైన {_esc(student_name)} తల్లిదండ్రులకు,</p>'
         + "".join(cards)
         + "</div></div>"
+    )
+
+
+def _render_advice_section_inline(student: dict, all_students: list[dict], exam_defs: list[dict], settings, student_name: str) -> str:
+    """Same cards as _render_advice_section, shown directly in the page
+    flow instead of behind a banner/modal — used by the single-scroll View
+    Report page, which already scrolls, so nothing needs to hide behind a
+    toggle the way it does on the fixed-shell chat page."""
+    cards = _build_advice_cards(student, all_students, exam_defs, settings)
+    if not cards:
+        return ""
+    return (
+        '<div class="view-advice-card">'
+        '<div class="section-heading">\U0001f469‍\U0001f3eb ఉపాధ్యాయుల సలహాలు / Teacher’s Advice</div>'
+        f'<p class="advice-greeting" style="margin-top:.8em">ప్రియమైన {_esc(student_name)},</p>'
+        + "".join(cards)
+        + "</div>"
     )
 
 
