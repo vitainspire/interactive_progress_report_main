@@ -238,6 +238,36 @@ def _send_one(conn, student_row) -> dict:
     return {**out, "channel": "none", "status": "failed", "detail": detail}
 
 
+@router.get("/{batch_id}/students/{student_id}/link")
+def get_student_link(batch_id: int, student_id: int, current_user=Depends(get_current_user)):
+    """The same private parent-report link send-reports generates, for one
+    student — but just handed back, never attempted to send and never
+    logged to send_log. Used by the per-student action row (preview link /
+    open-in-WhatsApp icons) so a teacher can look at or share a link
+    without that counting as a real send attempt in the history."""
+    with session() as conn:
+        batch_row = repo.get_batch(conn, current_user["id"], batch_id)
+        if not batch_row:
+            raise HTTPException(404, "Batch not found")
+        student_rows = [s for s in repo.list_students_brief(conn, batch_id) if s["id"] == student_id]
+        if not student_rows:
+            raise HTTPException(404, "Student not found in this batch")
+        student_row = student_rows[0]
+
+        token = get_or_create_share_token(conn, student_id)
+        report_url = public_report_url(token)
+
+        whatsapp_phone = None
+        raw_phone = (student_row["phone"] or "").strip()
+        if raw_phone:
+            try:
+                whatsapp_phone = normalize_phone(raw_phone).lstrip("+")
+            except InvalidPhoneNumber:
+                whatsapp_phone = None
+
+        return {"report_url": report_url, "whatsapp_phone": whatsapp_phone}
+
+
 @router.post("/{batch_id}/send-reports")
 def send_reports(batch_id: int, req: SendReportsRequest, current_user=Depends(get_current_user)):
     """Sends each selected student's parent-safe report link over WhatsApp,

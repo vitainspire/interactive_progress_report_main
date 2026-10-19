@@ -223,3 +223,11 @@ export function CheckIcon({ size = 18, className }: IconProps) {
     </svg>
   );
 }
+
+export function ChatIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M12 2C6.48 2 2 5.94 2 10.8c0 2.4 1.1 4.57 2.9 6.14-.14 1.17-.6 2.5-1.52 3.76a.5.5 0 0 0 .53.78c1.95-.52 3.52-1.37 4.56-2.1A12.5 12.5 0 0 0 12 19.6c5.52 0 10-3.94 10-8.8S17.52 2 12 2z" />
+    </svg>
+  );
+}

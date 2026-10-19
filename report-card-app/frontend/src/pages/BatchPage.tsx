@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { BarChartIcon, CheckIcon, CopyIcon, PrinterIcon, SearchIcon, SendIcon, SettingsIcon, TrashIcon } from "../components/Icons";
-import { ReportPreview } from "../components/ReportPreview";
+import { StudentActionList } from "../components/StudentActionList";
 import type { BatchDetail, ClassStats, RankedStudent, SendResult, StudentBrief } from "../types";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -790,7 +790,18 @@ export function BatchPage() {
         </div>
       )}
 
-      <ReportPreview reportUrl={reportUrl} iframeRef={iframeRef} />
+      <StudentActionList batchId={batchId} students={detail.students} />
+
+      {/* Off-screen, not display:none — printSelected() needs the iframe's
+          own window to actually paint before contentWindow.print() can
+          work in every browser, which a display:none iframe won't do. */}
+      <iframe
+        ref={iframeRef}
+        src={reportUrl}
+        title="Print source"
+        aria-hidden="true"
+        style={{ position: "fixed", width: 1, height: 1, left: -9999, top: -9999, border: 0 }}
+      />
     </div>
   );
 }
