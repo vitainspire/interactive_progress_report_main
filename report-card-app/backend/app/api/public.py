@@ -8,7 +8,7 @@ from app.db import batches as repo
 from app.db.database import session
 from app.integrations import bhashini, chat, tts_cache
 from app.integrations.sharing import get_student_id_for_token
-from app.reports import card_render
+from app.reports import card_render, study_plan
 from app.reports.chat_canned import answer_canned_question
 from app.reports.chat_context import build_student_context
 from app.reports.parent_report import (
@@ -131,6 +131,31 @@ def post_report_ask(token: str, req: AskRequest):
             raise HTTPException(503, "చాలా మంది అడుగుతున్నారు, కొంచెం సేపు తర్వాత మళ్ళీ ప్రయత్నించండి. / Lots of people are asking right now — please try again in a moment.")
         raise HTTPException(502, "సమాధానం పొందలేకపోయాం. దయచేసి మళ్ళీ ప్రయత్నించండి. / Could not get an answer right now. Please try again.")
     return {"answer": answer}
+
+
+@router.get("/report/{token}/study-plan")
+def get_public_study_plan(token: str):
+    """Lazily generates (and caches) a syllabus-aware study plan for this
+    student's single weakest subject — fetched client-side after the report
+    page has already rendered (see study_plan.py's module docstring for
+    why), so a slow or unconfigured LLM never blocks the page load.
+    Returns {"available": false} whenever there's nothing to show — no weak
+    subject, no syllabus on file for it, or the LLM call failed — and the
+    page simply doesn't display this card rather than erroring."""
+    with session() as conn:
+        student, all_students, batch_row = _resolve_report_context(conn, token)
+        settings = repo.settings_from_row(batch_row)
+        exam_defs = json.loads(batch_row["exam_order"])
+
+        subject = study_plan.weakest_subject(student, exam_defs)
+        if not subject:
+            return {"available": False}
+
+        weak_summary = answer_canned_question("ఏ సబ్జెక్టులు మెరుగుపడాలి?", student, all_students, exam_defs, settings) or ""
+        plan = study_plan.generate_study_plan(conn, subject, student["name"], weak_summary)
+        if not plan:
+            return {"available": False}
+        return {"available": True, "subject": subject, "plan": plan}
 
 
 @router.get("/report/{token}/full", response_class=HTMLResponse)

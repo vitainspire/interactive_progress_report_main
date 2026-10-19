@@ -6,6 +6,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from app.core.config import DATABASE_URL
+from app.db.syllabus_seed import seed as seed_syllabus
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
@@ -84,6 +85,7 @@ def init_db() -> None:
                 conn.execute(statement)
         _migrate_student_phone(conn)
         _migrate_tts_audio_cache(conn)
+        seed_syllabus(conn)
         conn.commit()
 
 

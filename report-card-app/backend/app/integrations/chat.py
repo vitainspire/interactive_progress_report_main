@@ -65,18 +65,9 @@ def _post(messages: list[dict]) -> httpx.Response:
     )
 
 
-def ask_about_student(context: str, history: list[dict], question: str) -> str:
-    """`history` is the prior turns of this conversation as already-sent
-    [{"role": "user"|"assistant", "content": str}, ...] (the client resends
-    it each time — this endpoint keeps no server-side chat state, same as
-    every other route in this app). `question` is the parent's newest
-    message, appended last."""
+def _complete(messages: list[dict]) -> str:
     if not is_configured():
         raise ChatNotConfigured("Chat isn't configured on this server (missing OPENROUTER_API_KEY).")
-
-    messages = [{"role": "system", "content": SYSTEM_PROMPT_TEMPLATE.format(context=context)}]
-    messages.extend(history)
-    messages.append({"role": "user", "content": question})
 
     try:
         response = _post(messages)
@@ -99,3 +90,25 @@ def ask_about_student(context: str, history: list[dict], question: str) -> str:
     if not content or not content.strip():
         raise ChatSendError(f"Chat service returned an empty answer (finish_reason={data['choices'][0].get('finish_reason')}).")
     return content.strip()
+
+
+def ask_about_student(context: str, history: list[dict], question: str) -> str:
+    """`history` is the prior turns of this conversation as already-sent
+    [{"role": "user"|"assistant", "content": str}, ...] (the client resends
+    it each time — this endpoint keeps no server-side chat state, same as
+    every other route in this app). `question` is the parent's newest
+    message, appended last."""
+    messages = [{"role": "system", "content": SYSTEM_PROMPT_TEMPLATE.format(context=context)}]
+    messages.extend(history)
+    messages.append({"role": "user", "content": question})
+    return _complete(messages)
+
+
+def generate_text(system_prompt: str, user_prompt: str) -> str:
+    """A one-off completion with no conversation history — used by the
+    syllabus-aware study plan (app/reports/study_plan.py), which needs a
+    single generated answer rather than a back-and-forth chat."""
+    return _complete([
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ])

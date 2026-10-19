@@ -115,3 +115,33 @@ CREATE TABLE IF NOT EXISTS tts_audio_cache (
     audio_bytes BYTEA NOT NULL,
     created_at TEXT NOT NULL
 );
+
+-- Real AP SSC (10th class) syllabus chapters, one row per chapter per
+-- subject — reference data shared by every batch/user (not tied to a
+-- user_id or batch_id), since the syllabus is the same regardless of which
+-- school uploaded marks. Seeded once from app/db/syllabus_seed.py, not
+-- hand-entered per teacher. Powers the syllabus-aware study plan (see
+-- app/reports/study_plan.py) instead of a generic "study more" tip.
+CREATE TABLE IF NOT EXISTS syllabus_chapter (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    subject TEXT NOT NULL,
+    chapter_no INTEGER NOT NULL,
+    chapter_name TEXT NOT NULL,
+    genre TEXT,
+    theme TEXT,
+    author TEXT,
+    month TEXT,
+    periods INTEGER,
+    page_range TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_syllabus_chapter_subject ON syllabus_chapter(subject);
+
+-- Caches one generated study plan per (subject, weak-subject summary) pair
+-- so reloading the same student's report doesn't re-call the LLM every
+-- time — same reasoning as tts_audio_cache, just for text instead of audio.
+CREATE TABLE IF NOT EXISTS study_plan_cache (
+    cache_key TEXT PRIMARY KEY,
+    subject TEXT NOT NULL,
+    plan_text TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);

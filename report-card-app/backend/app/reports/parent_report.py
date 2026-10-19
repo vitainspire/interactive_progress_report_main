@@ -625,6 +625,19 @@ def _render_view_footer(school_name: str, student_name: str, token: str) -> str:
 VIEW_REPORT_SCRIPT = """
 <script>
 (function(){
+  var shell = document.getElementById('viewShell');
+  var studyPlanCard = document.getElementById('studyPlanCard');
+  if(shell && studyPlanCard){
+    var token = shell.dataset.token;
+    fetch('/api/public/report/' + token + '/study-plan').then(function(r){ return r.json(); }).then(function(data){
+      if(data && data.available){
+        document.getElementById('studyPlanText').textContent = data.plan;
+        studyPlanCard.hidden = false;
+      }
+    }).catch(function(){});
+  }
+})();
+(function(){
   var btn = document.getElementById('viewListenBtn');
   if(!btn) return;
   var idleLabel = btn.textContent;
@@ -694,7 +707,7 @@ def render_parent_report_page(
     class_strength = settings.class_strength_override or len(all_students)
     facts = _compute_facts(student, exam_order, class_strength, school_name)
 
-    content = '<div class="view-shell">'
+    content = f'<div class="view-shell" id="viewShell" data-token="{_esc(token)}">'
     content += _render_summary_card(student, all_students, exam_defs, settings, facts)
     content += _render_listen_section(student, all_students, exam_defs, settings)
     content += _render_subjects_section(student, all_students, exam_defs, settings)
@@ -816,10 +829,25 @@ def _build_advice_cards(student: dict, all_students: list[dict], exam_defs: list
     return cards
 
 
+def _study_plan_placeholder_card(next_num: int) -> str:
+    """A hidden card, filled in (and un-hidden) by client-side JS that
+    fetches /report/{token}/study-plan after the page has rendered — see
+    that route and study_plan.py for why this is fetched lazily instead of
+    rendered server-side. Stays hidden forever if the fetch finds no weak
+    subject or no syllabus for it, so there's no empty/stuck-loading card
+    left behind in the common case."""
+    return (
+        f'<div class="advice-card" id="studyPlanCard" hidden><span class="advice-num">{next_num}</span>'
+        '<div class="advice-body"><div class="advice-title">\U0001f4d8 సిలబస్ ఆధారిత ప్రణాళిక / Syllabus-based Plan</div>'
+        '<div class="advice-text" id="studyPlanText">లోడ్ అవుతోంది…</div></div></div>'
+    )
+
+
 def _render_advice_section(student: dict, all_students: list[dict], exam_defs: list[dict], settings, student_name: str) -> str:
     cards = _build_advice_cards(student, all_students, exam_defs, settings)
     if not cards:
         return ""
+    cards.append(_study_plan_placeholder_card(len(cards) + 1))
     return (
         '<button type="button" class="advice-banner" id="adviceToggle">'
         '<span class="ab-icon">\U0001f469‍\U0001f3eb</span>'
@@ -847,6 +875,7 @@ def _render_advice_section_inline(student: dict, all_students: list[dict], exam_
     cards = _build_advice_cards(student, all_students, exam_defs, settings)
     if not cards:
         return ""
+    cards.append(_study_plan_placeholder_card(len(cards) + 1))
     return (
         '<div class="view-advice-card">'
         '<div class="section-heading">\U0001f469‍\U0001f3eb ఉపాధ్యాయుల సలహాలు / Teacher’s Advice</div>'
@@ -909,6 +938,15 @@ def render_report_about_page(student: dict, all_students: list[dict], exam_defs:
         "adviceToggle.addEventListener('click',function(){adviceModal.hidden=false;});"
         "if(adviceClose)adviceClose.addEventListener('click',function(){adviceModal.hidden=true;});"
         "adviceModal.addEventListener('click',function(e){if(e.target===adviceModal)adviceModal.hidden=true;});"
+        "}"
+        "var studyPlanCard=document.getElementById('studyPlanCard');"
+        "if(studyPlanCard){"
+        "fetch('/api/public/report/'+token+'/study-plan').then(function(r){return r.json();}).then(function(data){"
+        "if(data&&data.available){"
+        "document.getElementById('studyPlanText').textContent=data.plan;"
+        "studyPlanCard.hidden=false;"
+        "}"
+        "}).catch(function(){});"
         "}"
         "function addBubble(cls,text){"
         "var div=document.createElement('div');"
