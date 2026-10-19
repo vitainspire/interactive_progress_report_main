@@ -31,6 +31,7 @@ import math
 import re
 
 from app.reports.analysis import build_analysis
+from app.reports.chat_canned import answer_canned_question
 from app.reports.greeting import time_greeting_telugu
 from app.reports.numfmt import fmt_num
 from app.reports.parent_subject import (
@@ -289,6 +290,27 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 .chat-send{flex:none;width:2.6em;height:2.6em;border-radius:50%;border:none;background:var(--navy);color:#fff;font-size:1em;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .chat-send:disabled{opacity:.5;cursor:default}
 @media (prefers-reduced-motion: reduce){.chat-dot{animation:none}}
+
+/* Teacher's Advice: a compact entry banner (keeps the chat shell fitting
+   one screen, same constraint as the rest of this page) that opens the
+   full numbered breakdown in the existing analysis-sheet bottom modal —
+   reusing that pattern rather than a new one. Its five cards are each
+   just one of the already-built canned chat answers (chat_canned.py),
+   re-presented here instead of re-derived, so this can never drift out of
+   sync with what the chat itself would say for the same question. */
+.advice-banner{flex:none;display:flex;align-items:center;gap:.7em;width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:14px;padding:.75em .9em;font:inherit;cursor:pointer}
+.advice-banner .ab-icon{flex:none;width:2.3em;height:2.3em;border-radius:10px;background:linear-gradient(165deg,#2f6b45 0%,#173823 100%);display:flex;align-items:center;justify-content:center;font-size:1.1em}
+.advice-banner .ab-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:.15em}
+.advice-banner .ab-title{display:block;font-size:.86em;font-weight:700;color:var(--ink)}
+.advice-banner .ab-sub{display:block;font-size:.72em;color:var(--muted)}
+.advice-banner .ab-chev{flex:none;color:var(--muted);font-size:.85em}
+.advice-greeting{font-size:.95em;font-weight:700;color:var(--ink);margin:0 0 1em}
+.advice-card{display:flex;gap:.8em;border:1px solid var(--line);border-radius:14px;padding:.9em 1em;margin-bottom:.7em;background:#fff}
+.advice-card:last-child{margin-bottom:0}
+.advice-num{flex:none;width:1.8em;height:1.8em;border-radius:50%;background:#173823;color:#fff;font-weight:700;font-size:.82em;display:flex;align-items:center;justify-content:center}
+.advice-body{flex:1;min-width:0}
+.advice-title{font-size:.87em;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:.4em}
+.advice-text{font-size:.87em;color:var(--ink);line-height:1.55;margin-top:.35em}
 
 .bottom-fade{position:fixed;left:0;right:0;bottom:0;height:8.5em;background:linear-gradient(to bottom,rgba(246,247,249,0) 0%,#f6f7f9 65%);pointer-events:none;z-index:4}
 .listen-fab{position:fixed;left:50%;bottom:1.3em;transform:translateX(-50%);z-index:5;border:2px dashed rgba(245,239,222,.55);font:inherit;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.6em;border-radius:14px;padding:.85em 1.7em;background:linear-gradient(165deg,#2f6b45 0%,#173823 100%);color:#fdfbf3;font-size:.94em;letter-spacing:.2px;box-shadow:0 6px 18px rgba(12,38,22,.4),inset 0 0 0 3px rgba(255,255,255,.06);transition:transform .12s ease,background .2s ease}
@@ -1081,17 +1103,69 @@ _DEFAULT_CHAT_QUESTIONS = [
 ]
 
 
-def render_report_about_page(student_name: str, school_name: str, token: str) -> str:
+# Icon + card title for each of the five canned answers, in the same order
+# as _DEFAULT_CHAT_QUESTIONS, reused to build the "Teacher's Advice" panel
+# below from the exact same text the chat would give for that question.
+_ADVICE_META = [
+    ("\U0001f4aa", "బలాలు"),
+    ("\U0001f4da", "మెరుగుపడాల్సిన సబ్జెక్టులు"),
+    ("\U0001f3c5", "ర్యాంకు"),
+    ("\U0001f4c5", "హాజరు"),
+    ("\U0001f4a1", "చదువు చిట్కాలు"),
+]
+
+
+def _render_advice_section(student: dict, all_students: list[dict], exam_defs: list[dict], settings, student_name: str) -> str:
+    cards = []
+    for (icon, title), question in zip(_ADVICE_META, _DEFAULT_CHAT_QUESTIONS):
+        answer = answer_canned_question(question, student, all_students, exam_defs, settings)
+        if not answer:
+            continue
+        cards.append(
+            f'<div class="advice-card"><span class="advice-num">{len(cards) + 1}</span>'
+            f'<div class="advice-body"><div class="advice-title">{icon} {_esc(title)}</div>'
+            f'<div class="advice-text">{_esc(answer)}</div></div></div>'
+        )
+    if not cards:
+        return ""
+    return (
+        '<button type="button" class="advice-banner" id="adviceToggle">'
+        '<span class="ab-icon">\U0001f469‍\U0001f3eb</span>'
+        '<span class="ab-text">'
+        '<span class="ab-title">ఉపాధ్యాయుల సలహాలు / Teacher’s Advice</span>'
+        '<span class="ab-sub">బలాలు, ర్యాంకు, సలహాలు ఒకేచోట / Strengths, rank &amp; tips</span>'
+        "</span>"
+        '<span class="ab-chev">›</span>'
+        "</button>"
+        '<div class="analysis-modal" id="adviceModal" hidden>'
+        '<div class="analysis-sheet">'
+        '<button type="button" class="analysis-close" id="adviceClose" aria-label="Close">✕</button>'
+        '<h2>\U0001f469‍\U0001f3eb ఉపాధ్యాయుల సలహాలు</h2>'
+        f'<p class="advice-greeting">ప్రియమైన {_esc(student_name)} తల్లిదండ్రులకు,</p>'
+        + "".join(cards)
+        + "</div></div>"
+    )
+
+
+def render_report_about_page(student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str, token: str) -> str:
     """The "Know About Student" chat: a parent types a free-form question
     and gets an answer grounded in this one student's own report data (see
     app/reports/chat_context.py + app/integrations/chat.py, called via
     POST .../ask). Keeps no server-side conversation state — the page's own
     script resends the growing `history` array with every question, same
-    statelessness as the rest of this API."""
+    statelessness as the rest of this API.
+
+    Also carries a compact "Teacher's Advice" entry banner above the chat,
+    opening a bottom sheet with the same five canned answers re-presented as
+    numbered cards — a parent who doesn't know what to ask gets a ready
+    summary; one who does still has the free-form chat below it."""
+    student_name = student["name"]
     header = TOPBAR_HEADER.format(school=_esc(school_name or "School"), student_name=_esc(student_name))
     chips = "".join(f'<button type="button" class="chat-chip" data-q="{_esc(q)}">{_esc(q)}</button>' for q in _DEFAULT_CHAT_QUESTIONS)
+    advice_section = _render_advice_section(student, all_students, exam_defs, settings, student_name)
     content = (
         f'<div class="chat-shell" id="chatRoot" data-token="{_esc(token)}">'
+        f"{advice_section}"
         '<div class="chat-head">'
         '<div class="eyebrow">Know About Student</div>'
         f'<h1>{_esc(student_name)} గురించి అడగండి / Ask about {_esc(student_name)}</h1>'
@@ -1119,6 +1193,14 @@ def render_report_about_page(student_name: str, school_name: str, token: str) ->
         "var sendBtn=document.getElementById('chatSend');"
         "var history=[];"
         "var busy=false;"
+        "var adviceToggle=document.getElementById('adviceToggle');"
+        "var adviceModal=document.getElementById('adviceModal');"
+        "var adviceClose=document.getElementById('adviceClose');"
+        "if(adviceToggle&&adviceModal){"
+        "adviceToggle.addEventListener('click',function(){adviceModal.hidden=false;});"
+        "if(adviceClose)adviceClose.addEventListener('click',function(){adviceModal.hidden=true;});"
+        "adviceModal.addEventListener('click',function(e){if(e.target===adviceModal)adviceModal.hidden=true;});"
+        "}"
         "function addBubble(cls,text){"
         "var div=document.createElement('div');"
         "div.className='chat-bubble '+cls;"

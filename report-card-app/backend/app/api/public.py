@@ -82,8 +82,10 @@ def get_public_report_about(token: str):
     below is what actually fails in that case, with a clear message rather
     than this page 404ing or silently offering a feature that can't work."""
     with session() as conn:
-        student, _all_students, batch_row = _resolve_report_context(conn, token)
-        html = render_report_about_page(student["name"], batch_row["school_name"], token)
+        student, all_students, batch_row = _resolve_report_context(conn, token)
+        settings = repo.settings_from_row(batch_row)
+        exam_defs = json.loads(batch_row["exam_order"])
+        html = render_report_about_page(student, all_students, exam_defs, settings, batch_row["school_name"], token)
         return HTMLResponse(content=html)
 
 
