@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../api/client";
-import { ChatIcon, EyeIcon, SheetIcon, SmsIcon } from "./Icons";
+import { ChatIcon, DotsIcon, EyeIcon, SheetIcon, SmsIcon } from "./Icons";
 import type { StudentBrief } from "../types";
 
 interface StudentLink {
@@ -11,7 +11,10 @@ interface StudentLink {
 /** One row per student with four actions, replacing the old default view
  * of every selected student's full report concatenated into one long
  * iframe. Each action opens in a new tab so working down a long list of
- * students doesn't lose your place:
+ * students doesn't lose your place. Below the `sm` breakpoint the four
+ * buttons (plus the "no phone" pill) collapse into a single "⋮" menu —
+ * inline at phone widths they squeezed the name column down to a single
+ * truncated letter, same disclosure pattern as DashboardPage's card menu:
  *   - WhatsApp: opens a wa.me click-to-chat link pre-filled with that
  *     student's private report link — this app never sends WhatsApp
  *     messages itself (no Cloud API configured here), it just hands the
@@ -91,8 +94,10 @@ export function StudentActionList({ batchId, students }: { batchId: number; stud
               <span className="flex-1 truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                 {s.name}
               </span>
-              {!hasPhone && <span className="pill">no phone</span>}
-              <div className="flex flex-none items-center gap-1.5">
+
+              {/* Wide screens: every action inline, same as before. */}
+              <div className="hidden flex-none items-center gap-1.5 sm:flex">
+                {!hasPhone && <span className="pill">no phone</span>}
                 <button
                   type="button"
                   onClick={() => openWhatsApp(s)}
@@ -133,6 +138,64 @@ export function StudentActionList({ batchId, students }: { batchId: number; stud
                   <SheetIcon size={15} />
                 </button>
               </div>
+
+              {/* Narrow screens: same four actions, collapsed behind a menu
+               * so the student's name has room to actually show. */}
+              <details className="relative flex-none sm:hidden">
+                <summary
+                  aria-label="Student actions"
+                  className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-full transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  <DotsIcon size={16} />
+                </summary>
+                <div className="soft-card absolute right-0 z-10 mt-1 w-48 overflow-hidden p-1" style={{ boxShadow: "var(--shadow-pop)" }}>
+                  {!hasPhone && (
+                    <div className="px-2.5 py-1.5 text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                      No phone number on file
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => openWhatsApp(s)}
+                    disabled={busy}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-40"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    <ChatIcon size={14} className="text-[#25d366]" />
+                    WhatsApp
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openSms(s)}
+                    disabled={!hasPhone || busy}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-40"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    <SmsIcon size={14} />
+                    SMS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => previewParentLink(s)}
+                    disabled={busy}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-40"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    <EyeIcon size={14} />
+                    Preview parent link
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openFullReport(s)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    <SheetIcon size={14} />
+                    Full report
+                  </button>
+                </div>
+              </details>
             </div>
           );
         })}
