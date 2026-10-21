@@ -94,12 +94,14 @@ export interface TtSubject {
   id: number;
   name: string;
   code: string;
+  excluded_periods: number[];
 }
 
 export interface TtTeacher {
   id: number;
   name: string;
   code: string;
+  phone: string;
   max_periods_per_day: number | null;
   subject_ids: number[];
 }
@@ -169,6 +171,13 @@ export interface TtSubstitution {
   original_teacher_name: string | null;
   substitute_teacher_id: number;
   substitute_teacher_name: string;
+}
+
+export type TtNotifyStatus = "sent" | "failed" | "not_sent_no_phone" | "not_sent_sms_unconfigured" | "not_sent_invalid_phone";
+
+export interface TtSubstitutionResult extends TtSubstitution {
+  date: string;
+  notify_status: TtNotifyStatus;
 }
 
 export interface TtSchoolConfig {

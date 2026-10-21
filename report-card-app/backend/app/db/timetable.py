@@ -69,14 +69,18 @@ def delete_subject(conn: psycopg.Connection, user_id: int, subject_id: int) -> b
     return cur.rowcount > 0
 
 
+def set_subject_excluded_periods(conn: psycopg.Connection, subject_id: int, excluded_periods: list[int]) -> None:
+    conn.execute("UPDATE tt_subject SET excluded_periods = %s WHERE id = %s", (json.dumps(excluded_periods), subject_id))
+
+
 # ---- Teachers ----
 
 
-def create_teacher(conn: psycopg.Connection, user_id: int, name: str, code: str, max_periods_per_day: int | None) -> int:
+def create_teacher(conn: psycopg.Connection, user_id: int, name: str, code: str, max_periods_per_day: int | None, phone: str = "") -> int:
     sort_order = _next_sort_order(conn, "tt_teacher", user_id)
     row = conn.execute(
-        "INSERT INTO tt_teacher (user_id, name, code, max_periods_per_day, sort_order) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-        (user_id, name, code, max_periods_per_day, sort_order),
+        "INSERT INTO tt_teacher (user_id, name, code, phone, max_periods_per_day, sort_order) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+        (user_id, name, code, phone, max_periods_per_day, sort_order),
     ).fetchone()
     return row["id"]
 
@@ -87,6 +91,19 @@ def list_teachers(conn: psycopg.Connection, user_id: int) -> list[dict]:
 
 def get_teacher(conn: psycopg.Connection, user_id: int, teacher_id: int) -> dict | None:
     return conn.execute("SELECT * FROM tt_teacher WHERE id = %s AND user_id = %s", (teacher_id, user_id)).fetchone()
+
+
+def update_teacher(conn: psycopg.Connection, teacher_id: int, fields: dict) -> None:
+    cols = []
+    values = []
+    for key in ("name", "code", "phone", "max_periods_per_day"):
+        if key in fields:
+            cols.append(f"{key} = %s")
+            values.append(fields[key])
+    if not cols:
+        return
+    values.append(teacher_id)
+    conn.execute(f"UPDATE tt_teacher SET {', '.join(cols)} WHERE id = %s", values)
 
 
 def delete_teacher(conn: psycopg.Connection, user_id: int, teacher_id: int) -> bool:
@@ -211,7 +228,7 @@ def list_all_class_subjects_for_generation(conn: psycopg.Connection, user_id: in
     classes = list_classes(conn, user_id)
     rows = conn.execute(
         """SELECT cs.class_id, cs.subject_id, cs.teacher_id, cs.periods_per_week,
-                  s.name AS subject_name, t.name AS teacher_name
+                  s.name AS subject_name, s.excluded_periods, t.name AS teacher_name
            FROM tt_class_subject cs
            JOIN tt_class c ON c.id = cs.class_id
            JOIN tt_subject s ON s.id = cs.subject_id
@@ -268,6 +285,32 @@ def get_timetable_entry(conn: psycopg.Connection, class_id: int, day: str, perio
            LEFT JOIN tt_teacher t ON t.id = te.teacher_id
            WHERE te.class_id = %s AND te.day = %s AND te.period = %s""",
         (class_id, day, period),
+    ).fetchone()
+
+
+def set_timetable_entry(conn: psycopg.Connection, class_id: int, day: str, period: int, subject_id: int, teacher_id: int | None) -> None:
+    """Manually overrides one slot of the generated timetable — a
+    permanent change to the weekly template, distinct from a dated
+    tt_substitution (which only covers one specific day's absence)."""
+    conn.execute(
+        """INSERT INTO tt_timetable_entry (class_id, day, period, subject_id, teacher_id)
+           VALUES (%s, %s, %s, %s, %s)
+           ON CONFLICT (class_id, day, period) DO UPDATE SET subject_id = EXCLUDED.subject_id, teacher_id = EXCLUDED.teacher_id""",
+        (class_id, day, period, subject_id, teacher_id),
+    )
+
+
+def is_teacher_busy_elsewhere(
+    conn: psycopg.Connection, user_id: int, teacher_id: int, day: str, period: int, exclude_class_id: int
+) -> dict | None:
+    """Whether `teacher_id` already teaches a *different* class at this
+    exact day/period — used to block a manual edit from creating the same
+    double-booking the generator itself would never produce."""
+    return conn.execute(
+        """SELECT te.class_id, c.grade, c.section FROM tt_timetable_entry te
+           JOIN tt_class c ON c.id = te.class_id
+           WHERE c.user_id = %s AND te.teacher_id = %s AND te.day = %s AND te.period = %s AND te.class_id != %s""",
+        (user_id, teacher_id, day, period, exclude_class_id),
     ).fetchone()
 
 

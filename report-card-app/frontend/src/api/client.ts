@@ -47,6 +47,10 @@ export const api = {
     const params = new URLSearchParams({ token: getToken() ?? "", subject });
     return `${API_BASE}/batches/${batchId}/subject-analysis?${params.toString()}`;
   },
+  timetablePrintUrl: (classId: number) => {
+    const params = new URLSearchParams({ token: getToken() ?? "" });
+    return `${API_BASE}/timetable/classes/${classId}/timetable/print?${params.toString()}`;
+  },
 };
 
 export { UnauthorizedError };

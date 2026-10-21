@@ -97,6 +97,14 @@ def _migrate_tt_school_config(conn: psycopg.Connection) -> None:
     conn.execute("ALTER TABLE tt_school_config ADD COLUMN IF NOT EXISTS breaks TEXT NOT NULL DEFAULT '[]'")
 
 
+def _migrate_tt_phone_and_excluded_periods(conn: psycopg.Connection) -> None:
+    """Adds `tt_teacher.phone` (for substitute-assignment SMS alerts) and
+    `tt_subject.excluded_periods` (e.g. "Games never in period 1") to
+    tables that pre-date both features."""
+    conn.execute("ALTER TABLE tt_teacher ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT ''")
+    conn.execute("ALTER TABLE tt_subject ADD COLUMN IF NOT EXISTS excluded_periods TEXT NOT NULL DEFAULT '[]'")
+
+
 def init_db() -> None:
     with get_connection() as conn:
         schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
@@ -108,6 +116,7 @@ def init_db() -> None:
         _migrate_tts_audio_cache(conn)
         _migrate_class_level(conn)
         _migrate_tt_school_config(conn)
+        _migrate_tt_phone_and_excluded_periods(conn)
         seed_syllabus(conn)
         seed_subject_blueprint(conn)
         conn.commit()

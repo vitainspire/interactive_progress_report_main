@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import { CheckIcon, PlusIcon, TrashIcon } from "../components/Icons";
+import { CheckIcon, PlusIcon, PrinterIcon, TrashIcon } from "../components/Icons";
 import type {
   TtBreak,
   TtClass,
@@ -9,9 +9,11 @@ import type {
   TtGenerateResult,
   TtSchoolConfig,
   TtSubject,
+  TtNotifyStatus,
   TtSubstituteCandidate,
   TtSubstituteOptions,
   TtSubstitution,
+  TtSubstitutionResult,
   TtTeacher,
   TtTeacherTimetableEntry,
   TtTimetableEntry,
@@ -258,11 +260,47 @@ function ClassesTab({ classes, onAdd, onDelete }: { classes: TtClass[]; onAdd: (
   );
 }
 
-function SubjectsTab({ subjects, onAdd, onDelete }: { subjects: TtSubject[]; onAdd: (name: string, code: string) => Promise<void>; onDelete: (id: number) => void }) {
+function SubjectsTab({
+  subjects,
+  periodsPerDay,
+  onAdd,
+  onDelete,
+  onUpdateExcludedPeriods,
+}: {
+  subjects: TtSubject[];
+  periodsPerDay: number;
+  onAdd: (name: string, code: string) => Promise<void>;
+  onDelete: (id: number) => void;
+  onUpdateExcludedPeriods: (subjectId: number, excludedPeriods: number[]) => Promise<void>;
+}) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [excludedDrafts, setExcludedDrafts] = useState<Record<number, number[]>>({});
+
+  const periodOptions = Array.from({ length: Math.max(periodsPerDay, 0) }, (_, i) => i + 1);
+
+  function excludedFor(s: TtSubject): number[] {
+    return excludedDrafts[s.id] ?? s.excluded_periods;
+  }
+
+  function toggleDraftPeriod(s: TtSubject, period: number) {
+    const current = excludedFor(s);
+    const next = current.includes(period) ? current.filter((p) => p !== period) : [...current, period];
+    setExcludedDrafts((prev) => ({ ...prev, [s.id]: next }));
+  }
+
+  async function saveExcluded(s: TtSubject) {
+    const periods = excludedDrafts[s.id];
+    if (!periods) return;
+    await onUpdateExcludedPeriods(s.id, periods);
+    setExcludedDrafts((prev) => {
+      const next = { ...prev };
+      delete next[s.id];
+      return next;
+    });
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -303,14 +341,39 @@ function SubjectsTab({ subjects, onAdd, onDelete }: { subjects: TtSubject[]; onA
       {error && <p className="mt-2 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
 
       <div className="mt-4 divide-y" style={{ borderColor: "var(--border)" }}>
-        {subjects.map((s) => (
-          <Row key={s.id} onDelete={() => onDelete(s.id)}>
-            <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              {s.name}
-              {s.code && <span className="pill ml-2">{s.code}</span>}
-            </span>
-          </Row>
-        ))}
+        {subjects.map((s) => {
+          const excluded = excludedFor(s);
+          const dirty = excludedDrafts[s.id] !== undefined;
+          return (
+            <Row key={s.id} onDelete={() => onDelete(s.id)}>
+              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {s.name}
+                {s.code && <span className="pill ml-2">{s.code}</span>}
+              </span>
+              {periodOptions.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Never in period:
+                  </span>
+                  {periodOptions.map((p) => (
+                    <SubjectTogglePill key={p} label={String(p)} active={excluded.includes(p)} onClick={() => toggleDraftPeriod(s, p)} />
+                  ))}
+                  {dirty && (
+                    <button
+                      type="button"
+                      onClick={() => saveExcluded(s)}
+                      title="Save"
+                      className="flex h-6 w-6 flex-none items-center justify-center rounded-full"
+                      style={{ color: "var(--status-good)" }}
+                    >
+                      <CheckIcon size={13} />
+                    </button>
+                  )}
+                </div>
+              )}
+            </Row>
+          );
+        })}
         {subjects.length === 0 && <EmptyHint>No subjects yet — add your first one above.</EmptyHint>}
       </div>
     </Panel>
@@ -420,21 +483,25 @@ function TeachersTab({
   onAdd,
   onDelete,
   onUpdateSubjects,
+  onUpdatePhone,
 }: {
   teachers: TtTeacher[];
   subjects: TtSubject[];
   config: TtSchoolConfig;
-  onAdd: (name: string, code: string, maxPeriodsPerDay: number | null, subjectIds: number[]) => Promise<void>;
+  onAdd: (name: string, code: string, maxPeriodsPerDay: number | null, subjectIds: number[], phone: string) => Promise<void>;
   onDelete: (id: number) => void;
   onUpdateSubjects: (teacherId: number, subjectIds: number[]) => Promise<void>;
+  onUpdatePhone: (teacherId: number, phone: string) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [phone, setPhone] = useState("");
   const [maxPeriods, setMaxPeriods] = useState("");
   const [newSubjectIds, setNewSubjectIds] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subjectDrafts, setSubjectDrafts] = useState<Record<number, number[]>>({});
+  const [phoneError, setPhoneError] = useState<Record<number, string>>({});
   const [viewingTeacher, setViewingTeacher] = useState<TtTeacher | null>(null);
 
   function subjectsFor(t: TtTeacher): number[] {
@@ -464,15 +531,30 @@ function TeachersTab({
     setBusy(true);
     setError(null);
     try {
-      await onAdd(name.trim(), code.trim(), maxPeriods.trim() ? Number(maxPeriods) : null, newSubjectIds);
+      await onAdd(name.trim(), code.trim(), maxPeriods.trim() ? Number(maxPeriods) : null, newSubjectIds, phone.trim());
       setName("");
       setCode("");
+      setPhone("");
       setMaxPeriods("");
       setNewSubjectIds([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add this teacher");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function savePhone(t: TtTeacher, value: string) {
+    if (value === t.phone) return;
+    try {
+      await onUpdatePhone(t.id, value);
+      setPhoneError((prev) => {
+        const next = { ...prev };
+        delete next[t.id];
+        return next;
+      });
+    } catch (err) {
+      setPhoneError((prev) => ({ ...prev, [t.id]: err instanceof Error ? err.message : "Could not save this phone number" }));
     }
   }
 
@@ -491,6 +573,12 @@ function TeachersTab({
               Short code
             </label>
             <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. VJVS" />
+          </div>
+          <div className="w-40">
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Phone (for substitute alerts)
+            </label>
+            <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Optional" />
           </div>
           <div className="w-36">
             <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -546,6 +634,21 @@ function TeachersTab({
                   </span>
                 )}
               </button>
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="text"
+                  defaultValue={t.phone}
+                  onBlur={(e) => savePhone(t, e.target.value.trim())}
+                  placeholder="Phone (for substitute alerts)"
+                  className="w-48 text-xs"
+                  style={{ padding: "0.3rem 0.6rem" }}
+                />
+                {phoneError[t.id] && (
+                  <span className="text-xs" style={{ color: "var(--accent-mark)" }}>
+                    {phoneError[t.id]}
+                  </span>
+                )}
+              </div>
               {subjects.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {subjects.map((s) => (
@@ -816,24 +919,59 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function notifyNote(status: TtNotifyStatus): string {
+  switch (status) {
+    case "sent":
+      return "They've been texted.";
+    case "not_sent_no_phone":
+      return "No phone number on file, so they weren't notified.";
+    case "not_sent_invalid_phone":
+      return "Their phone number looks invalid, so they weren't notified.";
+    case "not_sent_sms_unconfigured":
+      return "SMS alerts aren't set up on this server, so they weren't notified.";
+    case "failed":
+      return "The SMS notification failed to send.";
+    default:
+      return "";
+  }
+}
+
 function SubstituteModal({
   classId,
   day,
   period,
+  initialDate,
+  teachers,
   onClose,
-  onAssigned,
+  onChanged,
 }: {
   classId: number;
   day: string;
   period: number;
+  initialDate: string;
+  teachers: TtTeacher[];
   onClose: () => void;
-  onAssigned: () => void;
+  onChanged: () => void;
 }) {
-  const [date, setDate] = useState(todayStr);
+  const [date, setDate] = useState(initialDate);
   const [options, setOptions] = useState<TtSubstituteOptions | null>(null);
+  const [existingSub, setExistingSub] = useState<TtSubstitution | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<number | null>(null);
-  const [assigned, setAssigned] = useState<string | null>(null);
+  const [assigned, setAssigned] = useState<{ name: string; note: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  // Editing the weekly template permanently (independent of any date).
+  const [classSubjects, setClassSubjects] = useState<TtClassSubject[] | null>(null);
+  const [editSubjectId, setEditSubjectId] = useState<number | "">("");
+  const [editTeacherId, setEditTeacherId] = useState<number | "">("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editSaved, setEditSaved] = useState(false);
+
+  useEffect(() => {
+    api.get<TtClassSubject[]>(`/timetable/classes/${classId}/subjects`).then(setClassSubjects).catch(() => setClassSubjects([]));
+  }, [classId]);
 
   useEffect(() => {
     setOptions(null);
@@ -841,21 +979,73 @@ function SubstituteModal({
     setAssigned(null);
     api
       .get<TtSubstituteOptions>(`/timetable/classes/${classId}/substitutes?day=${day}&period=${period}&date=${date}`)
-      .then(setOptions)
+      .then((opts) => {
+        setOptions(opts);
+        setEditSubjectId((prev) => (prev === "" ? opts.original.subject_id : prev));
+        setEditTeacherId((prev) => (prev === "" ? opts.original.teacher_id ?? "" : prev));
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load substitute options"));
+    setExistingSub(undefined);
+    api
+      .get<TtSubstitution[]>(`/timetable/classes/${classId}/substitutions?date=${date}`)
+      .then((subs) => setExistingSub(subs.find((s) => s.day === day && s.period === period) ?? null))
+      .catch(() => setExistingSub(null));
   }, [classId, day, period, date]);
 
   async function assign(teacherId: number, teacherName: string) {
     setAssigning(teacherId);
     setError(null);
     try {
-      await api.post(`/timetable/classes/${classId}/substitutions`, { date, day, period, substitute_teacher_id: teacherId });
-      setAssigned(teacherName);
-      onAssigned();
+      const result = await api.post<TtSubstitutionResult>(`/timetable/classes/${classId}/substitutions`, {
+        date,
+        day,
+        period,
+        substitute_teacher_id: teacherId,
+      });
+      setAssigned({ name: teacherName, note: notifyNote(result.notify_status) });
+      setExistingSub(result);
+      onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not assign this substitute");
     } finally {
       setAssigning(null);
+    }
+  }
+
+  async function removeSub() {
+    setRemoving(true);
+    setError(null);
+    try {
+      await api.del(`/timetable/classes/${classId}/substitutions?date=${date}&period=${period}`);
+      setExistingSub(null);
+      setAssigned(null);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove this substitution");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  async function saveEdit() {
+    if (editSubjectId === "") return;
+    setEditSaving(true);
+    setEditError(null);
+    setEditSaved(false);
+    try {
+      const updated = await api.put<{ subject_id: number; subject_name: string; teacher_id: number | null; teacher_name: string | null }>(
+        `/timetable/classes/${classId}/timetable/${day}/${period}`,
+        { subject_id: editSubjectId, teacher_id: editTeacherId === "" ? null : editTeacherId }
+      );
+      setOptions((prev) =>
+        prev ? { ...prev, original: { subject_id: updated.subject_id, subject_name: updated.subject_name, teacher_id: updated.teacher_id, teacher_name: updated.teacher_name } } : prev
+      );
+      setEditSaved(true);
+      onChanged();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Could not save this change");
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -867,11 +1057,15 @@ function SubstituteModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4"
       style={{ background: "rgba(15,23,42,0.45)" }}
       onClick={onClose}
     >
-      <div className="soft-card w-full max-w-md p-5" style={{ boxShadow: "var(--shadow-pop)" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="soft-card w-full max-w-md p-5"
+        style={{ boxShadow: "var(--shadow-pop)", maxHeight: "90vh", overflowY: "auto" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -888,61 +1082,142 @@ function SubstituteModal({
           </button>
         </div>
 
-        <div className="mt-3 w-44">
-          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            {options?.original.teacher_name ?? "Teacher"} is absent on
-          </label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+            Edit this period permanently
+          </p>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+            Changes every week going forward, not just one date.
+          </p>
+          {classSubjects && (
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <div className="w-40">
+                <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  Subject
+                </label>
+                <select
+                  value={editSubjectId}
+                  onChange={(e) => setEditSubjectId(e.target.value ? Number(e.target.value) : "")}
+                  className="w-full rounded-md border px-2.5 py-1.5 text-sm"
+                  style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+                >
+                  {classSubjects.map((cs) => (
+                    <option key={cs.subject_id} value={cs.subject_id}>
+                      {cs.subject_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-40">
+                <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  Teacher
+                </label>
+                <select
+                  value={editTeacherId}
+                  onChange={(e) => setEditTeacherId(e.target.value ? Number(e.target.value) : "")}
+                  className="w-full rounded-md border px-2.5 py-1.5 text-sm"
+                  style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+                >
+                  <option value="">— unassigned —</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {t.code ? ` (${t.code})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={saveEdit}
+                disabled={editSaving || editSubjectId === ""}
+                className="accent-fill rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {editSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          )}
+          {editError && <p className="mt-2 text-xs" style={{ color: "var(--accent-mark)" }}>{editError}</p>}
+          {editSaved && !editError && <p className="mt-2 text-xs" style={{ color: "var(--status-good)" }}>Saved.</p>}
         </div>
 
-        {error && <p className="mt-3 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
-        {assigned && (
-          <p className="mt-3 text-sm" style={{ color: "var(--status-good)" }}>
-            Assigned {assigned} to cover this period.
+        <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+            Mark absent for one day
           </p>
-        )}
+          <div className="mt-2 w-44">
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              {options?.original.teacher_name ?? "Teacher"} is absent on
+            </label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
 
-        <div className="mt-4 max-h-80 overflow-y-auto">
-          {!options && !error && (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              Loading…
+          {existingSub && (
+            <div className="mt-3 flex items-center justify-between rounded-lg p-2.5" style={{ background: "var(--status-good-soft)" }}>
+              <span className="text-sm" style={{ color: "var(--status-good)" }}>
+                Currently covered by {existingSub.substitute_teacher_name}
+              </span>
+              <button
+                type="button"
+                onClick={removeSub}
+                disabled={removing}
+                className="text-xs font-semibold underline-offset-2 hover:underline disabled:opacity-60"
+                style={{ color: "var(--accent-mark)" }}
+              >
+                {removing ? "Removing…" : "Remove"}
+              </button>
+            </div>
+          )}
+
+          {error && <p className="mt-3 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
+          {assigned && (
+            <p className="mt-3 text-sm" style={{ color: "var(--status-good)" }}>
+              Assigned {assigned.name} to cover this period. {assigned.note}
             </p>
           )}
-          {options &&
-            groups.map((g) => {
-              const list = options.candidates.filter((c) => c.reason === g.key);
-              if (list.length === 0) return null;
-              return (
-                <div key={g.key} className="mt-3 first:mt-0">
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
-                    {g.label}
-                  </p>
-                  <div className="mt-1.5 divide-y" style={{ borderColor: "var(--border)" }}>
-                    {list.map((c) => (
-                      <div key={c.teacher_id} className="flex items-center justify-between py-1.5">
-                        <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-                          {c.teacher_name}
-                          {c.teacher_code && <span className="pill ml-2">{c.teacher_code}</span>}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => assign(c.teacher_id, c.teacher_name)}
-                          disabled={assigning !== null}
-                          className="accent-fill rounded-md px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
-                        >
-                          {assigning === c.teacher_id ? "Assigning…" : "Assign"}
-                        </button>
-                      </div>
-                    ))}
+
+          <div className="mt-3 max-h-64 overflow-y-auto">
+            {!options && !error && (
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                Loading…
+              </p>
+            )}
+            {options &&
+              groups.map((g) => {
+                const list = options.candidates.filter((c) => c.reason === g.key);
+                if (list.length === 0) return null;
+                return (
+                  <div key={g.key} className="mt-3 first:mt-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+                      {g.label}
+                    </p>
+                    <div className="mt-1.5 divide-y" style={{ borderColor: "var(--border)" }}>
+                      {list.map((c) => (
+                        <div key={c.teacher_id} className="flex items-center justify-between py-1.5">
+                          <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                            {c.teacher_name}
+                            {c.teacher_code && <span className="pill ml-2">{c.teacher_code}</span>}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => assign(c.teacher_id, c.teacher_name)}
+                            disabled={assigning !== null}
+                            className="accent-fill rounded-md px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                          >
+                            {assigning === c.teacher_id ? "Assigning…" : "Assign"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          {options && options.candidates.length === 0 && (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              No teacher is free at this period on this date.
-            </p>
-          )}
+                );
+              })}
+            {options && options.candidates.length === 0 && (
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                No teacher is free at this period on this date.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -951,16 +1226,19 @@ function SubstituteModal({
 
 function GeneratedTimetableTab({
   classes,
+  teachers,
   config,
   onGenerate,
 }: {
   classes: TtClass[];
+  teachers: TtTeacher[];
   config: TtSchoolConfig;
   onGenerate: () => Promise<TtGenerateResult>;
 }) {
   const [classId, setClassId] = useState<number | null>(classes[0]?.id ?? null);
   const [entries, setEntries] = useState<TtTimetableEntry[] | null>(null);
-  const [todaySubs, setTodaySubs] = useState<TtSubstitution[]>([]);
+  const [viewDate, setViewDate] = useState(todayStr);
+  const [dateSubs, setDateSubs] = useState<TtSubstitution[]>([]);
   const [selectedCell, setSelectedCell] = useState<{ day: string; period: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -969,26 +1247,34 @@ function GeneratedTimetableTab({
   const schedule = buildDaySchedule(config.start_time, config.end_time, config.periods_per_day, config.breaks);
   const workingDays = ALL_DAYS.filter((d) => config.working_days.includes(d));
 
-  function refreshTodaySubs(id: number) {
+  function refreshSubs(id: number, date: string) {
     api
-      .get<TtSubstitution[]>(`/timetable/classes/${id}/substitutions?date=${todayStr()}`)
-      .then(setTodaySubs)
-      .catch(() => setTodaySubs([]));
+      .get<TtSubstitution[]>(`/timetable/classes/${id}/substitutions?date=${date}`)
+      .then(setDateSubs)
+      .catch(() => setDateSubs([]));
+  }
+
+  function refreshEntries(id: number) {
+    api
+      .get<TtTimetableEntry[]>(`/timetable/classes/${id}/timetable`)
+      .then(setEntries)
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load this class's timetable"));
   }
 
   useEffect(() => {
     if (classId === null) {
       setEntries(null);
-      setTodaySubs([]);
+      setDateSubs([]);
       return;
     }
     setEntries(null);
-    api
-      .get<TtTimetableEntry[]>(`/timetable/classes/${classId}/timetable`)
-      .then(setEntries)
-      .catch((err) => setError(err instanceof Error ? err.message : "Could not load this class's timetable"));
-    refreshTodaySubs(classId);
+    refreshEntries(classId);
+    refreshSubs(classId, viewDate);
   }, [classId]);
+
+  useEffect(() => {
+    if (classId !== null) refreshSubs(classId, viewDate);
+  }, [viewDate]);
 
   async function runGenerate() {
     if (!confirm("Generate the timetable? This replaces any previously generated timetable for every class.")) return;
@@ -1022,14 +1308,27 @@ function GeneratedTimetableTab({
 
   return (
     <Panel title="Timetable" hint="Generate the weekly timetable for every class from your Schedule, Classes, Subjects, Teachers, and Assignments.">
-      <button
-        type="button"
-        onClick={runGenerate}
-        disabled={busy}
-        className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-      >
-        {busy ? "Generating…" : "Generate timetable"}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={runGenerate}
+          disabled={busy}
+          className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {busy ? "Generating…" : "Generate timetable"}
+        </button>
+        {classId !== null && entries && entries.length > 0 && (
+          <button
+            type="button"
+            onClick={() => window.open(api.timetablePrintUrl(classId), "_blank", "noopener")}
+            className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+            style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+          >
+            <PrinterIcon size={15} />
+            Print this class
+          </button>
+        )}
+      </div>
 
       {error && <p className="mt-3 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
 
@@ -1052,23 +1351,31 @@ function GeneratedTimetableTab({
         </div>
       )}
 
-      <div className="mt-4 w-56">
-        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-          Class
-        </label>
-        <select
-          value={classId ?? ""}
-          onChange={(e) => setClassId(Number(e.target.value))}
-          className="w-full rounded-md border px-3 py-2 text-sm font-medium"
-          style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
-        >
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>
-              Grade {c.grade}
-              {c.section ? ` · ${c.section}` : ""}
-            </option>
-          ))}
-        </select>
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <div className="w-56">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Class
+          </label>
+          <select
+            value={classId ?? ""}
+            onChange={(e) => setClassId(Number(e.target.value))}
+            className="w-full rounded-md border px-3 py-2 text-sm font-medium"
+            style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+          >
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                Grade {c.grade}
+                {c.section ? ` · ${c.section}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="w-44">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Showing substitutes for
+          </label>
+          <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} />
+        </div>
       </div>
 
       {schedule ? (
@@ -1085,7 +1392,7 @@ function GeneratedTimetableTab({
                   </span>
                 );
               }
-              const sub = todaySubs.find((s) => s.day === day && s.period === period);
+              const sub = dateSubs.find((s) => s.day === day && s.period === period);
               return (
                 <button
                   type="button"
@@ -1123,8 +1430,13 @@ function GeneratedTimetableTab({
           classId={classId}
           day={selectedCell.day}
           period={selectedCell.period}
+          initialDate={viewDate}
+          teachers={teachers}
           onClose={() => setSelectedCell(null)}
-          onAssigned={() => refreshTodaySubs(classId)}
+          onChanged={() => {
+            refreshEntries(classId);
+            refreshSubs(classId, viewDate);
+          }}
         />
       )}
     </Panel>
@@ -1472,8 +1784,19 @@ export function TimetablePage() {
     setSubjects((prev) => prev?.filter((s) => s.id !== id) ?? prev);
   }
 
-  async function addTeacher(name: string, code: string, maxPeriodsPerDay: number | null, subjectIds: number[]) {
-    const created = await api.post<TtTeacher>("/timetable/teachers", { name, code, max_periods_per_day: maxPeriodsPerDay, subject_ids: subjectIds });
+  async function updateSubjectExcludedPeriods(subjectId: number, excludedPeriods: number[]) {
+    const updated = await api.put<TtSubject>(`/timetable/subjects/${subjectId}/excluded-periods`, { excluded_periods: excludedPeriods });
+    setSubjects((prev) => prev?.map((s) => (s.id === subjectId ? updated : s)) ?? prev);
+  }
+
+  async function addTeacher(name: string, code: string, maxPeriodsPerDay: number | null, subjectIds: number[], phone: string) {
+    const created = await api.post<TtTeacher>("/timetable/teachers", {
+      name,
+      code,
+      phone,
+      max_periods_per_day: maxPeriodsPerDay,
+      subject_ids: subjectIds,
+    });
     setTeachers((prev) => [...(prev ?? []), created]);
   }
 
@@ -1484,6 +1807,11 @@ export function TimetablePage() {
 
   async function updateTeacherSubjects(teacherId: number, subjectIds: number[]) {
     const updated = await api.put<TtTeacher>(`/timetable/teachers/${teacherId}/subjects`, { subject_ids: subjectIds });
+    setTeachers((prev) => prev?.map((t) => (t.id === teacherId ? updated : t)) ?? prev);
+  }
+
+  async function updateTeacherPhone(teacherId: number, phone: string) {
+    const updated = await api.put<TtTeacher>(`/timetable/teachers/${teacherId}`, { phone });
     setTeachers((prev) => prev?.map((t) => (t.id === teacherId ? updated : t)) ?? prev);
   }
 
@@ -1539,7 +1867,15 @@ export function TimetablePage() {
       <div className="mt-4">
         {!loaded && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading…</p>}
         {loaded && tab === "classes" && <ClassesTab classes={classes} onAdd={addClass} onDelete={deleteClass} />}
-        {loaded && tab === "subjects" && <SubjectsTab subjects={subjects} onAdd={addSubject} onDelete={deleteSubject} />}
+        {loaded && tab === "subjects" && (
+          <SubjectsTab
+            subjects={subjects}
+            periodsPerDay={config.periods_per_day}
+            onAdd={addSubject}
+            onDelete={deleteSubject}
+            onUpdateExcludedPeriods={updateSubjectExcludedPeriods}
+          />
+        )}
         {loaded && tab === "teachers" && (
           <TeachersTab
             teachers={teachers}
@@ -1548,10 +1884,13 @@ export function TimetablePage() {
             onAdd={addTeacher}
             onDelete={deleteTeacher}
             onUpdateSubjects={updateTeacherSubjects}
+            onUpdatePhone={updateTeacherPhone}
           />
         )}
         {loaded && tab === "assignments" && <AssignmentsTab classes={classes} subjects={subjects} teachers={teachers} />}
-        {loaded && tab === "timetable" && <GeneratedTimetableTab classes={classes} config={config} onGenerate={runGenerate} />}
+        {loaded && tab === "timetable" && (
+          <GeneratedTimetableTab classes={classes} teachers={teachers} config={config} onGenerate={runGenerate} />
+        )}
         {loaded && tab === "schedule" && <ScheduleTab config={config} onSave={saveConfig} />}
       </div>
     </section>

@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS tt_teacher (
     user_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     code TEXT NOT NULL DEFAULT '',
+    phone TEXT NOT NULL DEFAULT '',
     max_periods_per_day INTEGER,
     sort_order INTEGER NOT NULL
 );
@@ -220,11 +221,16 @@ CREATE TABLE IF NOT EXISTS tt_class (
 );
 CREATE INDEX IF NOT EXISTS idx_tt_class_user ON tt_class(user_id);
 
+-- `excluded_periods` is a JSON-encoded array of period numbers this
+-- subject must never be scheduled in, across every class (e.g. Games
+-- never in period 1) — a hard constraint the generator filters out
+-- candidate slots with before placing anything.
 CREATE TABLE IF NOT EXISTS tt_subject (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     code TEXT NOT NULL DEFAULT '',
+    excluded_periods TEXT NOT NULL DEFAULT '[]',
     sort_order INTEGER NOT NULL,
     UNIQUE (user_id, name)
 );

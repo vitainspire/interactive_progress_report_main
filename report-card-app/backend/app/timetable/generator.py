@@ -1,5 +1,5 @@
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -9,6 +9,7 @@ class SubjectRequirement:
     teacher_id: int | None
     teacher_name: str | None
     periods_per_week: int
+    excluded_periods: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -58,7 +59,7 @@ def _try_generate(
             issues.append(GenerationIssue(c.class_name, req.subject_name, "No teacher assigned — set one under Assignments"))
             continue
 
-        shuffled_slots = all_slots[:]
+        shuffled_slots = [s for s in all_slots if s[1] not in req.excluded_periods]
         rng.shuffle(shuffled_slots)
         placed = 0
         # Widening passes: first try to put this subject's periods on days that

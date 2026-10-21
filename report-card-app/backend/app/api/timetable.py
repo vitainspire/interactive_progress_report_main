@@ -1,11 +1,16 @@
+import json
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_current_user_from_header_or_query
 from app.db import timetable as repo
 from app.db.database import session
+from app.integrations import sms
+from app.integrations.phone import InvalidPhoneNumber, normalize_phone
+from app.reports.timetable_print import render_class_timetable_print
 from app.timetable.generator import ClassSpec, SubjectRequirement, generate_timetable
 
 router = APIRouter(prefix="/timetable", tags=["timetable"])
@@ -18,7 +23,7 @@ def _class_out(row: dict) -> dict:
 
 
 def _subject_out(row: dict) -> dict:
-    return {"id": row["id"], "name": row["name"], "code": row["code"]}
+    return {"id": row["id"], "name": row["name"], "code": row["code"], "excluded_periods": json.loads(row["excluded_periods"])}
 
 
 def _teacher_out(row: dict, subject_ids: list[int] | None = None) -> dict:
@@ -26,6 +31,7 @@ def _teacher_out(row: dict, subject_ids: list[int] | None = None) -> dict:
         "id": row["id"],
         "name": row["name"],
         "code": row["code"],
+        "phone": row["phone"],
         "max_periods_per_day": row["max_periods_per_day"],
         "subject_ids": subject_ids if subject_ids is not None else [],
     }
@@ -112,14 +118,37 @@ def delete_subject(subject_id: int, current_user=Depends(get_current_user)):
     return {"ok": True}
 
 
+class SubjectExcludedPeriodsUpdate(BaseModel):
+    excluded_periods: list[int]
+
+
+@router.put("/subjects/{subject_id}/excluded-periods")
+def update_subject_excluded_periods(subject_id: int, req: SubjectExcludedPeriodsUpdate, current_user=Depends(get_current_user)):
+    with session() as conn:
+        row = repo.get_subject(conn, current_user["id"], subject_id)
+        if not row:
+            raise HTTPException(404, "Subject not found")
+        periods = sorted({p for p in req.excluded_periods if p >= 1})
+        repo.set_subject_excluded_periods(conn, subject_id, periods)
+        return _subject_out(repo.get_subject(conn, current_user["id"], subject_id))
+
+
 # ---- Teachers ----
 
 
 class TeacherCreate(BaseModel):
     name: str
     code: str = ""
+    phone: str = ""
     max_periods_per_day: int | None = None
     subject_ids: list[int] = []
+
+
+class TeacherUpdate(BaseModel):
+    name: str | None = None
+    code: str | None = None
+    phone: str | None = None
+    max_periods_per_day: int | None = None
 
 
 class TeacherSubjectsUpdate(BaseModel):
@@ -134,6 +163,16 @@ def _validate_subject_ids(conn, user_id: int, subject_ids: list[int]) -> list[in
     return unique_ids
 
 
+def _normalize_optional_phone(phone: str) -> str:
+    phone = phone.strip()
+    if not phone:
+        return ""
+    try:
+        return normalize_phone(phone)
+    except InvalidPhoneNumber as exc:
+        raise HTTPException(422, str(exc))
+
+
 @router.get("/teachers")
 def list_teachers(current_user=Depends(get_current_user)):
     with session() as conn:
@@ -146,12 +185,32 @@ def create_teacher(req: TeacherCreate, current_user=Depends(get_current_user)):
     name = req.name.strip()
     if not name:
         raise HTTPException(422, "Teacher name is required")
+    phone = _normalize_optional_phone(req.phone)
     with session() as conn:
         subject_ids = _validate_subject_ids(conn, current_user["id"], req.subject_ids)
-        teacher_id = repo.create_teacher(conn, current_user["id"], name, req.code.strip(), req.max_periods_per_day)
+        teacher_id = repo.create_teacher(conn, current_user["id"], name, req.code.strip(), req.max_periods_per_day, phone)
         if subject_ids:
             repo.set_teacher_subjects(conn, teacher_id, subject_ids)
         return _teacher_out(repo.get_teacher(conn, current_user["id"], teacher_id), subject_ids)
+
+
+@router.put("/teachers/{teacher_id}")
+def update_teacher(teacher_id: int, req: TeacherUpdate, current_user=Depends(get_current_user)):
+    with session() as conn:
+        if not repo.get_teacher(conn, current_user["id"], teacher_id):
+            raise HTTPException(404, "Teacher not found")
+        fields = req.model_dump(exclude_unset=True)
+        if "name" in fields:
+            fields["name"] = fields["name"].strip() or None
+            if fields["name"] is None:
+                raise HTTPException(422, "Teacher name is required")
+        if "code" in fields:
+            fields["code"] = fields["code"].strip()
+        if "phone" in fields:
+            fields["phone"] = _normalize_optional_phone(fields["phone"])
+        repo.update_teacher(conn, teacher_id, fields)
+        subject_ids_by_teacher = repo.subject_ids_by_teacher(conn, current_user["id"])
+        return _teacher_out(repo.get_teacher(conn, current_user["id"], teacher_id), subject_ids_by_teacher.get(teacher_id, []))
 
 
 @router.delete("/teachers/{teacher_id}")
@@ -328,6 +387,7 @@ def generate(current_user=Depends(get_current_user)):
                         teacher_id=s["teacher_id"],
                         teacher_name=s["teacher_name"],
                         periods_per_week=s["periods_per_week"],
+                        excluded_periods=json.loads(s["excluded_periods"]),
                     )
                     for s in c["subjects"]
                 ],
@@ -371,6 +431,56 @@ def get_class_timetable(class_id: int, current_user=Depends(get_current_user)):
             }
             for r in rows
         ]
+
+
+class TimetableEntryUpdate(BaseModel):
+    subject_id: int
+    teacher_id: int | None = None
+
+
+@router.put("/classes/{class_id}/timetable/{day}/{period}")
+def update_timetable_entry(class_id: int, day: str, period: int, req: TimetableEntryUpdate, current_user=Depends(get_current_user)):
+    _validate_day_period(day, period)
+    with session() as conn:
+        if not repo.get_class(conn, current_user["id"], class_id):
+            raise HTTPException(404, "Class not found")
+        if not repo.get_subject(conn, current_user["id"], req.subject_id):
+            raise HTTPException(404, "Subject not found")
+        class_subjects = repo.list_class_subjects(conn, class_id)
+        if not any(cs["subject_id"] == req.subject_id for cs in class_subjects):
+            raise HTTPException(422, "This subject isn't assigned to this class — add it under Assignments first")
+        if req.teacher_id is not None:
+            teacher = repo.get_teacher(conn, current_user["id"], req.teacher_id)
+            if not teacher:
+                raise HTTPException(404, "Teacher not found")
+            conflict = repo.is_teacher_busy_elsewhere(conn, current_user["id"], req.teacher_id, day, period, class_id)
+            if conflict:
+                class_label = f'Grade {conflict["grade"]} · {conflict["section"]}' if conflict["section"] else f'Grade {conflict["grade"]}'
+                raise HTTPException(422, f"{teacher['name']} already teaches {class_label} at this exact period")
+        repo.set_timetable_entry(conn, class_id, day, period, req.subject_id, req.teacher_id)
+        entry = repo.get_timetable_entry(conn, class_id, day, period)
+        return {
+            "day": day,
+            "period": period,
+            "subject_id": entry["subject_id"],
+            "subject_name": entry["subject_name"],
+            "teacher_id": entry["teacher_id"],
+            "teacher_name": entry["teacher_name"],
+            "teacher_code": entry["teacher_code"],
+        }
+
+
+@router.get("/classes/{class_id}/timetable/print", response_class=HTMLResponse)
+def print_class_timetable(class_id: int, current_user=Depends(get_current_user_from_header_or_query)):
+    with session() as conn:
+        row = repo.get_class(conn, current_user["id"], class_id)
+        if not row:
+            raise HTTPException(404, "Class not found")
+        entries = repo.get_timetable_entries(conn, class_id)
+        config = repo.get_school_config(conn, current_user["id"])
+        class_label = f'Grade {row["grade"]} · {row["section"]}' if row["section"] else f'Grade {row["grade"]}'
+        html_out = render_class_timetable_print(current_user["default_school_name"] or "School Timetable", class_label, config, entries)
+        return HTMLResponse(content=html_out)
 
 
 # ---- Substitutions ----
@@ -419,13 +529,44 @@ class SubstitutionCreate(BaseModel):
     substitute_teacher_id: int
 
 
+def _class_label(row: dict) -> str:
+    return f'Grade {row["grade"]} · {row["section"]}' if row["section"] else f'Grade {row["grade"]}'
+
+
+def _notify_substitute(current_user: dict, class_row: dict, entry: dict, date: str, substitute: dict) -> str:
+    """Best-effort SMS to the substitute — never raises, since a failed
+    notification shouldn't undo an otherwise-successful assignment. SMS
+    only (not WhatsApp): the WhatsApp Cloud API requires a pre-approved
+    message template per message shape, which this app doesn't have for
+    substitution alerts — see app/integrations/whatsapp.py."""
+    if not substitute["phone"]:
+        return "not_sent_no_phone"
+    if not sms.is_configured():
+        return "not_sent_sms_unconfigured"
+    try:
+        phone = normalize_phone(substitute["phone"])
+    except InvalidPhoneNumber:
+        return "not_sent_invalid_phone"
+    school = current_user["default_school_name"] or "your school"
+    body = (
+        f"{school}: you're covering {_class_label(class_row)}'s {entry['subject_name']} "
+        f"(period {entry.get('period', '')}) on {date} for {entry['teacher_name'] or 'the regular teacher'}."
+    )
+    try:
+        sms.send_plain_sms(phone, body)
+        return "sent"
+    except sms.SmsSendError:
+        return "failed"
+
+
 @router.post("/classes/{class_id}/substitutions")
 def create_substitution(class_id: int, req: SubstitutionCreate, current_user=Depends(get_current_user)):
     _validate_day_period(req.day, req.period)
     if not _DATE_RE.match(req.date):
         raise HTTPException(422, "date must be in YYYY-MM-DD format")
     with session() as conn:
-        if not repo.get_class(conn, current_user["id"], class_id):
+        class_row = repo.get_class(conn, current_user["id"], class_id)
+        if not class_row:
             raise HTTPException(404, "Class not found")
         entry = repo.get_timetable_entry(conn, class_id, req.day, req.period)
         if not entry:
@@ -436,6 +577,7 @@ def create_substitution(class_id: int, req: SubstitutionCreate, current_user=Dep
         repo.create_or_update_substitution(
             conn, class_id, req.date, req.day, req.period, entry["subject_id"], entry["teacher_id"], req.substitute_teacher_id
         )
+        notify_status = _notify_substitute(current_user, class_row, {**entry, "period": req.period}, req.date, substitute)
         return {
             "date": req.date,
             "day": req.day,
@@ -446,6 +588,7 @@ def create_substitution(class_id: int, req: SubstitutionCreate, current_user=Dep
             "original_teacher_name": entry["teacher_name"],
             "substitute_teacher_id": substitute["id"],
             "substitute_teacher_name": substitute["name"],
+            "notify_status": notify_status,
         }
 
 
