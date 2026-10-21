@@ -351,3 +351,114 @@ def get_class_timetable(class_id: int, current_user=Depends(get_current_user)):
             }
             for r in rows
         ]
+
+
+# ---- Substitutions ----
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _candidate_out(c: dict) -> dict:
+    return {"teacher_id": c["teacher_id"], "teacher_name": c["teacher_name"], "teacher_code": c["teacher_code"], "reason": c["reason"]}
+
+
+def _validate_day_period(day: str, period: int):
+    if day not in _VALID_DAYS:
+        raise HTTPException(422, "Invalid day")
+    if period < 1:
+        raise HTTPException(422, "Invalid period")
+
+
+@router.get("/classes/{class_id}/substitutes")
+def get_substitutes(class_id: int, day: str, period: int, date: str, current_user=Depends(get_current_user)):
+    _validate_day_period(day, period)
+    if not _DATE_RE.match(date):
+        raise HTTPException(422, "date must be in YYYY-MM-DD format")
+    with session() as conn:
+        if not repo.get_class(conn, current_user["id"], class_id):
+            raise HTTPException(404, "Class not found")
+        entry = repo.get_timetable_entry(conn, class_id, day, period)
+        if not entry:
+            raise HTTPException(404, "No class scheduled for this day/period")
+        candidates = repo.find_substitute_candidates(conn, current_user["id"], class_id, day, period, date, entry["teacher_id"])
+        return {
+            "original": {
+                "subject_id": entry["subject_id"],
+                "subject_name": entry["subject_name"],
+                "teacher_id": entry["teacher_id"],
+                "teacher_name": entry["teacher_name"],
+            },
+            "candidates": [_candidate_out(c) for c in candidates],
+        }
+
+
+class SubstitutionCreate(BaseModel):
+    date: str
+    day: str
+    period: int
+    substitute_teacher_id: int
+
+
+@router.post("/classes/{class_id}/substitutions")
+def create_substitution(class_id: int, req: SubstitutionCreate, current_user=Depends(get_current_user)):
+    _validate_day_period(req.day, req.period)
+    if not _DATE_RE.match(req.date):
+        raise HTTPException(422, "date must be in YYYY-MM-DD format")
+    with session() as conn:
+        if not repo.get_class(conn, current_user["id"], class_id):
+            raise HTTPException(404, "Class not found")
+        entry = repo.get_timetable_entry(conn, class_id, req.day, req.period)
+        if not entry:
+            raise HTTPException(404, "No class scheduled for this day/period")
+        substitute = repo.get_teacher(conn, current_user["id"], req.substitute_teacher_id)
+        if not substitute:
+            raise HTTPException(404, "Substitute teacher not found")
+        repo.create_or_update_substitution(
+            conn, class_id, req.date, req.day, req.period, entry["subject_id"], entry["teacher_id"], req.substitute_teacher_id
+        )
+        return {
+            "date": req.date,
+            "day": req.day,
+            "period": req.period,
+            "subject_id": entry["subject_id"],
+            "subject_name": entry["subject_name"],
+            "original_teacher_id": entry["teacher_id"],
+            "original_teacher_name": entry["teacher_name"],
+            "substitute_teacher_id": substitute["id"],
+            "substitute_teacher_name": substitute["name"],
+        }
+
+
+@router.get("/classes/{class_id}/substitutions")
+def get_substitutions(class_id: int, date: str, current_user=Depends(get_current_user)):
+    if not _DATE_RE.match(date):
+        raise HTTPException(422, "date must be in YYYY-MM-DD format")
+    with session() as conn:
+        if not repo.get_class(conn, current_user["id"], class_id):
+            raise HTTPException(404, "Class not found")
+        rows = repo.list_substitutions(conn, class_id, date)
+        return [
+            {
+                "day": r["day"],
+                "period": r["period"],
+                "subject_id": r["subject_id"],
+                "subject_name": r["subject_name"],
+                "original_teacher_id": r["original_teacher_id"],
+                "original_teacher_name": r["original_teacher_name"],
+                "substitute_teacher_id": r["substitute_teacher_id"],
+                "substitute_teacher_name": r["substitute_teacher_name"],
+            }
+            for r in rows
+        ]
+
+
+@router.delete("/classes/{class_id}/substitutions")
+def remove_substitution(class_id: int, date: str, period: int, current_user=Depends(get_current_user)):
+    if not _DATE_RE.match(date):
+        raise HTTPException(422, "date must be in YYYY-MM-DD format")
+    with session() as conn:
+        if not repo.get_class(conn, current_user["id"], class_id):
+            raise HTTPException(404, "Class not found")
+        if not repo.delete_substitution(conn, class_id, date, period):
+            raise HTTPException(404, "No substitution found for this date/period")
+    return {"ok": True}

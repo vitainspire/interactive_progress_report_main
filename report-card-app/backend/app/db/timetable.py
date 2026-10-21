@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 import psycopg
 
@@ -257,3 +258,126 @@ def has_generated_timetable(conn: psycopg.Connection, user_id: int) -> bool:
         "SELECT 1 FROM tt_timetable_entry te JOIN tt_class c ON c.id = te.class_id WHERE c.user_id = %s LIMIT 1", (user_id,)
     ).fetchone()
     return row is not None
+
+
+def get_timetable_entry(conn: psycopg.Connection, class_id: int, day: str, period: int) -> dict | None:
+    return conn.execute(
+        """SELECT te.subject_id, s.name AS subject_name, te.teacher_id, t.name AS teacher_name, t.code AS teacher_code
+           FROM tt_timetable_entry te
+           JOIN tt_subject s ON s.id = te.subject_id
+           LEFT JOIN tt_teacher t ON t.id = te.teacher_id
+           WHERE te.class_id = %s AND te.day = %s AND te.period = %s""",
+        (class_id, day, period),
+    ).fetchone()
+
+
+# ---- Substitutions ----
+
+
+def find_substitute_candidates(
+    conn: psycopg.Connection, user_id: int, class_id: int, day: str, period: int, date: str, exclude_teacher_id: int | None
+) -> list[dict]:
+    """Every teacher for this account who could cover a (class, day,
+    period) slot, ranked: teaches the same subject first, then anyone who
+    already teaches this class some other subject (a familiar face), then
+    everyone else — excluding whoever's already busy at that exact
+    day/period in the generated timetable, or already covering a
+    different substitution at that same date/period."""
+    entry = get_timetable_entry(conn, class_id, day, period)
+    subject_id = entry["subject_id"] if entry else None
+
+    teachers = list_teachers(conn, user_id)
+
+    busy_teaching = {
+        r["teacher_id"]
+        for r in conn.execute(
+            """SELECT DISTINCT te.teacher_id FROM tt_timetable_entry te
+               JOIN tt_class c ON c.id = te.class_id
+               WHERE c.user_id = %s AND te.day = %s AND te.period = %s AND te.teacher_id IS NOT NULL""",
+            (user_id, day, period),
+        ).fetchall()
+    }
+    busy_substituting = {
+        r["substitute_teacher_id"]
+        for r in conn.execute(
+            """SELECT DISTINCT sub.substitute_teacher_id FROM tt_substitution sub
+               JOIN tt_class c ON c.id = sub.class_id
+               WHERE c.user_id = %s AND sub.date = %s AND sub.period = %s""",
+            (user_id, date, period),
+        ).fetchall()
+    }
+    busy = busy_teaching | busy_substituting
+    if exclude_teacher_id is not None:
+        busy.add(exclude_teacher_id)
+
+    same_subject_ids: set[int] = set()
+    if subject_id is not None:
+        same_subject_ids = {
+            r["teacher_id"] for r in conn.execute("SELECT teacher_id FROM tt_teacher_subject WHERE subject_id = %s", (subject_id,)).fetchall()
+        }
+    this_class_teacher_ids = {
+        r["teacher_id"]
+        for r in conn.execute(
+            "SELECT DISTINCT teacher_id FROM tt_timetable_entry WHERE class_id = %s AND teacher_id IS NOT NULL", (class_id,)
+        ).fetchall()
+    }
+
+    candidates = []
+    for t in teachers:
+        if t["id"] in busy:
+            continue
+        if t["id"] in same_subject_ids:
+            reason = "subject"
+        elif t["id"] in this_class_teacher_ids:
+            reason = "class"
+        else:
+            reason = "other"
+        candidates.append({"teacher_id": t["id"], "teacher_name": t["name"], "teacher_code": t["code"], "reason": reason})
+
+    order = {"subject": 0, "class": 1, "other": 2}
+    candidates.sort(key=lambda c: (order[c["reason"]], c["teacher_name"]))
+    return candidates
+
+
+def create_or_update_substitution(
+    conn: psycopg.Connection,
+    class_id: int,
+    date: str,
+    day: str,
+    period: int,
+    subject_id: int | None,
+    original_teacher_id: int | None,
+    substitute_teacher_id: int,
+) -> int:
+    row = conn.execute(
+        """INSERT INTO tt_substitution (class_id, date, day, period, subject_id, original_teacher_id, substitute_teacher_id, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+           ON CONFLICT (class_id, date, period) DO UPDATE SET
+               substitute_teacher_id = EXCLUDED.substitute_teacher_id,
+               subject_id = EXCLUDED.subject_id,
+               original_teacher_id = EXCLUDED.original_teacher_id,
+               created_at = EXCLUDED.created_at
+           RETURNING id""",
+        (class_id, date, day, period, subject_id, original_teacher_id, substitute_teacher_id, datetime.now(timezone.utc).isoformat()),
+    ).fetchone()
+    return row["id"]
+
+
+def list_substitutions(conn: psycopg.Connection, class_id: int, date: str) -> list[dict]:
+    return conn.execute(
+        """SELECT sub.period, sub.day, sub.subject_id, s.name AS subject_name,
+                  sub.original_teacher_id, ot.name AS original_teacher_name,
+                  sub.substitute_teacher_id, st.name AS substitute_teacher_name, st.code AS substitute_teacher_code
+           FROM tt_substitution sub
+           LEFT JOIN tt_subject s ON s.id = sub.subject_id
+           LEFT JOIN tt_teacher ot ON ot.id = sub.original_teacher_id
+           JOIN tt_teacher st ON st.id = sub.substitute_teacher_id
+           WHERE sub.class_id = %s AND sub.date = %s
+           ORDER BY sub.period""",
+        (class_id, date),
+    ).fetchall()
+
+
+def delete_substitution(conn: psycopg.Connection, class_id: int, date: str, period: int) -> bool:
+    cur = conn.execute("DELETE FROM tt_substitution WHERE class_id = %s AND date = %s AND period = %s", (class_id, date, period))
+    return cur.rowcount > 0

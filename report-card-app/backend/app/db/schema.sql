@@ -279,3 +279,25 @@ CREATE TABLE IF NOT EXISTS tt_timetable_entry (
 CREATE INDEX IF NOT EXISTS idx_tt_timetable_entry_class ON tt_timetable_entry(class_id);
 -- Powers "who is free at (day, period)" lookups for the substitute finder.
 CREATE INDEX IF NOT EXISTS idx_tt_timetable_entry_teacher_slot ON tt_timetable_entry(teacher_id, day, period);
+
+-- A teacher covering a single (class, date, period) slot for the regular
+-- teacher, who was absent. Keyed by a real calendar date (not just a day
+-- of week) since the weekly timetable repeats but an absence is a one-off
+-- — the same Wednesday slot might need a different substitute, or none,
+-- on a different week.
+CREATE TABLE IF NOT EXISTS tt_substitution (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    class_id INTEGER NOT NULL REFERENCES tt_class(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    day TEXT NOT NULL,
+    period INTEGER NOT NULL,
+    subject_id INTEGER REFERENCES tt_subject(id) ON DELETE SET NULL,
+    original_teacher_id INTEGER REFERENCES tt_teacher(id) ON DELETE SET NULL,
+    substitute_teacher_id INTEGER NOT NULL REFERENCES tt_teacher(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    UNIQUE (class_id, date, period)
+);
+CREATE INDEX IF NOT EXISTS idx_tt_substitution_class_date ON tt_substitution(class_id, date);
+-- Powers "is this teacher already covering something else at this exact
+-- date+period" checks, so one substitute never gets double-booked either.
+CREATE INDEX IF NOT EXISTS idx_tt_substitution_sub_slot ON tt_substitution(substitute_teacher_id, date, period);

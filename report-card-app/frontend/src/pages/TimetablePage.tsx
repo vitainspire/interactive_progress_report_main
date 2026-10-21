@@ -2,7 +2,19 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { CheckIcon, PlusIcon, TrashIcon } from "../components/Icons";
-import type { TtBreak, TtClass, TtClassSubject, TtGenerateResult, TtSchoolConfig, TtSubject, TtTeacher, TtTimetableEntry } from "../types";
+import type {
+  TtBreak,
+  TtClass,
+  TtClassSubject,
+  TtGenerateResult,
+  TtSchoolConfig,
+  TtSubject,
+  TtSubstituteCandidate,
+  TtSubstituteOptions,
+  TtSubstitution,
+  TtTeacher,
+  TtTimetableEntry,
+} from "../types";
 
 type Tab = "classes" | "subjects" | "teachers" | "assignments" | "schedule" | "timetable";
 
@@ -698,6 +710,143 @@ function AssignmentsTab({ classes, subjects, teachers }: { classes: TtClass[]; s
   );
 }
 
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function SubstituteModal({
+  classId,
+  day,
+  period,
+  onClose,
+  onAssigned,
+}: {
+  classId: number;
+  day: string;
+  period: number;
+  onClose: () => void;
+  onAssigned: () => void;
+}) {
+  const [date, setDate] = useState(todayStr);
+  const [options, setOptions] = useState<TtSubstituteOptions | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState<number | null>(null);
+  const [assigned, setAssigned] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOptions(null);
+    setError(null);
+    setAssigned(null);
+    api
+      .get<TtSubstituteOptions>(`/timetable/classes/${classId}/substitutes?day=${day}&period=${period}&date=${date}`)
+      .then(setOptions)
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load substitute options"));
+  }, [classId, day, period, date]);
+
+  async function assign(teacherId: number, teacherName: string) {
+    setAssigning(teacherId);
+    setError(null);
+    try {
+      await api.post(`/timetable/classes/${classId}/substitutions`, { date, day, period, substitute_teacher_id: teacherId });
+      setAssigned(teacherName);
+      onAssigned();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not assign this substitute");
+    } finally {
+      setAssigning(null);
+    }
+  }
+
+  const groups: { key: TtSubstituteCandidate["reason"]; label: string }[] = [
+    { key: "subject", label: "Teaches this subject" },
+    { key: "class", label: "Already teaches this class" },
+    { key: "other", label: "Other free teachers" },
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(15,23,42,0.45)" }}
+      onClick={onClose}
+    >
+      <div className="soft-card w-full max-w-md p-5" style={{ boxShadow: "var(--shadow-pop)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+              {DAY_LABEL[day]}, Period {period}
+            </h3>
+            {options && (
+              <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
+                {options.original.subject_name} — {options.original.teacher_name ?? "unassigned"}
+              </p>
+            )}
+          </div>
+          <button type="button" onClick={onClose} className="text-xl leading-none" style={{ color: "var(--text-muted)" }}>
+            ×
+          </button>
+        </div>
+
+        <div className="mt-3 w-44">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            {options?.original.teacher_name ?? "Teacher"} is absent on
+          </label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+
+        {error && <p className="mt-3 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
+        {assigned && (
+          <p className="mt-3 text-sm" style={{ color: "var(--status-good)" }}>
+            Assigned {assigned} to cover this period.
+          </p>
+        )}
+
+        <div className="mt-4 max-h-80 overflow-y-auto">
+          {!options && !error && (
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+              Loading…
+            </p>
+          )}
+          {options &&
+            groups.map((g) => {
+              const list = options.candidates.filter((c) => c.reason === g.key);
+              if (list.length === 0) return null;
+              return (
+                <div key={g.key} className="mt-3 first:mt-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+                    {g.label}
+                  </p>
+                  <div className="mt-1.5 divide-y" style={{ borderColor: "var(--border)" }}>
+                    {list.map((c) => (
+                      <div key={c.teacher_id} className="flex items-center justify-between py-1.5">
+                        <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                          {c.teacher_name}
+                          {c.teacher_code && <span className="pill ml-2">{c.teacher_code}</span>}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => assign(c.teacher_id, c.teacher_name)}
+                          disabled={assigning !== null}
+                          className="accent-fill rounded-md px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                        >
+                          {assigning === c.teacher_id ? "Assigning…" : "Assign"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          {options && options.candidates.length === 0 && (
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+              No teacher is free at this period on this date.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GeneratedTimetableTab({
   classes,
   config,
@@ -709,6 +858,8 @@ function GeneratedTimetableTab({
 }) {
   const [classId, setClassId] = useState<number | null>(classes[0]?.id ?? null);
   const [entries, setEntries] = useState<TtTimetableEntry[] | null>(null);
+  const [todaySubs, setTodaySubs] = useState<TtSubstitution[]>([]);
+  const [selectedCell, setSelectedCell] = useState<{ day: string; period: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TtGenerateResult | null>(null);
@@ -716,9 +867,17 @@ function GeneratedTimetableTab({
   const schedule = buildDaySchedule(config.start_time, config.end_time, config.periods_per_day, config.breaks);
   const workingDays = ALL_DAYS.filter((d) => config.working_days.includes(d));
 
+  function refreshTodaySubs(id: number) {
+    api
+      .get<TtSubstitution[]>(`/timetable/classes/${id}/substitutions?date=${todayStr()}`)
+      .then(setTodaySubs)
+      .catch(() => setTodaySubs([]));
+  }
+
   useEffect(() => {
     if (classId === null) {
       setEntries(null);
+      setTodaySubs([]);
       return;
     }
     setEntries(null);
@@ -726,6 +885,7 @@ function GeneratedTimetableTab({
       .get<TtTimetableEntry[]>(`/timetable/classes/${classId}/timetable`)
       .then(setEntries)
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load this class's timetable"));
+    refreshTodaySubs(classId);
   }, [classId]);
 
   async function runGenerate() {
@@ -823,17 +983,29 @@ function GeneratedTimetableTab({
                   </span>
                 );
               }
+              const sub = todaySubs.find((s) => s.day === day && s.period === period);
               return (
-                <div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCell({ day, period })}
+                  title="Click to find a substitute if this teacher is absent"
+                  className="flex w-full flex-col items-start rounded-md text-left transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+                >
                   <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
                     {entry.subject_name}
                   </div>
-                  {entry.teacher_name && (
-                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {entry.teacher_name}
+                  {sub ? (
+                    <div className="text-xs" style={{ color: "var(--status-good)" }}>
+                      Sub: {sub.substitute_teacher_name}
                     </div>
+                  ) : (
+                    entry.teacher_name && (
+                      <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {entry.teacher_name}
+                      </div>
+                    )
                   )}
-                </div>
+                </button>
               );
             }}
           />
@@ -842,6 +1014,16 @@ function GeneratedTimetableTab({
         <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>
           Set up a valid Schedule first (the breaks need to fit in the school day) before the timetable can be displayed.
         </p>
+      )}
+
+      {selectedCell && classId !== null && (
+        <SubstituteModal
+          classId={classId}
+          day={selectedCell.day}
+          period={selectedCell.period}
+          onClose={() => setSelectedCell(null)}
+          onAssigned={() => refreshTodaySubs(classId)}
+        />
       )}
     </Panel>
   );

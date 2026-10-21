@@ -138,6 +138,29 @@ export interface TtGenerateResult {
   issues: { class_name: string; subject_name: string; reason: string }[];
 }
 
+export interface TtSubstituteCandidate {
+  teacher_id: number;
+  teacher_name: string;
+  teacher_code: string;
+  reason: "subject" | "class" | "other";
+}
+
+export interface TtSubstituteOptions {
+  original: { subject_id: number; subject_name: string; teacher_id: number | null; teacher_name: string | null };
+  candidates: TtSubstituteCandidate[];
+}
+
+export interface TtSubstitution {
+  day: string;
+  period: number;
+  subject_id: number | null;
+  subject_name: string | null;
+  original_teacher_id: number | null;
+  original_teacher_name: string | null;
+  substitute_teacher_id: number;
+  substitute_teacher_name: string;
+}
+
 export interface TtSchoolConfig {
   working_days: string[];
   periods_per_day: number;
