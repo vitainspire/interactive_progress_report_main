@@ -38,11 +38,16 @@
   --font-serif: "Fraunces", "Noto Sans Telugu", Georgia, serif;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   background: var(--page-plane);
   color: var(--text-primary);
   font-family: var(--font-body);
+  overflow-x: hidden;
 }
 
 h1, h2, h3, .font-display {

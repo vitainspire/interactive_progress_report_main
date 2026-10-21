@@ -129,7 +129,7 @@ export function LandingPage() {
           <h2 className="font-serif text-2xl font-semibold md:text-3xl" style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}>
             What happens when you upload a sheet
           </h2>
-          <div className="mt-10 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-10 grid grid-cols-1 gap-10 sm:grid-cols-2">
             <Feature
               icon={<SheetIcon size={22} />}
               title="Upload once, generate for the whole class"
@@ -144,6 +144,11 @@ export function LandingPage() {
               icon={<SpeakerWaveIcon size={22} />}
               title="Parents don't have to read to understand"
               body="The link sent to parents is a page per subject plus a results page, with a listen button that narrates it in Telugu — built for a phone, not a printer."
+            />
+            <Feature
+              icon={<BarChartIcon size={22} />}
+              title="A printable analysis for every subject"
+              body="Pick any subject and see grade trends, top performers, and students needing attention for the whole class — plus which exam chapters are worth the most marks, from the real SSC blueprint."
             />
           </div>
         </section>
