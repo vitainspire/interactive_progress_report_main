@@ -7,11 +7,11 @@ import type { TtClass, TtClassSubject, TtSchoolConfig, TtSubject, TtTeacher } fr
 type Tab = "classes" | "subjects" | "teachers" | "assignments" | "schedule";
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: "schedule", label: "Schedule" },
   { id: "classes", label: "Classes" },
   { id: "subjects", label: "Subjects" },
   { id: "teachers", label: "Teachers" },
   { id: "assignments", label: "Assignments" },
-  { id: "schedule", label: "Schedule" },
 ];
 
 const ALL_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -470,6 +470,8 @@ function AssignmentsTab({ classes, subjects, teachers }: { classes: TtClass[]; s
 function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (config: TtSchoolConfig) => Promise<void> }) {
   const [days, setDays] = useState<Set<string>>(new Set(config.working_days));
   const [periodsPerDay, setPeriodsPerDay] = useState(String(config.periods_per_day));
+  const [startTime, setStartTime] = useState(config.start_time);
+  const [endTime, setEndTime] = useState(config.end_time);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -489,7 +491,12 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
     setBusy(true);
     setError(null);
     try {
-      await onSave({ working_days: ALL_DAYS.filter((d) => days.has(d)), periods_per_day: Number(periodsPerDay) || 1 });
+      await onSave({
+        working_days: ALL_DAYS.filter((d) => days.has(d)),
+        periods_per_day: Number(periodsPerDay) || 1,
+        start_time: startTime,
+        end_time: endTime,
+      });
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the schedule");
@@ -499,7 +506,7 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
   }
 
   return (
-    <Panel title="Weekly schedule" hint="Which days the school runs classes, and how many periods are in each day.">
+    <Panel title="Weekly schedule" hint="Start with this — the school day's shape. Which days run classes, what time the day starts and ends, and how many periods fit in it.">
       <form onSubmit={submit}>
         <div>
           <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -527,21 +534,51 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
           </div>
         </div>
 
-        <div className="mt-4 w-40">
-          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            Periods per day
-          </label>
-          <input
-            type="number"
-            min={1}
-            max={12}
-            value={periodsPerDay}
-            onChange={(e) => {
-              setPeriodsPerDay(e.target.value);
-              setSaved(false);
-            }}
-            required
-          />
+        <div className="mt-4 flex flex-wrap gap-3">
+          <div className="w-36">
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              School starts
+            </label>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => {
+                setStartTime(e.target.value);
+                setSaved(false);
+              }}
+              required
+            />
+          </div>
+          <div className="w-36">
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              School ends
+            </label>
+            <input
+              type="time"
+              value={endTime}
+              onChange={(e) => {
+                setEndTime(e.target.value);
+                setSaved(false);
+              }}
+              required
+            />
+          </div>
+          <div className="w-36">
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Periods per day
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={12}
+              value={periodsPerDay}
+              onChange={(e) => {
+                setPeriodsPerDay(e.target.value);
+                setSaved(false);
+              }}
+              required
+            />
+          </div>
         </div>
 
         {error && <p className="mt-3 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
@@ -556,7 +593,7 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
 }
 
 export function TimetablePage() {
-  const [tab, setTab] = useState<Tab>("classes");
+  const [tab, setTab] = useState<Tab>("schedule");
   const [classes, setClasses] = useState<TtClass[] | null>(null);
   const [subjects, setSubjects] = useState<TtSubject[] | null>(null);
   const [teachers, setTeachers] = useState<TtTeacher[] | null>(null);

@@ -116,4 +116,6 @@ export interface TtClassSubject {
 export interface TtSchoolConfig {
   working_days: string[];
   periods_per_day: number;
+  start_time: string;
+  end_time: string;
 }

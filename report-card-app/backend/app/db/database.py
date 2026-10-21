@@ -88,6 +88,14 @@ def _migrate_class_level(conn: psycopg.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_syllabus_chapter_lookup ON syllabus_chapter(class_level, subject)")
 
 
+def _migrate_tt_school_config(conn: psycopg.Connection) -> None:
+    """Adds `start_time`/`end_time` to a pre-existing `tt_school_config`
+    table (see schema.sql) — added after the Timetable Creator's first
+    deploy, which only had working_days/periods_per_day."""
+    conn.execute("ALTER TABLE tt_school_config ADD COLUMN IF NOT EXISTS start_time TEXT NOT NULL DEFAULT '09:15'")
+    conn.execute("ALTER TABLE tt_school_config ADD COLUMN IF NOT EXISTS end_time TEXT NOT NULL DEFAULT '16:00'")
+
+
 def init_db() -> None:
     with get_connection() as conn:
         schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
@@ -98,6 +106,7 @@ def init_db() -> None:
         _migrate_student_phone(conn)
         _migrate_tts_audio_cache(conn)
         _migrate_class_level(conn)
+        _migrate_tt_school_config(conn)
         seed_syllabus(conn)
         seed_subject_blueprint(conn)
         conn.commit()

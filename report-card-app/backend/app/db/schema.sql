@@ -240,5 +240,7 @@ CREATE INDEX IF NOT EXISTS idx_tt_class_subject_class ON tt_class_subject(class_
 CREATE TABLE IF NOT EXISTS tt_school_config (
     user_id INTEGER PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE,
     working_days TEXT NOT NULL DEFAULT '["MON","TUE","WED","THU","FRI","SAT"]',
-    periods_per_day INTEGER NOT NULL DEFAULT 8
+    periods_per_day INTEGER NOT NULL DEFAULT 8,
+    start_time TEXT NOT NULL DEFAULT '09:15',
+    end_time TEXT NOT NULL DEFAULT '16:00'
 );

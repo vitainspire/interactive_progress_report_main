@@ -95,7 +95,8 @@ h1, h2, h3, .font-display {
 input[type="text"],
 input[type="email"],
 input[type="password"],
-input[type="number"] {
+input[type="number"],
+input[type="time"] {
   border-radius: var(--radius-control);
   border: 1px solid var(--border);
   background: var(--page-plane);
@@ -109,7 +110,8 @@ input[type="number"] {
 input[type="text"]:focus,
 input[type="email"]:focus,
 input[type="password"]:focus,
-input[type="number"]:focus {
+input[type="number"]:focus,
+input[type="time"]:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);

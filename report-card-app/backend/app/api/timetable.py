@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -182,9 +184,14 @@ def delete_class_subject(class_id: int, subject_id: int, current_user=Depends(ge
 # ---- School weekly structure ----
 
 
+_TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+
+
 class SchoolConfigUpdate(BaseModel):
     working_days: list[str]
     periods_per_day: int
+    start_time: str
+    end_time: str
 
 
 @router.get("/config")
@@ -200,6 +207,10 @@ def update_config(req: SchoolConfigUpdate, current_user=Depends(get_current_user
         raise HTTPException(422, "Invalid working days")
     if not (1 <= req.periods_per_day <= 12):
         raise HTTPException(422, "Periods per day must be between 1 and 12")
+    if not _TIME_RE.match(req.start_time) or not _TIME_RE.match(req.end_time):
+        raise HTTPException(422, "Start and end time must be in HH:MM (24-hour) format")
+    if req.start_time >= req.end_time:
+        raise HTTPException(422, "End time must be after start time")
     with session() as conn:
-        repo.set_school_config(conn, current_user["id"], days, req.periods_per_day)
-    return {"working_days": days, "periods_per_day": req.periods_per_day}
+        repo.set_school_config(conn, current_user["id"], days, req.periods_per_day, req.start_time, req.end_time)
+    return {"working_days": days, "periods_per_day": req.periods_per_day, "start_time": req.start_time, "end_time": req.end_time}

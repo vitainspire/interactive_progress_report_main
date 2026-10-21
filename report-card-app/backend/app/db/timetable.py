@@ -128,19 +128,37 @@ def delete_class_subject(conn: psycopg.Connection, class_id: int, subject_id: in
 # ---- School weekly structure ----
 
 _DEFAULT_WORKING_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT"]
+_DEFAULT_START_TIME = "09:15"
+_DEFAULT_END_TIME = "16:00"
 
 
 def get_school_config(conn: psycopg.Connection, user_id: int) -> dict:
     row = conn.execute("SELECT * FROM tt_school_config WHERE user_id = %s", (user_id,)).fetchone()
     if row:
-        return {"working_days": json.loads(row["working_days"]), "periods_per_day": row["periods_per_day"]}
-    return {"working_days": _DEFAULT_WORKING_DAYS, "periods_per_day": 8}
+        return {
+            "working_days": json.loads(row["working_days"]),
+            "periods_per_day": row["periods_per_day"],
+            "start_time": row["start_time"],
+            "end_time": row["end_time"],
+        }
+    return {
+        "working_days": _DEFAULT_WORKING_DAYS,
+        "periods_per_day": 8,
+        "start_time": _DEFAULT_START_TIME,
+        "end_time": _DEFAULT_END_TIME,
+    }
 
 
-def set_school_config(conn: psycopg.Connection, user_id: int, working_days: list[str], periods_per_day: int) -> None:
+def set_school_config(
+    conn: psycopg.Connection, user_id: int, working_days: list[str], periods_per_day: int, start_time: str, end_time: str
+) -> None:
     conn.execute(
-        """INSERT INTO tt_school_config (user_id, working_days, periods_per_day)
-           VALUES (%s, %s, %s)
-           ON CONFLICT (user_id) DO UPDATE SET working_days = EXCLUDED.working_days, periods_per_day = EXCLUDED.periods_per_day""",
-        (user_id, json.dumps(working_days), periods_per_day),
+        """INSERT INTO tt_school_config (user_id, working_days, periods_per_day, start_time, end_time)
+           VALUES (%s, %s, %s, %s, %s)
+           ON CONFLICT (user_id) DO UPDATE SET
+               working_days = EXCLUDED.working_days,
+               periods_per_day = EXCLUDED.periods_per_day,
+               start_time = EXCLUDED.start_time,
+               end_time = EXCLUDED.end_time""",
+        (user_id, json.dumps(working_days), periods_per_day, start_time, end_time),
     )
