@@ -83,3 +83,37 @@ export interface SendResult {
   detail: string;
   report_url: string | null;
 }
+
+export interface TtClass {
+  id: number;
+  grade: string;
+  section: string;
+}
+
+export interface TtSubject {
+  id: number;
+  name: string;
+  code: string;
+}
+
+export interface TtTeacher {
+  id: number;
+  name: string;
+  code: string;
+  max_periods_per_day: number | null;
+}
+
+export interface TtClassSubject {
+  subject_id: number;
+  subject_name: string;
+  subject_code: string;
+  teacher_id: number | null;
+  teacher_name: string | null;
+  teacher_code: string | null;
+  periods_per_week: number;
+}
+
+export interface TtSchoolConfig {
+  working_days: string[];
+  periods_per_day: number;
+}

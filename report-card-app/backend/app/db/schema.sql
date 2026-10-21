@@ -184,3 +184,61 @@ CREATE TABLE IF NOT EXISTS subject_exam_info (
     tips TEXT NOT NULL DEFAULT '[]',
     PRIMARY KEY (class_level, subject)
 );
+
+-- Timetable Creator module — a second tool under the same login, scoped to
+-- user_id exactly like batch is (one account = one school, see ToolsHubPage).
+-- tt_teacher is declared before tt_class_subject below since that junction
+-- table references it.
+CREATE TABLE IF NOT EXISTS tt_teacher (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    code TEXT NOT NULL DEFAULT '',
+    max_periods_per_day INTEGER,
+    sort_order INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tt_teacher_user ON tt_teacher(user_id);
+
+CREATE TABLE IF NOT EXISTS tt_class (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    grade TEXT NOT NULL,
+    section TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL,
+    UNIQUE (user_id, grade, section)
+);
+CREATE INDEX IF NOT EXISTS idx_tt_class_user ON tt_class(user_id);
+
+CREATE TABLE IF NOT EXISTS tt_subject (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    code TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL,
+    UNIQUE (user_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_tt_subject_user ON tt_subject(user_id);
+
+-- One row per (class, subject) actually taught: how many periods/week it
+-- gets for that class, and which teacher is responsible for it. Fixed by
+-- the school up front, same as every real timetable sheet we've seen — a
+-- subject for a given class always has one assigned teacher. What's still
+-- to be solved (by the generator, not here) is WHEN each period falls.
+CREATE TABLE IF NOT EXISTS tt_class_subject (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    class_id INTEGER NOT NULL REFERENCES tt_class(id) ON DELETE CASCADE,
+    subject_id INTEGER NOT NULL REFERENCES tt_subject(id) ON DELETE CASCADE,
+    teacher_id INTEGER REFERENCES tt_teacher(id) ON DELETE SET NULL,
+    periods_per_week INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (class_id, subject_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tt_class_subject_class ON tt_class_subject(class_id);
+
+-- The school's weekly structure: which days run classes and how many
+-- periods each day has. One row per account. Needed so the generator can
+-- later check requested periods_per_week against actual weekly capacity.
+CREATE TABLE IF NOT EXISTS tt_school_config (
+    user_id INTEGER PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE,
+    working_days TEXT NOT NULL DEFAULT '["MON","TUE","WED","THU","FRI","SAT"]',
+    periods_per_day INTEGER NOT NULL DEFAULT 8
+);
