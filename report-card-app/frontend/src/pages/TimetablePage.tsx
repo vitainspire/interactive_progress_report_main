@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { CheckIcon, PlusIcon, TrashIcon } from "../components/Icons";
-import type { TtClass, TtClassSubject, TtSchoolConfig, TtSubject, TtTeacher } from "../types";
+import type { TtBreak, TtClass, TtClassSubject, TtSchoolConfig, TtSubject, TtTeacher } from "../types";
 
 type Tab = "classes" | "subjects" | "teachers" | "assignments" | "schedule";
 
@@ -16,6 +16,63 @@ const TABS: { id: Tab; label: string }[] = [
 
 const ALL_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const DAY_LABEL: Record<string, string> = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
+
+function toMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function fromMinutes(total: number): string {
+  const h = Math.floor(total / 60) % 24;
+  const m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function formatClock(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+interface DayScheduleRow {
+  kind: "period" | "break";
+  label: string;
+  start: string;
+  end: string;
+}
+
+// Splits the school day into `periodsPerDay` equal(-ish) slots with each
+// break inserted right after the period it follows — the same shape as
+// every real timetable sheet we've seen (periods interleaved with short
+// breaks and a lunch break), computed from the school's own start/end
+// time rather than hand-entered per period.
+function buildDaySchedule(startTime: string, endTime: string, periodsPerDay: number, breaks: TtBreak[]): DayScheduleRow[] | null {
+  const totalMinutes = toMinutes(endTime) - toMinutes(startTime);
+  const breakMinutes = breaks.reduce((sum, b) => sum + b.duration_minutes, 0);
+  const teachingMinutes = totalMinutes - breakMinutes;
+  if (periodsPerDay < 1 || teachingMinutes < periodsPerDay) return null;
+
+  const base = Math.floor(teachingMinutes / periodsPerDay);
+  const extra = teachingMinutes % periodsPerDay; // first `extra` periods run one minute longer, so the total matches exactly
+  const breaksByAfter = new Map(breaks.map((b) => [b.after_period, b]));
+
+  const rows: DayScheduleRow[] = [];
+  let cursor = toMinutes(startTime);
+  for (let i = 1; i <= periodsPerDay; i++) {
+    const duration = base + (i <= extra ? 1 : 0);
+    const start = cursor;
+    cursor += duration;
+    rows.push({ kind: "period", label: `Period ${i}`, start: fromMinutes(start), end: fromMinutes(cursor) });
+    const brk = breaksByAfter.get(i);
+    if (brk) {
+      const bStart = cursor;
+      cursor += brk.duration_minutes;
+      rows.push({ kind: "break", label: brk.label, start: fromMinutes(bStart), end: fromMinutes(cursor) });
+    }
+  }
+  return rows;
+}
 
 function Panel({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -472,9 +529,19 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
   const [periodsPerDay, setPeriodsPerDay] = useState(String(config.periods_per_day));
   const [startTime, setStartTime] = useState(config.start_time);
   const [endTime, setEndTime] = useState(config.end_time);
+  const [breaks, setBreaks] = useState<TtBreak[]>(config.breaks);
+  const [breakAfter, setBreakAfter] = useState<number | "">("");
+  const [breakDuration, setBreakDuration] = useState("10");
+  const [breakLabel, setBreakLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const periodsNum = Number(periodsPerDay) || 0;
+  const usedPositions = new Set(breaks.map((b) => b.after_period));
+  const availablePositions = Array.from({ length: Math.max(periodsNum - 1, 0) }, (_, i) => i + 1).filter((p) => !usedPositions.has(p));
+  const schedule = buildDaySchedule(startTime, endTime, periodsNum, breaks);
+  const strandedBreaks = breaks.filter((b) => b.after_period >= periodsNum);
 
   function toggleDay(day: string) {
     setDays((prev) => {
@@ -486,6 +553,20 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
     setSaved(false);
   }
 
+  function addBreak() {
+    if (breakAfter === "") return;
+    setBreaks((prev) => [...prev, { after_period: breakAfter, duration_minutes: Number(breakDuration) || 1, label: breakLabel.trim() || "Break" }].sort((a, b) => a.after_period - b.after_period));
+    setBreakAfter("");
+    setBreakDuration("10");
+    setBreakLabel("");
+    setSaved(false);
+  }
+
+  function removeBreak(afterPeriod: number) {
+    setBreaks((prev) => prev.filter((b) => b.after_period !== afterPeriod));
+    setSaved(false);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -493,9 +574,10 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
     try {
       await onSave({
         working_days: ALL_DAYS.filter((d) => days.has(d)),
-        periods_per_day: Number(periodsPerDay) || 1,
+        periods_per_day: periodsNum || 1,
         start_time: startTime,
         end_time: endTime,
+        breaks,
       });
       setSaved(true);
     } catch (err) {
@@ -581,10 +663,119 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
           </div>
         </div>
 
+        <div className="mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Breaks (short breaks, lunch break)
+          </label>
+          <div className="mt-2 divide-y" style={{ borderColor: "var(--border)" }}>
+            {breaks.map((b) => (
+              <div key={b.after_period} className="flex items-center justify-between gap-3 py-1.5">
+                <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                  {b.label} — after period {b.after_period}, {b.duration_minutes} min
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeBreak(b.after_period)}
+                  title="Remove this break"
+                  className="flex h-7 w-7 flex-none items-center justify-center rounded-full transition-colors duration-200 hover:bg-[var(--accent-mark-soft)]"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  <TrashIcon size={14} />
+                </button>
+              </div>
+            ))}
+            {breaks.length === 0 && (
+              <p className="py-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
+                No breaks yet — periods will run back-to-back until you add one.
+              </p>
+            )}
+          </div>
+
+          {availablePositions.length > 0 ? (
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <div className="w-32">
+                <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  After period
+                </label>
+                <select
+                  value={breakAfter}
+                  onChange={(e) => setBreakAfter(e.target.value ? Number(e.target.value) : "")}
+                  className="w-full rounded-md border px-3 py-2 text-sm font-medium"
+                  style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+                >
+                  <option value="">Choose…</option>
+                  {availablePositions.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-28">
+                <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  Minutes
+                </label>
+                <input type="number" min={1} max={180} value={breakDuration} onChange={(e) => setBreakDuration(e.target.value)} />
+              </div>
+              <div className="w-40">
+                <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  Label
+                </label>
+                <input type="text" value={breakLabel} onChange={(e) => setBreakLabel(e.target.value)} placeholder="e.g. Lunch break" />
+              </div>
+              <button
+                type="button"
+                onClick={addBreak}
+                disabled={breakAfter === ""}
+                className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                <PlusIcon size={14} />
+                Add break
+              </button>
+            </div>
+          ) : (
+            periodsNum > 1 && (
+              <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                Every period already has a break assigned after it.
+              </p>
+            )
+          )}
+        </div>
+
+        <div className="mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            Day template
+          </h3>
+          {schedule ? (
+            <div className="mt-2 max-w-sm divide-y" style={{ borderColor: "var(--border)" }}>
+              {schedule.map((row, i) => (
+                <div key={i} className="flex items-center justify-between py-1.5 text-sm">
+                  <span style={row.kind === "break" ? { color: "var(--text-muted)", fontStyle: "italic" } : { color: "var(--text-primary)" }}>
+                    {row.label}
+                  </span>
+                  <span className="tabular-nums" style={{ color: "var(--text-secondary)" }}>
+                    {formatClock(row.start)} – {formatClock(row.end)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm" style={{ color: "var(--accent-mark)" }}>
+              The breaks below don't leave enough time in the day for {periodsNum || "every"} period{periodsNum === 1 ? "" : "s"} — shorten a
+              break or extend the school day.
+            </p>
+          )}
+        </div>
+
+        {strandedBreaks.length > 0 && (
+          <p className="mt-3 text-xs" style={{ color: "var(--accent-mark)" }}>
+            {strandedBreaks.map((b) => `"${b.label}" (after period ${b.after_period})`).join(", ")} no longer fit{strandedBreaks.length === 1 ? "s" : ""} with only {periodsNum} period{periodsNum === 1 ? "" : "s"} — remove {strandedBreaks.length === 1 ? "it" : "them"} or increase periods per day before saving.
+          </p>
+        )}
         {error && <p className="mt-3 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
         {saved && !error && <p className="mt-3 text-xs" style={{ color: "var(--status-good)" }}>Saved.</p>}
 
-        <button type="submit" disabled={busy} className="accent-fill mt-4 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+        <button type="submit" disabled={busy || !schedule || strandedBreaks.length > 0} className="accent-fill mt-4 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
           {busy ? "Saving…" : "Save schedule"}
         </button>
       </form>

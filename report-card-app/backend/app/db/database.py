@@ -89,11 +89,12 @@ def _migrate_class_level(conn: psycopg.Connection) -> None:
 
 
 def _migrate_tt_school_config(conn: psycopg.Connection) -> None:
-    """Adds `start_time`/`end_time` to a pre-existing `tt_school_config`
-    table (see schema.sql) — added after the Timetable Creator's first
-    deploy, which only had working_days/periods_per_day."""
+    """Adds `start_time`/`end_time`/`breaks` to a pre-existing
+    `tt_school_config` table (see schema.sql) — added after the Timetable
+    Creator's first deploy, which only had working_days/periods_per_day."""
     conn.execute("ALTER TABLE tt_school_config ADD COLUMN IF NOT EXISTS start_time TEXT NOT NULL DEFAULT '09:15'")
     conn.execute("ALTER TABLE tt_school_config ADD COLUMN IF NOT EXISTS end_time TEXT NOT NULL DEFAULT '16:00'")
+    conn.execute("ALTER TABLE tt_school_config ADD COLUMN IF NOT EXISTS breaks TEXT NOT NULL DEFAULT '[]'")
 
 
 def init_db() -> None:

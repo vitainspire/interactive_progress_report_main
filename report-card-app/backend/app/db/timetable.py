@@ -140,25 +140,34 @@ def get_school_config(conn: psycopg.Connection, user_id: int) -> dict:
             "periods_per_day": row["periods_per_day"],
             "start_time": row["start_time"],
             "end_time": row["end_time"],
+            "breaks": json.loads(row["breaks"]),
         }
     return {
         "working_days": _DEFAULT_WORKING_DAYS,
         "periods_per_day": 8,
         "start_time": _DEFAULT_START_TIME,
         "end_time": _DEFAULT_END_TIME,
+        "breaks": [],
     }
 
 
 def set_school_config(
-    conn: psycopg.Connection, user_id: int, working_days: list[str], periods_per_day: int, start_time: str, end_time: str
+    conn: psycopg.Connection,
+    user_id: int,
+    working_days: list[str],
+    periods_per_day: int,
+    start_time: str,
+    end_time: str,
+    breaks: list[dict],
 ) -> None:
     conn.execute(
-        """INSERT INTO tt_school_config (user_id, working_days, periods_per_day, start_time, end_time)
-           VALUES (%s, %s, %s, %s, %s)
+        """INSERT INTO tt_school_config (user_id, working_days, periods_per_day, start_time, end_time, breaks)
+           VALUES (%s, %s, %s, %s, %s, %s)
            ON CONFLICT (user_id) DO UPDATE SET
                working_days = EXCLUDED.working_days,
                periods_per_day = EXCLUDED.periods_per_day,
                start_time = EXCLUDED.start_time,
-               end_time = EXCLUDED.end_time""",
-        (user_id, json.dumps(working_days), periods_per_day, start_time, end_time),
+               end_time = EXCLUDED.end_time,
+               breaks = EXCLUDED.breaks""",
+        (user_id, json.dumps(working_days), periods_per_day, start_time, end_time, json.dumps(breaks)),
     )

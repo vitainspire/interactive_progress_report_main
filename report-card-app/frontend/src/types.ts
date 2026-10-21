@@ -113,9 +113,16 @@ export interface TtClassSubject {
   periods_per_week: number;
 }
 
+export interface TtBreak {
+  after_period: number;
+  duration_minutes: number;
+  label: string;
+}
+
 export interface TtSchoolConfig {
   working_days: string[];
   periods_per_day: number;
   start_time: string;
   end_time: string;
+  breaks: TtBreak[];
 }

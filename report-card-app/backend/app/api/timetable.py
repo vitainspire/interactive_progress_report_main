@@ -187,11 +187,23 @@ def delete_class_subject(class_id: int, subject_id: int, current_user=Depends(ge
 _TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 
+def _minutes(hhmm: str) -> int:
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+class BreakIn(BaseModel):
+    after_period: int
+    duration_minutes: int
+    label: str = "Break"
+
+
 class SchoolConfigUpdate(BaseModel):
     working_days: list[str]
     periods_per_day: int
     start_time: str
     end_time: str
+    breaks: list[BreakIn] = []
 
 
 @router.get("/config")
@@ -211,6 +223,31 @@ def update_config(req: SchoolConfigUpdate, current_user=Depends(get_current_user
         raise HTTPException(422, "Start and end time must be in HH:MM (24-hour) format")
     if req.start_time >= req.end_time:
         raise HTTPException(422, "End time must be after start time")
+
+    seen_positions: set[int] = set()
+    breaks: list[dict] = []
+    for b in req.breaks:
+        if not (1 <= b.after_period <= req.periods_per_day - 1):
+            raise HTTPException(422, f"A break must fall after period 1 through {req.periods_per_day - 1}")
+        if b.after_period in seen_positions:
+            raise HTTPException(422, f"Only one break can follow period {b.after_period}")
+        seen_positions.add(b.after_period)
+        if not (1 <= b.duration_minutes <= 180):
+            raise HTTPException(422, "A break must be between 1 and 180 minutes")
+        breaks.append({"after_period": b.after_period, "duration_minutes": b.duration_minutes, "label": b.label.strip() or "Break"})
+    breaks.sort(key=lambda b: b["after_period"])
+
+    total_minutes = _minutes(req.end_time) - _minutes(req.start_time)
+    break_minutes = sum(b["duration_minutes"] for b in breaks)
+    if total_minutes - break_minutes < req.periods_per_day:
+        raise HTTPException(422, "The breaks don't leave enough time in the day for every period")
+
     with session() as conn:
-        repo.set_school_config(conn, current_user["id"], days, req.periods_per_day, req.start_time, req.end_time)
-    return {"working_days": days, "periods_per_day": req.periods_per_day, "start_time": req.start_time, "end_time": req.end_time}
+        repo.set_school_config(conn, current_user["id"], days, req.periods_per_day, req.start_time, req.end_time, breaks)
+    return {
+        "working_days": days,
+        "periods_per_day": req.periods_per_day,
+        "start_time": req.start_time,
+        "end_time": req.end_time,
+        "breaks": breaks,
+    }

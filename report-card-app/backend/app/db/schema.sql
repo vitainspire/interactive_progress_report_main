@@ -237,10 +237,16 @@ CREATE INDEX IF NOT EXISTS idx_tt_class_subject_class ON tt_class_subject(class_
 -- The school's weekly structure: which days run classes and how many
 -- periods each day has. One row per account. Needed so the generator can
 -- later check requested periods_per_week against actual weekly capacity.
+-- `breaks` is a JSON-encoded array of {after_period, duration_minutes,
+-- label} — a short break or lunch break slotted in immediately after a
+-- given period number, used to compute the actual clock-time template
+-- (see the frontend's buildDaySchedule) the same way the real timetable
+-- sheets we've seen interleave breaks between periods.
 CREATE TABLE IF NOT EXISTS tt_school_config (
     user_id INTEGER PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE,
     working_days TEXT NOT NULL DEFAULT '["MON","TUE","WED","THU","FRI","SAT"]',
     periods_per_day INTEGER NOT NULL DEFAULT 8,
     start_time TEXT NOT NULL DEFAULT '09:15',
-    end_time TEXT NOT NULL DEFAULT '16:00'
+    end_time TEXT NOT NULL DEFAULT '16:00',
+    breaks TEXT NOT NULL DEFAULT '[]'
 );
