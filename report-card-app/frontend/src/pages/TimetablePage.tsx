@@ -457,7 +457,8 @@ function AssignmentsTab({ classes, subjects, teachers }: { classes: TtClass[]; s
                     max={60}
                     value={draft.periodsPerWeek}
                     onChange={(e) => editDraft(r.subject_id, { periodsPerWeek: Number(e.target.value) || 0 }, draft)}
-                    className="w-16 text-center"
+                    className="text-center"
+                    style={{ width: "4rem" }}
                   />
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                     /week
@@ -709,7 +710,8 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
                     max={180}
                     value={b.duration_minutes}
                     onChange={(e) => updateBreakAt(i, { duration_minutes: Number(e.target.value) || 1 })}
-                    className="w-16 text-center"
+                    className="text-center"
+                    style={{ width: "4rem" }}
                   />
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                     min
@@ -786,20 +788,67 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
 
         <div className="mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}>
           <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            Day template
+            Weekly template
           </h3>
+          <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
+            This is the empty grid every class's timetable will follow — subjects and teachers fill it in once you've set up
+            Classes, Subjects, Teachers, and Assignments.
+          </p>
           {schedule ? (
-            <div className="mt-2 max-w-sm divide-y" style={{ borderColor: "var(--border)" }}>
-              {schedule.map((row, i) => (
-                <div key={i} className="flex items-center justify-between py-1.5 text-sm">
-                  <span style={row.kind === "break" ? { color: "var(--text-muted)", fontStyle: "italic" } : { color: "var(--text-primary)" }}>
-                    {row.label}
-                  </span>
-                  <span className="tabular-nums" style={{ color: "var(--text-secondary)" }}>
-                    {formatClock(row.start)} – {formatClock(row.end)}
-                  </span>
-                </div>
-              ))}
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full border-collapse text-sm" style={{ minWidth: 560 }}>
+                <thead>
+                  <tr>
+                    <th
+                      className="whitespace-nowrap border px-3 py-2 text-left text-xs font-semibold"
+                      style={{ borderColor: "var(--border)", background: "var(--page-plane)", color: "var(--text-secondary)" }}
+                    >
+                      Time
+                    </th>
+                    {ALL_DAYS.filter((d) => days.has(d)).map((d) => (
+                      <th
+                        key={d}
+                        className="whitespace-nowrap border px-3 py-2 text-left text-xs font-semibold"
+                        style={{ borderColor: "var(--border)", background: "var(--accent)", color: "#fff" }}
+                      >
+                        {DAY_LABEL[d]}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {schedule.map((row, i) =>
+                    row.kind === "break" ? (
+                      <tr key={i}>
+                        <td
+                          colSpan={ALL_DAYS.filter((d) => days.has(d)).length + 1}
+                          className="border px-3 py-1.5 text-center text-xs italic"
+                          style={{ borderColor: "var(--border)", background: "var(--accent-soft)", color: "var(--text-secondary)" }}
+                        >
+                          {row.label} · {formatClock(row.start)} – {formatClock(row.end)}
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={i}>
+                        <td
+                          className="whitespace-nowrap border px-3 py-2 align-top"
+                          style={{ borderColor: "var(--border)", background: "var(--page-plane)" }}
+                        >
+                          <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                            {row.label}
+                          </div>
+                          <div className="tabular-nums text-xs" style={{ color: "var(--text-muted)" }}>
+                            {formatClock(row.start)} – {formatClock(row.end)}
+                          </div>
+                        </td>
+                        {ALL_DAYS.filter((d) => days.has(d)).map((d) => (
+                          <td key={d} className="border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }} />
+                        ))}
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
             </div>
           ) : (
             <p className="mt-2 text-sm" style={{ color: "var(--accent-mark)" }}>
