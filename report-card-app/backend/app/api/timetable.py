@@ -20,8 +20,14 @@ def _subject_out(row: dict) -> dict:
     return {"id": row["id"], "name": row["name"], "code": row["code"]}
 
 
-def _teacher_out(row: dict) -> dict:
-    return {"id": row["id"], "name": row["name"], "code": row["code"], "max_periods_per_day": row["max_periods_per_day"]}
+def _teacher_out(row: dict, subject_ids: list[int] | None = None) -> dict:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "code": row["code"],
+        "max_periods_per_day": row["max_periods_per_day"],
+        "subject_ids": subject_ids if subject_ids is not None else [],
+    }
 
 
 def _class_subject_out(row: dict) -> dict:
@@ -112,12 +118,26 @@ class TeacherCreate(BaseModel):
     name: str
     code: str = ""
     max_periods_per_day: int | None = None
+    subject_ids: list[int] = []
+
+
+class TeacherSubjectsUpdate(BaseModel):
+    subject_ids: list[int]
+
+
+def _validate_subject_ids(conn, user_id: int, subject_ids: list[int]) -> list[int]:
+    unique_ids = list(dict.fromkeys(subject_ids))  # de-dupe, keep order
+    for sid in unique_ids:
+        if not repo.get_subject(conn, user_id, sid):
+            raise HTTPException(404, f"Subject {sid} not found")
+    return unique_ids
 
 
 @router.get("/teachers")
 def list_teachers(current_user=Depends(get_current_user)):
     with session() as conn:
-        return [_teacher_out(r) for r in repo.list_teachers(conn, current_user["id"])]
+        subject_ids_by_teacher = repo.subject_ids_by_teacher(conn, current_user["id"])
+        return [_teacher_out(r, subject_ids_by_teacher.get(r["id"], [])) for r in repo.list_teachers(conn, current_user["id"])]
 
 
 @router.post("/teachers")
@@ -126,8 +146,11 @@ def create_teacher(req: TeacherCreate, current_user=Depends(get_current_user)):
     if not name:
         raise HTTPException(422, "Teacher name is required")
     with session() as conn:
+        subject_ids = _validate_subject_ids(conn, current_user["id"], req.subject_ids)
         teacher_id = repo.create_teacher(conn, current_user["id"], name, req.code.strip(), req.max_periods_per_day)
-        return _teacher_out(repo.get_teacher(conn, current_user["id"], teacher_id))
+        if subject_ids:
+            repo.set_teacher_subjects(conn, teacher_id, subject_ids)
+        return _teacher_out(repo.get_teacher(conn, current_user["id"], teacher_id), subject_ids)
 
 
 @router.delete("/teachers/{teacher_id}")
@@ -136,6 +159,17 @@ def delete_teacher(teacher_id: int, current_user=Depends(get_current_user)):
         if not repo.delete_teacher(conn, current_user["id"], teacher_id):
             raise HTTPException(404, "Teacher not found")
     return {"ok": True}
+
+
+@router.put("/teachers/{teacher_id}/subjects")
+def update_teacher_subjects(teacher_id: int, req: TeacherSubjectsUpdate, current_user=Depends(get_current_user)):
+    with session() as conn:
+        teacher_row = repo.get_teacher(conn, current_user["id"], teacher_id)
+        if not teacher_row:
+            raise HTTPException(404, "Teacher not found")
+        subject_ids = _validate_subject_ids(conn, current_user["id"], req.subject_ids)
+        repo.set_teacher_subjects(conn, teacher_id, subject_ids)
+        return _teacher_out(teacher_row, subject_ids)
 
 
 # ---- Class <-> subject assignments ----

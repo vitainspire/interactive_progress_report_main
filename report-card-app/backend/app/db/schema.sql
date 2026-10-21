@@ -199,6 +199,17 @@ CREATE TABLE IF NOT EXISTS tt_teacher (
 );
 CREATE INDEX IF NOT EXISTS idx_tt_teacher_user ON tt_teacher(user_id);
 
+-- Which subjects a teacher is qualified to teach at all — distinct from
+-- tt_class_subject, which says who actually teaches a given class. This
+-- is what lets the Assignments picker put likely-correct teachers first,
+-- and later lets the substitute finder look for someone who can actually
+-- cover the subject, not just anyone free that period.
+CREATE TABLE IF NOT EXISTS tt_teacher_subject (
+    teacher_id INTEGER NOT NULL REFERENCES tt_teacher(id) ON DELETE CASCADE,
+    subject_id INTEGER NOT NULL REFERENCES tt_subject(id) ON DELETE CASCADE,
+    PRIMARY KEY (teacher_id, subject_id)
+);
+
 CREATE TABLE IF NOT EXISTS tt_class (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,

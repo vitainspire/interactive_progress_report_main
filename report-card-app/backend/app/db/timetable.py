@@ -93,6 +93,33 @@ def delete_teacher(conn: psycopg.Connection, user_id: int, teacher_id: int) -> b
     return cur.rowcount > 0
 
 
+def subject_ids_by_teacher(conn: psycopg.Connection, user_id: int) -> dict[int, list[int]]:
+    """Every teacher's taught-subject ids, grouped by teacher_id, in one
+    query — used to assemble the teacher list response without an N+1."""
+    rows = conn.execute(
+        """SELECT ts.teacher_id, ts.subject_id
+           FROM tt_teacher_subject ts
+           JOIN tt_teacher t ON t.id = ts.teacher_id
+           WHERE t.user_id = %s""",
+        (user_id,),
+    ).fetchall()
+    out: dict[int, list[int]] = {}
+    for row in rows:
+        out.setdefault(row["teacher_id"], []).append(row["subject_id"])
+    return out
+
+
+def set_teacher_subjects(conn: psycopg.Connection, teacher_id: int, subject_ids: list[int]) -> None:
+    """Replaces the full set of subjects this teacher is tagged as
+    teaching — simpler and race-free compared to incremental add/remove
+    calls, since the frontend always sends the complete desired set."""
+    conn.execute("DELETE FROM tt_teacher_subject WHERE teacher_id = %s", (teacher_id,))
+    if subject_ids:
+        placeholders = ", ".join(["(%s, %s)"] * len(subject_ids))
+        params = [v for sid in subject_ids for v in (teacher_id, sid)]
+        conn.execute(f"INSERT INTO tt_teacher_subject (teacher_id, subject_id) VALUES {placeholders}", params)
+
+
 # ---- Class <-> subject assignments (who teaches what, how often) ----
 
 

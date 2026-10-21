@@ -233,12 +233,60 @@ function SubjectsTab({ subjects, onAdd, onDelete }: { subjects: TtSubject[]; onA
   );
 }
 
-function TeachersTab({ teachers, onAdd, onDelete }: { teachers: TtTeacher[]; onAdd: (name: string, code: string, maxPeriodsPerDay: number | null) => Promise<void>; onDelete: (id: number) => void }) {
+function SubjectTogglePill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-200"
+      style={active ? { background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" } : { borderColor: "var(--border)", color: "var(--text-secondary)" }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function TeachersTab({
+  teachers,
+  subjects,
+  onAdd,
+  onDelete,
+  onUpdateSubjects,
+}: {
+  teachers: TtTeacher[];
+  subjects: TtSubject[];
+  onAdd: (name: string, code: string, maxPeriodsPerDay: number | null, subjectIds: number[]) => Promise<void>;
+  onDelete: (id: number) => void;
+  onUpdateSubjects: (teacherId: number, subjectIds: number[]) => Promise<void>;
+}) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [maxPeriods, setMaxPeriods] = useState("");
+  const [newSubjectIds, setNewSubjectIds] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [subjectDrafts, setSubjectDrafts] = useState<Record<number, number[]>>({});
+
+  function subjectsFor(t: TtTeacher): number[] {
+    return subjectDrafts[t.id] ?? t.subject_ids;
+  }
+
+  function toggleDraftSubject(t: TtTeacher, subjectId: number) {
+    const current = subjectsFor(t);
+    const next = current.includes(subjectId) ? current.filter((x) => x !== subjectId) : [...current, subjectId];
+    setSubjectDrafts((prev) => ({ ...prev, [t.id]: next }));
+  }
+
+  async function saveSubjects(t: TtTeacher) {
+    const ids = subjectDrafts[t.id];
+    if (!ids) return;
+    await onUpdateSubjects(t.id, ids);
+    setSubjectDrafts((prev) => {
+      const next = { ...prev };
+      delete next[t.id];
+      return next;
+    });
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -246,10 +294,11 @@ function TeachersTab({ teachers, onAdd, onDelete }: { teachers: TtTeacher[]; onA
     setBusy(true);
     setError(null);
     try {
-      await onAdd(name.trim(), code.trim(), maxPeriods.trim() ? Number(maxPeriods) : null);
+      await onAdd(name.trim(), code.trim(), maxPeriods.trim() ? Number(maxPeriods) : null, newSubjectIds);
       setName("");
       setCode("");
       setMaxPeriods("");
+      setNewSubjectIds([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add this teacher");
     } finally {
@@ -258,47 +307,90 @@ function TeachersTab({ teachers, onAdd, onDelete }: { teachers: TtTeacher[]; onA
   }
 
   return (
-    <Panel title="Teachers" hint="Every teacher on staff. You'll assign which subject(s) and class(es) each one teaches under Assignments.">
-      <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
-        <div className="w-52">
-          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            Teacher name
-          </label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. V.J.V. Shobhakar" required />
+    <Panel title="Teachers" hint="Every teacher on staff, and which subject(s) they teach — used to suggest the right teacher under Assignments.">
+      <form onSubmit={submit}>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="w-52">
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Teacher name
+            </label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. V.J.V. Shobhakar" required />
+          </div>
+          <div className="w-24">
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Short code
+            </label>
+            <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. VJVS" />
+          </div>
+          <div className="w-36">
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Max periods/day
+            </label>
+            <input type="number" min={1} max={12} value={maxPeriods} onChange={(e) => setMaxPeriods(e.target.value)} placeholder="Optional" />
+          </div>
+          <button type="submit" disabled={busy} className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            <PlusIcon size={14} />
+            Add teacher
+          </button>
         </div>
-        <div className="w-24">
-          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            Short code
-          </label>
-          <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. VJVS" />
-        </div>
-        <div className="w-36">
-          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            Max periods/day
-          </label>
-          <input type="number" min={1} max={12} value={maxPeriods} onChange={(e) => setMaxPeriods(e.target.value)} placeholder="Optional" />
-        </div>
-        <button type="submit" disabled={busy} className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-          <PlusIcon size={14} />
-          Add teacher
-        </button>
+
+        {subjects.length > 0 && (
+          <div className="mt-3">
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Subjects they teach
+            </label>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {subjects.map((s) => (
+                <SubjectTogglePill
+                  key={s.id}
+                  label={s.name}
+                  active={newSubjectIds.includes(s.id)}
+                  onClick={() => setNewSubjectIds((prev) => (prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id]))}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {error && <p className="mt-2 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
       </form>
-      {error && <p className="mt-2 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
 
       <div className="mt-4 divide-y" style={{ borderColor: "var(--border)" }}>
-        {teachers.map((t) => (
-          <Row key={t.id} onDelete={() => onDelete(t.id)}>
-            <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              {t.name}
-              {t.code && <span className="pill ml-2">{t.code}</span>}
-              {t.max_periods_per_day && (
-                <span className="ml-2 text-xs" style={{ color: "var(--text-muted)" }}>
-                  max {t.max_periods_per_day}/day
-                </span>
+        {teachers.map((t) => {
+          const current = subjectsFor(t);
+          const dirty = subjectDrafts[t.id] !== undefined;
+          return (
+            <Row key={t.id} onDelete={() => onDelete(t.id)}>
+              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {t.name}
+                {t.code && <span className="pill ml-2">{t.code}</span>}
+                {t.max_periods_per_day && (
+                  <span className="ml-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                    max {t.max_periods_per_day}/day
+                  </span>
+                )}
+              </span>
+              {subjects.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {subjects.map((s) => (
+                    <SubjectTogglePill key={s.id} label={s.name} active={current.includes(s.id)} onClick={() => toggleDraftSubject(t, s.id)} />
+                  ))}
+                  {dirty && (
+                    <button
+                      type="button"
+                      onClick={() => saveSubjects(t)}
+                      title="Save subjects"
+                      className="flex h-6 w-6 flex-none items-center justify-center rounded-full"
+                      style={{ color: "var(--status-good)" }}
+                    >
+                      <CheckIcon size={13} />
+                    </button>
+                  )}
+                </div>
               )}
-            </span>
-          </Row>
-        ))}
+            </Row>
+          );
+        })}
         {teachers.length === 0 && <EmptyHint>No teachers yet — add your first one above.</EmptyHint>}
       </div>
     </Panel>
@@ -431,6 +523,14 @@ function AssignmentsTab({ classes, subjects, teachers }: { classes: TtClass[]; s
           {rows.map((r) => {
             const draft = draftFor(r);
             const dirty = Boolean(drafts[r.subject_id]);
+            const matching = teachers.filter((t) => t.subject_ids.includes(r.subject_id));
+            const others = teachers.filter((t) => !t.subject_ids.includes(r.subject_id));
+            const teacherOption = (t: TtTeacher) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.code ? ` (${t.code})` : ""}
+              </option>
+            );
             return (
               <div key={r.subject_id} className="flex flex-wrap items-center gap-3 py-2.5">
                 <span className="w-36 flex-none text-sm font-medium" style={{ color: "var(--text-primary)" }}>
@@ -443,12 +543,14 @@ function AssignmentsTab({ classes, subjects, teachers }: { classes: TtClass[]; s
                   style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
                 >
                   <option value="">— unassigned —</option>
-                  {teachers.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                      {t.code ? ` (${t.code})` : ""}
-                    </option>
-                  ))}
+                  {matching.length > 0 && others.length > 0 ? (
+                    <>
+                      <optgroup label={`Teaches ${r.subject_name}`}>{matching.map(teacherOption)}</optgroup>
+                      <optgroup label="Other teachers">{others.map(teacherOption)}</optgroup>
+                    </>
+                  ) : (
+                    teachers.map(teacherOption)
+                  )}
                 </select>
                 <div className="flex items-center gap-1.5">
                   <input
@@ -918,14 +1020,19 @@ export function TimetablePage() {
     setSubjects((prev) => prev?.filter((s) => s.id !== id) ?? prev);
   }
 
-  async function addTeacher(name: string, code: string, maxPeriodsPerDay: number | null) {
-    const created = await api.post<TtTeacher>("/timetable/teachers", { name, code, max_periods_per_day: maxPeriodsPerDay });
+  async function addTeacher(name: string, code: string, maxPeriodsPerDay: number | null, subjectIds: number[]) {
+    const created = await api.post<TtTeacher>("/timetable/teachers", { name, code, max_periods_per_day: maxPeriodsPerDay, subject_ids: subjectIds });
     setTeachers((prev) => [...(prev ?? []), created]);
   }
 
   async function deleteTeacher(id: number) {
     await api.del(`/timetable/teachers/${id}`);
     setTeachers((prev) => prev?.filter((t) => t.id !== id) ?? prev);
+  }
+
+  async function updateTeacherSubjects(teacherId: number, subjectIds: number[]) {
+    const updated = await api.put<TtTeacher>(`/timetable/teachers/${teacherId}/subjects`, { subject_ids: subjectIds });
+    setTeachers((prev) => prev?.map((t) => (t.id === teacherId ? updated : t)) ?? prev);
   }
 
   async function saveConfig(next: TtSchoolConfig) {
@@ -977,7 +1084,9 @@ export function TimetablePage() {
         {!loaded && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading…</p>}
         {loaded && tab === "classes" && <ClassesTab classes={classes} onAdd={addClass} onDelete={deleteClass} />}
         {loaded && tab === "subjects" && <SubjectsTab subjects={subjects} onAdd={addSubject} onDelete={deleteSubject} />}
-        {loaded && tab === "teachers" && <TeachersTab teachers={teachers} onAdd={addTeacher} onDelete={deleteTeacher} />}
+        {loaded && tab === "teachers" && (
+          <TeachersTab teachers={teachers} subjects={subjects} onAdd={addTeacher} onDelete={deleteTeacher} onUpdateSubjects={updateTeacherSubjects} />
+        )}
         {loaded && tab === "assignments" && <AssignmentsTab classes={classes} subjects={subjects} teachers={teachers} />}
         {loaded && tab === "schedule" && <ScheduleTab config={config} onSave={saveConfig} />}
       </div>

@@ -101,6 +101,7 @@ export interface TtTeacher {
   name: string;
   code: string;
   max_periods_per_day: number | null;
+  subject_ids: number[];
 }
 
 export interface TtClassSubject {
