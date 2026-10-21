@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { CheckIcon, PlusIcon, TrashIcon } from "../components/Icons";
-import type { TtBreak, TtClass, TtClassSubject, TtSchoolConfig, TtSubject, TtTeacher } from "../types";
+import type { TtBreak, TtClass, TtClassSubject, TtGenerateResult, TtSchoolConfig, TtSubject, TtTeacher, TtTimetableEntry } from "../types";
 
-type Tab = "classes" | "subjects" | "teachers" | "assignments" | "schedule";
+type Tab = "classes" | "subjects" | "teachers" | "assignments" | "schedule" | "timetable";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "schedule", label: "Schedule" },
@@ -12,6 +12,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "subjects", label: "Subjects" },
   { id: "teachers", label: "Teachers" },
   { id: "assignments", label: "Assignments" },
+  { id: "timetable", label: "Timetable" },
 ];
 
 const ALL_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -40,6 +41,7 @@ interface DayScheduleRow {
   label: string;
   start: string;
   end: string;
+  period?: number; // set for kind: "period" rows — the 1-indexed period number
 }
 
 // Splits the school day into `periodsPerDay` equal(-ish) slots with each
@@ -63,7 +65,7 @@ function buildDaySchedule(startTime: string, endTime: string, periodsPerDay: num
     const duration = base + (i <= extra ? 1 : 0);
     const start = cursor;
     cursor += duration;
-    rows.push({ kind: "period", label: `Period ${i}`, start: fromMinutes(start), end: fromMinutes(cursor) });
+    rows.push({ kind: "period", label: `Period ${i}`, start: fromMinutes(start), end: fromMinutes(cursor), period: i });
     const brk = breaksByAfter.get(i);
     if (brk) {
       const bStart = cursor;
@@ -72,6 +74,75 @@ function buildDaySchedule(startTime: string, endTime: string, periodsPerDay: num
     }
   }
   return rows;
+}
+
+// Shared by the blank Schedule-tab preview and the filled generated-timetable
+// view — same Time + day-columns grid, just a different `renderCell`.
+function WeekGrid({
+  schedule,
+  workingDays,
+  renderCell,
+}: {
+  schedule: DayScheduleRow[];
+  workingDays: string[];
+  renderCell?: (day: string, period: number) => React.ReactNode;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm" style={{ minWidth: 560 }}>
+        <thead>
+          <tr>
+            <th
+              className="whitespace-nowrap border px-3 py-2 text-left text-xs font-semibold"
+              style={{ borderColor: "var(--border)", background: "var(--page-plane)", color: "var(--text-secondary)" }}
+            >
+              Time
+            </th>
+            {workingDays.map((d) => (
+              <th
+                key={d}
+                className="whitespace-nowrap border px-3 py-2 text-left text-xs font-semibold"
+                style={{ borderColor: "var(--border)", background: "var(--accent)", color: "#fff" }}
+              >
+                {DAY_LABEL[d]}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {schedule.map((row, i) =>
+            row.kind === "break" ? (
+              <tr key={i}>
+                <td
+                  colSpan={workingDays.length + 1}
+                  className="border px-3 py-1.5 text-center text-xs italic"
+                  style={{ borderColor: "var(--border)", background: "var(--accent-soft)", color: "var(--text-secondary)" }}
+                >
+                  {row.label} · {formatClock(row.start)} – {formatClock(row.end)}
+                </td>
+              </tr>
+            ) : (
+              <tr key={i}>
+                <td className="whitespace-nowrap border px-3 py-2 align-top" style={{ borderColor: "var(--border)", background: "var(--page-plane)" }}>
+                  <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {row.label}
+                  </div>
+                  <div className="tabular-nums text-xs" style={{ color: "var(--text-muted)" }}>
+                    {formatClock(row.start)} – {formatClock(row.end)}
+                  </div>
+                </td>
+                {workingDays.map((d) => (
+                  <td key={d} className="border px-3 py-2 align-top" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
+                    {renderCell ? renderCell(d, row.period as number) : null}
+                  </td>
+                ))}
+              </tr>
+            )
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function Panel({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
@@ -627,6 +698,155 @@ function AssignmentsTab({ classes, subjects, teachers }: { classes: TtClass[]; s
   );
 }
 
+function GeneratedTimetableTab({
+  classes,
+  config,
+  onGenerate,
+}: {
+  classes: TtClass[];
+  config: TtSchoolConfig;
+  onGenerate: () => Promise<TtGenerateResult>;
+}) {
+  const [classId, setClassId] = useState<number | null>(classes[0]?.id ?? null);
+  const [entries, setEntries] = useState<TtTimetableEntry[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<TtGenerateResult | null>(null);
+
+  const schedule = buildDaySchedule(config.start_time, config.end_time, config.periods_per_day, config.breaks);
+  const workingDays = ALL_DAYS.filter((d) => config.working_days.includes(d));
+
+  useEffect(() => {
+    if (classId === null) {
+      setEntries(null);
+      return;
+    }
+    setEntries(null);
+    api
+      .get<TtTimetableEntry[]>(`/timetable/classes/${classId}/timetable`)
+      .then(setEntries)
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load this class's timetable"));
+  }, [classId]);
+
+  async function runGenerate() {
+    if (!confirm("Generate the timetable? This replaces any previously generated timetable for every class.")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await onGenerate();
+      // Wait for the grid to actually have the fresh entries before
+      // announcing success, so the "Done" message and the filled-in grid
+      // appear together instead of the message landing a moment early.
+      const fresh = classId !== null ? await api.get<TtTimetableEntry[]>(`/timetable/classes/${classId}/timetable`) : null;
+      if (fresh !== null) setEntries(fresh);
+      setResult(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate the timetable");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (classes.length === 0) {
+    return (
+      <Panel title="Timetable">
+        <EmptyHint>Add at least one class, with subjects and teachers assigned, before generating a timetable.</EmptyHint>
+      </Panel>
+    );
+  }
+
+  const entryBySlot = new Map<string, TtTimetableEntry>();
+  entries?.forEach((e) => entryBySlot.set(`${e.day}-${e.period}`, e));
+
+  return (
+    <Panel title="Timetable" hint="Generate the weekly timetable for every class from your Schedule, Classes, Subjects, Teachers, and Assignments.">
+      <button
+        type="button"
+        onClick={runGenerate}
+        disabled={busy}
+        className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        {busy ? "Generating…" : "Generate timetable"}
+      </button>
+
+      {error && <p className="mt-3 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
+
+      {result && (
+        <div className="mt-3 rounded-lg p-3 text-sm" style={{ background: result.ok ? "var(--status-good-soft)" : "var(--accent-mark-soft)" }}>
+          <p style={{ color: result.ok ? "var(--status-good)" : "var(--accent-mark)" }}>
+            {result.ok
+              ? `Done — generated a full timetable for ${result.classes_generated} class${result.classes_generated === 1 ? "" : "es"} (${result.total_periods_placed} periods placed).`
+              : `Placed ${result.total_periods_placed} periods across ${result.classes_generated} class${result.classes_generated === 1 ? "" : "es"}, but some couldn't be fully scheduled:`}
+          </p>
+          {result.issues.length > 0 && (
+            <ul className="mt-1.5 list-disc space-y-1 pl-5">
+              {result.issues.map((issue, i) => (
+                <li key={i} style={{ color: "var(--text-secondary)" }}>
+                  <strong>{issue.class_name}</strong> — {issue.subject_name}: {issue.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4 w-56">
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Class
+        </label>
+        <select
+          value={classId ?? ""}
+          onChange={(e) => setClassId(Number(e.target.value))}
+          className="w-full rounded-md border px-3 py-2 text-sm font-medium"
+          style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+        >
+          {classes.map((c) => (
+            <option key={c.id} value={c.id}>
+              Grade {c.grade}
+              {c.section ? ` · ${c.section}` : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {schedule ? (
+        <div className="mt-4">
+          <WeekGrid
+            schedule={schedule}
+            workingDays={workingDays}
+            renderCell={(day, period) => {
+              const entry = entryBySlot.get(`${day}-${period}`);
+              if (!entry) {
+                return entries === null ? null : (
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    —
+                  </span>
+                );
+              }
+              return (
+                <div>
+                  <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {entry.subject_name}
+                  </div>
+                  {entry.teacher_name && (
+                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {entry.teacher_name}
+                    </div>
+                  )}
+                </div>
+              );
+            }}
+          />
+        </div>
+      ) : (
+        <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>
+          Set up a valid Schedule first (the breaks need to fit in the school day) before the timetable can be displayed.
+        </p>
+      )}
+    </Panel>
+  );
+}
+
 function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (config: TtSchoolConfig) => Promise<void> }) {
   const [days, setDays] = useState<Set<string>>(new Set(config.working_days));
   const [periodsPerDay, setPeriodsPerDay] = useState(String(config.periods_per_day));
@@ -897,60 +1117,8 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
             Classes, Subjects, Teachers, and Assignments.
           </p>
           {schedule ? (
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full border-collapse text-sm" style={{ minWidth: 560 }}>
-                <thead>
-                  <tr>
-                    <th
-                      className="whitespace-nowrap border px-3 py-2 text-left text-xs font-semibold"
-                      style={{ borderColor: "var(--border)", background: "var(--page-plane)", color: "var(--text-secondary)" }}
-                    >
-                      Time
-                    </th>
-                    {ALL_DAYS.filter((d) => days.has(d)).map((d) => (
-                      <th
-                        key={d}
-                        className="whitespace-nowrap border px-3 py-2 text-left text-xs font-semibold"
-                        style={{ borderColor: "var(--border)", background: "var(--accent)", color: "#fff" }}
-                      >
-                        {DAY_LABEL[d]}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {schedule.map((row, i) =>
-                    row.kind === "break" ? (
-                      <tr key={i}>
-                        <td
-                          colSpan={ALL_DAYS.filter((d) => days.has(d)).length + 1}
-                          className="border px-3 py-1.5 text-center text-xs italic"
-                          style={{ borderColor: "var(--border)", background: "var(--accent-soft)", color: "var(--text-secondary)" }}
-                        >
-                          {row.label} · {formatClock(row.start)} – {formatClock(row.end)}
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={i}>
-                        <td
-                          className="whitespace-nowrap border px-3 py-2 align-top"
-                          style={{ borderColor: "var(--border)", background: "var(--page-plane)" }}
-                        >
-                          <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
-                            {row.label}
-                          </div>
-                          <div className="tabular-nums text-xs" style={{ color: "var(--text-muted)" }}>
-                            {formatClock(row.start)} – {formatClock(row.end)}
-                          </div>
-                        </td>
-                        {ALL_DAYS.filter((d) => days.has(d)).map((d) => (
-                          <td key={d} className="border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }} />
-                        ))}
-                      </tr>
-                    )
-                  )}
-                </tbody>
-              </table>
+            <div className="mt-3">
+              <WeekGrid schedule={schedule} workingDays={ALL_DAYS.filter((d) => days.has(d))} />
             </div>
           ) : (
             <p className="mt-2 text-sm" style={{ color: "var(--accent-mark)" }}>
@@ -1040,6 +1208,10 @@ export function TimetablePage() {
     setConfig(updated);
   }
 
+  async function runGenerate(): Promise<TtGenerateResult> {
+    return api.post<TtGenerateResult>("/timetable/generate");
+  }
+
   const loaded = classes && subjects && teachers && config;
 
   return (
@@ -1088,6 +1260,7 @@ export function TimetablePage() {
           <TeachersTab teachers={teachers} subjects={subjects} onAdd={addTeacher} onDelete={deleteTeacher} onUpdateSubjects={updateTeacherSubjects} />
         )}
         {loaded && tab === "assignments" && <AssignmentsTab classes={classes} subjects={subjects} teachers={teachers} />}
+        {loaded && tab === "timetable" && <GeneratedTimetableTab classes={classes} config={config} onGenerate={runGenerate} />}
         {loaded && tab === "schedule" && <ScheduleTab config={config} onSave={saveConfig} />}
       </div>
     </section>

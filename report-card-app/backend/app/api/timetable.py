@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.core.deps import get_current_user
 from app.db import timetable as repo
 from app.db.database import session
+from app.timetable.generator import ClassSpec, SubjectRequirement, generate_timetable
 
 router = APIRouter(prefix="/timetable", tags=["timetable"])
 
@@ -285,3 +286,68 @@ def update_config(req: SchoolConfigUpdate, current_user=Depends(get_current_user
         "end_time": req.end_time,
         "breaks": breaks,
     }
+
+
+# ---- Generated timetable ----
+
+
+@router.post("/generate")
+def generate(current_user=Depends(get_current_user)):
+    with session() as conn:
+        class_data = repo.list_all_class_subjects_for_generation(conn, current_user["id"])
+        config = repo.get_school_config(conn, current_user["id"])
+
+        classes = [
+            ClassSpec(
+                class_id=c["class_id"],
+                class_name=c["class_name"],
+                subjects=[
+                    SubjectRequirement(
+                        subject_id=s["subject_id"],
+                        subject_name=s["subject_name"],
+                        teacher_id=s["teacher_id"],
+                        teacher_name=s["teacher_name"],
+                        periods_per_week=s["periods_per_week"],
+                    )
+                    for s in c["subjects"]
+                ],
+            )
+            for c in class_data
+        ]
+
+        total_requirements = sum(req.periods_per_week for c in classes for req in c.subjects)
+        if not classes or total_requirements == 0:
+            raise HTTPException(422, "Add classes, subjects, and periods/week under Assignments before generating a timetable")
+
+        entries, issues = generate_timetable(classes, config["working_days"], config["periods_per_day"])
+
+        rows = [(e.class_id, e.day, e.period, e.subject_id, e.teacher_id) for e in entries]
+        repo.replace_timetable_entries(conn, current_user["id"], rows)
+
+        return {
+            "ok": not issues,
+            "classes_generated": len({e.class_id for e in entries}),
+            "total_periods_placed": len(entries),
+            "issues": [{"class_name": i.class_name, "subject_name": i.subject_name, "reason": i.reason} for i in issues],
+        }
+
+
+@router.get("/classes/{class_id}/timetable")
+def get_class_timetable(class_id: int, current_user=Depends(get_current_user)):
+    with session() as conn:
+        if not repo.get_class(conn, current_user["id"], class_id):
+            raise HTTPException(404, "Class not found")
+        rows = repo.get_timetable_entries(conn, class_id)
+        return [
+            {
+                "day": r["day"],
+                "period": r["period"],
+                "subject_id": r["subject_id"],
+                "subject_name": r["subject_name"],
+                "subject_code": r["subject_code"],
+                "teacher_id": r["teacher_id"],
+                "teacher_name": r["teacher_name"],
+                "teacher_code": r["teacher_code"],
+            }
+            for r in rows
+        ]

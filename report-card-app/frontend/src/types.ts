@@ -120,6 +120,24 @@ export interface TtBreak {
   label: string;
 }
 
+export interface TtTimetableEntry {
+  day: string;
+  period: number;
+  subject_id: number;
+  subject_name: string;
+  subject_code: string;
+  teacher_id: number | null;
+  teacher_name: string | null;
+  teacher_code: string | null;
+}
+
+export interface TtGenerateResult {
+  ok: boolean;
+  classes_generated: number;
+  total_periods_placed: number;
+  issues: { class_name: string; subject_name: string; reason: string }[];
+}
+
 export interface TtSchoolConfig {
   working_days: string[];
   periods_per_day: number;

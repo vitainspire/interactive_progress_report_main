@@ -198,3 +198,62 @@ def set_school_config(
                breaks = EXCLUDED.breaks""",
         (user_id, json.dumps(working_days), periods_per_day, start_time, end_time, json.dumps(breaks)),
     )
+
+
+# ---- Generated timetable ----
+
+
+def list_all_class_subjects_for_generation(conn: psycopg.Connection, user_id: int) -> list[dict]:
+    """Every class belonging to this user, each with its full list of
+    (subject, teacher, periods_per_week) requirements — everything the
+    generator needs, in one query per table instead of one per class."""
+    classes = list_classes(conn, user_id)
+    rows = conn.execute(
+        """SELECT cs.class_id, cs.subject_id, cs.teacher_id, cs.periods_per_week,
+                  s.name AS subject_name, t.name AS teacher_name
+           FROM tt_class_subject cs
+           JOIN tt_class c ON c.id = cs.class_id
+           JOIN tt_subject s ON s.id = cs.subject_id
+           LEFT JOIN tt_teacher t ON t.id = cs.teacher_id
+           WHERE c.user_id = %s""",
+        (user_id,),
+    ).fetchall()
+    by_class: dict[int, list[dict]] = {}
+    for row in rows:
+        by_class.setdefault(row["class_id"], []).append(row)
+    return [
+        {"class_id": c["id"], "class_name": f'{c["grade"]} {c["section"]}'.strip(), "subjects": by_class.get(c["id"], [])}
+        for c in classes
+    ]
+
+
+def replace_timetable_entries(conn: psycopg.Connection, user_id: int, entries: list[tuple[int, str, int, int, int | None]]) -> None:
+    """Wipes every existing generated entry for this user's classes and
+    inserts the freshly generated set — a generation run always replaces
+    the previous one wholesale rather than being merged with it."""
+    conn.execute("DELETE FROM tt_timetable_entry WHERE class_id IN (SELECT id FROM tt_class WHERE user_id = %s)", (user_id,))
+    if not entries:
+        return
+    placeholders = ", ".join(["(%s, %s, %s, %s, %s)"] * len(entries))
+    params = [v for e in entries for v in e]
+    conn.execute(f"INSERT INTO tt_timetable_entry (class_id, day, period, subject_id, teacher_id) VALUES {placeholders}", params)
+
+
+def get_timetable_entries(conn: psycopg.Connection, class_id: int) -> list[dict]:
+    return conn.execute(
+        """SELECT te.day, te.period, te.subject_id, s.name AS subject_name, s.code AS subject_code,
+                  te.teacher_id, t.name AS teacher_name, t.code AS teacher_code
+           FROM tt_timetable_entry te
+           JOIN tt_subject s ON s.id = te.subject_id
+           LEFT JOIN tt_teacher t ON t.id = te.teacher_id
+           WHERE te.class_id = %s
+           ORDER BY te.day, te.period""",
+        (class_id,),
+    ).fetchall()
+
+
+def has_generated_timetable(conn: psycopg.Connection, user_id: int) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM tt_timetable_entry te JOIN tt_class c ON c.id = te.class_id WHERE c.user_id = %s LIMIT 1", (user_id,)
+    ).fetchone()
+    return row is not None

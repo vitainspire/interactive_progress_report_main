@@ -261,3 +261,21 @@ CREATE TABLE IF NOT EXISTS tt_school_config (
     end_time TEXT NOT NULL DEFAULT '16:00',
     breaks TEXT NOT NULL DEFAULT '[]'
 );
+
+-- The actual generated weekly schedule, one row per (class, day, period)
+-- slot that's been filled in. Produced by POST /timetable/generate from
+-- tt_class_subject's requirements (see app/timetable/generator.py) —
+-- wiped and rebuilt on every generation run rather than edited cell by
+-- cell, which is a later feature.
+CREATE TABLE IF NOT EXISTS tt_timetable_entry (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    class_id INTEGER NOT NULL REFERENCES tt_class(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    period INTEGER NOT NULL,
+    subject_id INTEGER NOT NULL REFERENCES tt_subject(id) ON DELETE CASCADE,
+    teacher_id INTEGER REFERENCES tt_teacher(id) ON DELETE SET NULL,
+    UNIQUE (class_id, day, period)
+);
+CREATE INDEX IF NOT EXISTS idx_tt_timetable_entry_class ON tt_timetable_entry(class_id);
+-- Powers "who is free at (day, period)" lookups for the substitute finder.
+CREATE INDEX IF NOT EXISTS idx_tt_timetable_entry_teacher_slot ON tt_timetable_entry(teacher_id, day, period);
