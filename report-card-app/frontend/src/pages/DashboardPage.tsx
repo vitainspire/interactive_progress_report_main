@@ -110,7 +110,13 @@ export function DashboardPage() {
 
   return (
     <section>
-      <header className="flex flex-wrap items-center justify-between gap-4">
+      <nav className="text-xs" style={{ color: "var(--text-muted)" }} aria-label="Breadcrumb">
+        <Link to="/tools" className="hover:underline" style={{ color: "var(--text-muted)" }}>
+          Tools
+        </Link>{" "}
+        / Report Card Generator
+      </nav>
+      <header className="mt-1 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold" style={{ color: "var(--text-primary)" }}>
             Your uploads

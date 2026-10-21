@@ -15,10 +15,10 @@ export function Layout() {
     <div className="min-h-screen">
       <header style={{ background: "var(--surface-1)", borderBottom: "1px solid var(--border)" }}>
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-3.5">
-          <Link to="/dashboard" className="flex items-center gap-3">
+          <Link to="/tools" className="flex items-center gap-3">
             <div className="icon-chip" style={{ fontWeight: 700 }}>RC</div>
             <div className="font-display text-lg font-bold" style={{ color: "var(--text-primary)" }}>
-              Report Card Generator
+              School Admin Tools
             </div>
           </Link>
           {user && (

@@ -13,7 +13,7 @@ export function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) return <Navigate to="/tools" replace />;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -21,7 +21,7 @@ export function SignupPage() {
     setBusy(true);
     try {
       await signup(email, password, displayName);
-      navigate("/dashboard");
+      navigate("/tools");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create account");
     } finally {
@@ -37,7 +37,7 @@ export function SignupPage() {
             RC
           </span>
           <div className="font-display mt-3 text-xl font-bold" style={{ color: "var(--text-primary)" }}>
-            Report Card Generator
+            School Admin Tools
           </div>
         </div>
         <form onSubmit={onSubmit} aria-label="Create account" className="soft-card p-8" style={{ boxShadow: "var(--shadow-pop)" }}>
