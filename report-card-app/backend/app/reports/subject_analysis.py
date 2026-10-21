@@ -184,9 +184,10 @@ def get_exam_info(conn: psycopg.Connection, class_level: str, subject_name: str)
 # ---------------------------------------------------------------- render --
 
 _CSS = """
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
 body{margin:0;background:#eceff5;color:#18213a;font-family:'Noto Sans Telugu','Noto Sans',system-ui,sans-serif}
 .bar{position:sticky;top:0;z-index:5;display:flex;gap:10px;align-items:center;background:#fff;border-bottom:1px solid #d3d9e6;padding:10px 16px}
+#pv{zoom:var(--z,1)}
 .bar h1{margin:0;flex:1;font-size:16px}
 .bar button{border:0;border-radius:10px;padding:9px 16px;font-weight:700;cursor:pointer;background:#18213a;color:#fff;font:inherit}
 .pvw{overflow-x:auto;padding:16px 0 40px}
@@ -294,7 +295,8 @@ body{margin:0;background:#eceff5;color:#18213a;font-family:'Noto Sans Telugu','N
  @page{size:A4;margin:0}
  body{background:#fff}
  .noprint{display:none!important}
- .pvw{padding:0}
+ .pvw{padding:0;overflow:visible}
+ #pv{zoom:1!important}
  .pg{margin:0;box-shadow:none}
 }
 """
@@ -546,4 +548,24 @@ def render_subject_analysis(
 <body>
 <div class="bar noprint"><h1>{_esc(te)} — Subject Analysis</h1><button onclick="window.print()">\U0001f5a8 Print / Save as PDF</button></div>
 <div class="pvw"><div id="pv">{h}</div></div>
+<script>
+(function(){{
+  // Each .pg page is a fixed A4 width (210mm ≈ 794px) — on a phone-width
+  // screen that's wider than the viewport, so it's shrunk to fit here via
+  // CSS zoom (affects layout size, unlike transform:scale, so no leftover
+  // blank space below). Printing always resets zoom to 1 (see @media print)
+  // so the saved PDF is always full quality regardless of what the on-screen
+  // preview happened to be shrunk to.
+  var pvw = document.querySelector('.pvw');
+  var pv = document.getElementById('pv');
+  if(!pvw || !pv || !('zoom' in document.documentElement.style)) return;
+  function fit(){{
+    var natural = 794;
+    var z = Math.min(1, (pvw.clientWidth - 4) / natural);
+    pv.style.zoom = z > 0 ? z : 1;
+  }}
+  fit();
+  window.addEventListener('resize', fit);
+}})();
+</script>
 </body></html>"""
