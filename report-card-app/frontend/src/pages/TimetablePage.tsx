@@ -555,15 +555,22 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
 
   function addBreak() {
     if (breakAfter === "") return;
-    setBreaks((prev) => [...prev, { after_period: breakAfter, duration_minutes: Number(breakDuration) || 1, label: breakLabel.trim() || "Break" }].sort((a, b) => a.after_period - b.after_period));
+    // Not re-sorted by position — editing a row's "after period" below would
+    // otherwise jump that row to a new spot in the list mid-edit.
+    setBreaks((prev) => [...prev, { after_period: breakAfter, duration_minutes: Number(breakDuration) || 1, label: breakLabel.trim() || "Break" }]);
     setBreakAfter("");
     setBreakDuration("10");
     setBreakLabel("");
     setSaved(false);
   }
 
-  function removeBreak(afterPeriod: number) {
-    setBreaks((prev) => prev.filter((b) => b.after_period !== afterPeriod));
+  function updateBreakAt(index: number, patch: Partial<TtBreak>) {
+    setBreaks((prev) => prev.map((b, i) => (i === index ? { ...b, ...patch } : b)));
+    setSaved(false);
+  }
+
+  function removeBreakAt(index: number) {
+    setBreaks((prev) => prev.filter((_, i) => i !== index));
     setSaved(false);
   }
 
@@ -668,22 +675,57 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
             Breaks (short breaks, lunch break)
           </label>
           <div className="mt-2 divide-y" style={{ borderColor: "var(--border)" }}>
-            {breaks.map((b) => (
-              <div key={b.after_period} className="flex items-center justify-between gap-3 py-1.5">
-                <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-                  {b.label} — after period {b.after_period}, {b.duration_minutes} min
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeBreak(b.after_period)}
-                  title="Remove this break"
-                  className="flex h-7 w-7 flex-none items-center justify-center rounded-full transition-colors duration-200 hover:bg-[var(--accent-mark-soft)]"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  <TrashIcon size={14} />
-                </button>
-              </div>
-            ))}
+            {breaks.map((b, i) => {
+              const usedByOthers = new Set(breaks.filter((_, j) => j !== i).map((x) => x.after_period));
+              const rowPositions = Array.from({ length: Math.max(periodsNum - 1, 0) }, (_, k) => k + 1).filter(
+                (p) => p === b.after_period || !usedByOthers.has(p)
+              );
+              return (
+                <div key={i} className="flex flex-wrap items-center gap-2 py-1.5">
+                  <input
+                    type="text"
+                    value={b.label}
+                    onChange={(e) => updateBreakAt(i, { label: e.target.value })}
+                    className="min-w-0 flex-1"
+                  />
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    after period
+                  </span>
+                  <select
+                    value={b.after_period}
+                    onChange={(e) => updateBreakAt(i, { after_period: Number(e.target.value) })}
+                    className="w-20 rounded-md border px-2 py-1.5 text-sm"
+                    style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+                  >
+                    {rowPositions.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min={1}
+                    max={180}
+                    value={b.duration_minutes}
+                    onChange={(e) => updateBreakAt(i, { duration_minutes: Number(e.target.value) || 1 })}
+                    className="w-16 text-center"
+                  />
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    min
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeBreakAt(i)}
+                    title="Remove this break"
+                    className="flex h-7 w-7 flex-none items-center justify-center rounded-full transition-colors duration-200 hover:bg-[var(--accent-mark-soft)]"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                </div>
+              );
+            })}
             {breaks.length === 0 && (
               <p className="py-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
                 No breaks yet — periods will run back-to-back until you add one.
