@@ -18,6 +18,7 @@ from app.integrations.sharing import get_or_create_share_token, public_report_ur
 from app.parsing.sheet_parser import SheetParseError, parse_uploaded_file, parse_workbook_file
 from app.reports.card_render import render_report_page
 from app.reports.class_stats import compute_class_stats
+from app.reports.subject_analysis import discover_subjects, render_subject_analysis
 
 router = APIRouter(prefix="/batches", tags=["batches"])
 
@@ -194,6 +195,43 @@ def get_report(batch_id: int, ids: str | None = None, current_user=Depends(get_c
             selected = all_students
         settings = repo.settings_from_row(row)
         html = render_report_page(selected, all_students, json.loads(row["exam_order"]), settings, row["school_name"], title=row["name"])
+        return HTMLResponse(content=html)
+
+
+@router.get("/{batch_id}/subjects")
+def get_batch_subjects(batch_id: int, current_user=Depends(get_current_user)):
+    """Every subject name appearing anywhere in this batch, in the same
+    display order as the rest of the app — powers the Subject Analysis
+    picker without needing to recompute stats just to list subjects."""
+    with session() as conn:
+        row = repo.get_batch(conn, current_user["id"], batch_id)
+        if not row:
+            raise HTTPException(404, "Batch not found")
+        all_students = repo.load_batch_students(conn, batch_id)
+        return {"subjects": discover_subjects(all_students)}
+
+
+@router.get("/{batch_id}/subject-analysis", response_class=HTMLResponse)
+def get_subject_analysis(batch_id: int, subject: str, current_user=Depends(get_current_user_from_header_or_query)):
+    """The teacher-facing, whole-class, per-subject analysis report (donuts,
+    Shining/Rising Stars, exam-to-exam comparison, SSC blueprint action
+    plan) — see app/reports/subject_analysis.py. Opened in a new tab the
+    same way /report already is, with the auth token passed as a query
+    param since this is a plain navigation, not a fetch() call."""
+    with session() as conn:
+        row = repo.get_batch(conn, current_user["id"], batch_id)
+        if not row:
+            raise HTTPException(404, "Batch not found")
+        all_students = repo.load_batch_students(conn, batch_id)
+        if not all_students:
+            raise HTTPException(404, "This batch has no students")
+        settings = repo.settings_from_row(row)
+        html = render_subject_analysis(
+            conn, all_students, json.loads(row["exam_order"]), settings,
+            row["class_level"], row["school_name"], row["name"], subject,
+        )
+        if html is None:
+            raise HTTPException(404, "No marks recorded for this subject yet")
         return HTMLResponse(content=html)
 
 

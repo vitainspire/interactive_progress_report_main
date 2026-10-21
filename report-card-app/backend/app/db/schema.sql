@@ -154,3 +154,33 @@ CREATE TABLE IF NOT EXISTS study_plan_cache (
     plan_text TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+-- The official SSC exam BLUEPRINT's marks-weightage per topic — distinct
+-- from syllabus_chapter's textbook table-of-contents (periods/month/page):
+-- the blueprint groups topics differently (e.g. one "Light: Reflection and
+-- Refraction" exam topic spans several syllabus_chapter rows) and carries
+-- how many marks that topic is actually worth in the public exam, which
+-- the textbook TOC doesn't have. Powers the teacher-facing Subject
+-- Analysis report's "study these chapters first" ranking.
+CREATE TABLE IF NOT EXISTS subject_blueprint (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    class_level TEXT NOT NULL DEFAULT '10',
+    subject TEXT NOT NULL,
+    topic_name TEXT NOT NULL,
+    marks INTEGER NOT NULL,
+    choice_marks INTEGER,
+    sort_order INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_subject_blueprint_lookup ON subject_blueprint(class_level, subject);
+
+-- Per-subject exam format (marks/time/question count) and a curated list of
+-- "easy marks" exam-technique tips — also feeds the Subject Analysis
+-- report. One row per (class_level, subject). `tips` is a JSON-encoded
+-- array of strings (same TEXT-holding-JSON convention as batch.exam_order).
+CREATE TABLE IF NOT EXISTS subject_exam_info (
+    class_level TEXT NOT NULL DEFAULT '10',
+    subject TEXT NOT NULL,
+    exam_format TEXT,
+    tips TEXT NOT NULL DEFAULT '[]',
+    PRIMARY KEY (class_level, subject)
+);

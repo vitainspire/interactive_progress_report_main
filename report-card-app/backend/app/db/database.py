@@ -6,6 +6,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from app.core.config import DATABASE_URL
+from app.db.subject_blueprint_seed import seed as seed_subject_blueprint
 from app.db.syllabus_seed import seed as seed_syllabus
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
@@ -98,6 +99,7 @@ def init_db() -> None:
         _migrate_tts_audio_cache(conn)
         _migrate_class_level(conn)
         seed_syllabus(conn)
+        seed_subject_blueprint(conn)
         conn.commit()
 
 

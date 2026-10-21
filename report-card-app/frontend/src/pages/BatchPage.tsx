@@ -338,6 +338,85 @@ function ClassOverview({
   );
 }
 
+/** A printable, whole-class, per-subject report — grade-distribution
+ * donuts, Shining Stars / Rising Stars, exam-to-exam comparison, and an
+ * SSC-blueprint "study these chapters first" action plan. Subjects are
+ * fetched lazily (only once the picker is opened) from every exam in the
+ * batch, not just the one selected_exam ClassOverview shows, so a subject
+ * that only appears in an earlier exam still shows up here. Opens in a new
+ * tab like the "Report" action elsewhere, since it's a full printable page
+ * the teacher may want open alongside this one. */
+function SubjectAnalysis({ batchId }: { batchId: number }) {
+  const [open, setOpen] = useState(false);
+  const [subjects, setSubjects] = useState<string[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function toggle() {
+    if (!open && subjects === null) {
+      setLoading(true);
+      try {
+        const res = await api.get<{ subjects: string[] }>(`/batches/${batchId}/subjects`);
+        setSubjects(res.subjects);
+      } catch {
+        setSubjects([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    setOpen((o) => !o);
+  }
+
+  return (
+    <div className="soft-card p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="icon-chip" style={{ width: "1.75rem", height: "1.75rem" }}>
+          <BarChartIcon size={14} />
+        </span>
+        <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+          Subject Analysis
+        </h2>
+        <button
+          type="button"
+          onClick={toggle}
+          className="ml-auto rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+          style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+        >
+          {open ? "Hide subjects" : "Choose a subject"}
+        </button>
+      </div>
+      <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+        A printable, whole-class report for one subject — grade trends, top performers, students needing attention,
+        and an SSC-blueprint study plan.
+      </p>
+      {open && (
+        <div className="mt-3 flex flex-wrap gap-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
+          {loading && (
+            <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Loading subjects…
+            </span>
+          )}
+          {subjects && subjects.length === 0 && (
+            <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              No subjects found in this upload.
+            </span>
+          )}
+          {subjects?.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => window.open(api.subjectAnalysisUrl(batchId, s), "_blank", "noopener")}
+              className="rounded-full border px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+              style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface SettingsState {
   name: string;
   schoolName: string;
@@ -684,6 +763,8 @@ export function BatchPage() {
       <BatchHeader detail={detail} onDelete={deleteBatch} />
 
       <ClassOverview stats={stats} onChangeExam={changeExam} onSelectStudent={viewOneStudent} />
+
+      <SubjectAnalysis batchId={batchId} />
 
       <SettingsDrawer
         settings={settings}

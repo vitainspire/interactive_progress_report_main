@@ -43,6 +43,10 @@ export const api = {
     if (studentIds && studentIds.length) params.set("ids", studentIds.join(","));
     return `${API_BASE}/batches/${batchId}/report?${params.toString()}`;
   },
+  subjectAnalysisUrl: (batchId: number, subject: string) => {
+    const params = new URLSearchParams({ token: getToken() ?? "", subject });
+    return `${API_BASE}/batches/${batchId}/subject-analysis?${params.toString()}`;
+  },
 };
 
 export { UnauthorizedError };
