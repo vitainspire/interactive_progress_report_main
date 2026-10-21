@@ -162,6 +162,26 @@ def delete_teacher(teacher_id: int, current_user=Depends(get_current_user)):
     return {"ok": True}
 
 
+@router.get("/teachers/{teacher_id}/timetable")
+def get_teacher_timetable(teacher_id: int, current_user=Depends(get_current_user)):
+    with session() as conn:
+        if not repo.get_teacher(conn, current_user["id"], teacher_id):
+            raise HTTPException(404, "Teacher not found")
+        rows = repo.get_teacher_timetable(conn, current_user["id"], teacher_id)
+        return [
+            {
+                "day": r["day"],
+                "period": r["period"],
+                "class_id": r["class_id"],
+                "class_name": f'{r["grade"]} {r["section"]}'.strip(),
+                "subject_id": r["subject_id"],
+                "subject_name": r["subject_name"],
+                "subject_code": r["subject_code"],
+            }
+            for r in rows
+        ]
+
+
 @router.put("/teachers/{teacher_id}/subjects")
 def update_teacher_subjects(teacher_id: int, req: TeacherSubjectsUpdate, current_user=Depends(get_current_user)):
     with session() as conn:

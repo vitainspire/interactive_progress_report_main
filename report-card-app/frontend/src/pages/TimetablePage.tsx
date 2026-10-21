@@ -13,6 +13,7 @@ import type {
   TtSubstituteOptions,
   TtSubstitution,
   TtTeacher,
+  TtTeacherTimetableEntry,
   TtTimetableEntry,
 } from "../types";
 
@@ -329,15 +330,100 @@ function SubjectTogglePill({ label, active, onClick }: { label: string; active: 
   );
 }
 
+function TeacherTimetableModal({
+  teacherId,
+  teacherName,
+  config,
+  onClose,
+}: {
+  teacherId: number;
+  teacherName: string;
+  config: TtSchoolConfig;
+  onClose: () => void;
+}) {
+  const [entries, setEntries] = useState<TtTeacherTimetableEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get<TtTeacherTimetableEntry[]>(`/timetable/teachers/${teacherId}/timetable`)
+      .then(setEntries)
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load this teacher's timetable"));
+  }, [teacherId]);
+
+  const schedule = buildDaySchedule(config.start_time, config.end_time, config.periods_per_day, config.breaks);
+  const workingDays = ALL_DAYS.filter((d) => config.working_days.includes(d));
+  const entryBySlot = new Map<string, TtTeacherTimetableEntry>();
+  entries?.forEach((e) => entryBySlot.set(`${e.day}-${e.period}`, e));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(15,23,42,0.45)" }} onClick={onClose}>
+      <div
+        className="soft-card w-full max-w-3xl overflow-y-auto p-5"
+        style={{ boxShadow: "var(--shadow-pop)", maxHeight: "90vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+            {teacherName}'s timetable
+          </h3>
+          <button type="button" onClick={onClose} className="text-xl leading-none" style={{ color: "var(--text-muted)" }}>
+            ×
+          </button>
+        </div>
+
+        {error && <p className="mt-3 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
+        {!error && !schedule && (
+          <p className="mt-3 text-sm" style={{ color: "var(--accent-mark)" }}>
+            Set up a valid Schedule first before a teacher's timetable can be displayed.
+          </p>
+        )}
+        {schedule && (
+          <div className="mt-3">
+            <WeekGrid
+              schedule={schedule}
+              workingDays={workingDays}
+              renderCell={(day, period) => {
+                const entry = entryBySlot.get(`${day}-${period}`);
+                if (!entry) {
+                  return entries === null ? null : (
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      Free
+                    </span>
+                  );
+                }
+                const [grade, section] = entry.class_name.split(" ");
+                return (
+                  <div>
+                    <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                      Grade {grade}
+                      {section ? ` · ${section}` : ""}
+                    </div>
+                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {entry.subject_name}
+                    </div>
+                  </div>
+                );
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TeachersTab({
   teachers,
   subjects,
+  config,
   onAdd,
   onDelete,
   onUpdateSubjects,
 }: {
   teachers: TtTeacher[];
   subjects: TtSubject[];
+  config: TtSchoolConfig;
   onAdd: (name: string, code: string, maxPeriodsPerDay: number | null, subjectIds: number[]) => Promise<void>;
   onDelete: (id: number) => void;
   onUpdateSubjects: (teacherId: number, subjectIds: number[]) => Promise<void>;
@@ -349,6 +435,7 @@ function TeachersTab({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subjectDrafts, setSubjectDrafts] = useState<Record<number, number[]>>({});
+  const [viewingTeacher, setViewingTeacher] = useState<TtTeacher | null>(null);
 
   function subjectsFor(t: TtTeacher): number[] {
     return subjectDrafts[t.id] ?? t.subject_ids;
@@ -444,7 +531,13 @@ function TeachersTab({
           const dirty = subjectDrafts[t.id] !== undefined;
           return (
             <Row key={t.id} onDelete={() => onDelete(t.id)}>
-              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              <button
+                type="button"
+                onClick={() => setViewingTeacher(t)}
+                title="View this teacher's own timetable"
+                className="text-sm font-medium underline-offset-2 hover:underline"
+                style={{ color: "var(--text-primary)" }}
+              >
                 {t.name}
                 {t.code && <span className="pill ml-2">{t.code}</span>}
                 {t.max_periods_per_day && (
@@ -452,7 +545,7 @@ function TeachersTab({
                     max {t.max_periods_per_day}/day
                   </span>
                 )}
-              </span>
+              </button>
               {subjects.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {subjects.map((s) => (
@@ -476,6 +569,15 @@ function TeachersTab({
         })}
         {teachers.length === 0 && <EmptyHint>No teachers yet — add your first one above.</EmptyHint>}
       </div>
+
+      {viewingTeacher && (
+        <TeacherTimetableModal
+          teacherId={viewingTeacher.id}
+          teacherName={viewingTeacher.name}
+          config={config}
+          onClose={() => setViewingTeacher(null)}
+        />
+      )}
     </Panel>
   );
 }
@@ -1439,7 +1541,14 @@ export function TimetablePage() {
         {loaded && tab === "classes" && <ClassesTab classes={classes} onAdd={addClass} onDelete={deleteClass} />}
         {loaded && tab === "subjects" && <SubjectsTab subjects={subjects} onAdd={addSubject} onDelete={deleteSubject} />}
         {loaded && tab === "teachers" && (
-          <TeachersTab teachers={teachers} subjects={subjects} onAdd={addTeacher} onDelete={deleteTeacher} onUpdateSubjects={updateTeacherSubjects} />
+          <TeachersTab
+            teachers={teachers}
+            subjects={subjects}
+            config={config}
+            onAdd={addTeacher}
+            onDelete={deleteTeacher}
+            onUpdateSubjects={updateTeacherSubjects}
+          />
         )}
         {loaded && tab === "assignments" && <AssignmentsTab classes={classes} subjects={subjects} teachers={teachers} />}
         {loaded && tab === "timetable" && <GeneratedTimetableTab classes={classes} config={config} onGenerate={runGenerate} />}

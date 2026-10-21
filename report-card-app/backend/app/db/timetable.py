@@ -381,3 +381,19 @@ def list_substitutions(conn: psycopg.Connection, class_id: int, date: str) -> li
 def delete_substitution(conn: psycopg.Connection, class_id: int, date: str, period: int) -> bool:
     cur = conn.execute("DELETE FROM tt_substitution WHERE class_id = %s AND date = %s AND period = %s", (class_id, date, period))
     return cur.rowcount > 0
+
+
+def get_teacher_timetable(conn: psycopg.Connection, user_id: int, teacher_id: int) -> list[dict]:
+    """One teacher's own week — every class they're in, period by period —
+    the same underlying generated data as a class's timetable, just
+    re-grouped by teacher instead of by class."""
+    return conn.execute(
+        """SELECT te.day, te.period, te.class_id, c.grade, c.section,
+                  te.subject_id, s.name AS subject_name, s.code AS subject_code
+           FROM tt_timetable_entry te
+           JOIN tt_class c ON c.id = te.class_id
+           JOIN tt_subject s ON s.id = te.subject_id
+           WHERE te.teacher_id = %s AND c.user_id = %s
+           ORDER BY te.day, te.period""",
+        (teacher_id, user_id),
+    ).fetchall()
