@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { LogoutIcon, PlugIcon } from "./Icons";
+import { LogoutIcon, PlugIcon, SchoolIcon } from "./Icons";
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -16,7 +16,9 @@ export function Layout() {
       <header style={{ background: "var(--surface-1)", borderBottom: "1px solid var(--border)" }}>
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-3.5">
           <Link to="/tools" className="flex items-center gap-3">
-            <div className="icon-chip" style={{ fontWeight: 700 }}>RC</div>
+            <div className="icon-chip">
+              <SchoolIcon size={18} />
+            </div>
             <div className="font-display text-lg font-bold" style={{ color: "var(--text-primary)" }}>
               School Admin Tools
             </div>

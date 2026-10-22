@@ -261,3 +261,13 @@ export function GridIcon({ size = 18, className }: IconProps) {
     </svg>
   );
 }
+
+export function SchoolIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...base} stroke="currentColor">
+      <path d="M2 8.5L12 4l10 4.5-10 4.5-10-4.5z" />
+      <path d="M6 10.6v4.9c0 1.6 2.7 2.9 6 2.9s6-1.3 6-2.9v-4.9" />
+      <path d="M21 8.5v6" />
+    </svg>
+  );
+}

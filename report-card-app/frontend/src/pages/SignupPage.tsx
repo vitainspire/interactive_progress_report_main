@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { EyeIcon, EyeOffIcon } from "../components/Icons";
+import { EyeIcon, EyeOffIcon, SchoolIcon } from "../components/Icons";
 
 export function SignupPage() {
   const { user, signup } = useAuth();
@@ -33,8 +33,8 @@ export function SignupPage() {
     <main className="flex min-h-screen items-center justify-center px-4 py-10" style={{ background: "var(--page-plane)" }}>
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center text-center">
-          <span className="icon-chip" style={{ width: "3rem", height: "3rem", fontWeight: 700 }}>
-            RC
+          <span className="icon-chip" style={{ width: "3rem", height: "3rem" }}>
+            <SchoolIcon size={26} />
           </span>
           <div className="font-display mt-3 text-xl font-bold" style={{ color: "var(--text-primary)" }}>
             School Admin Tools

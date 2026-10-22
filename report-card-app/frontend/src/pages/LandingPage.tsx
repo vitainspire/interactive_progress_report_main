@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
-import { BarChartIcon, CalendarIcon, SheetIcon, SpeakerWaveIcon, TeluguGlyphIcon } from "../components/Icons";
-import classOverviewScreenshot from "../assets/landing/class-overview.png";
+import { BarChartIcon, CalendarIcon, SchoolIcon, SheetIcon, SpeakerWaveIcon, TeluguGlyphIcon } from "../components/Icons";
 import reportCardScreenshot from "../assets/landing/report-card.png";
 import timetableScreenshot from "../assets/landing/timetable.png";
 import leaveQueueScreenshot from "../assets/landing/leave-queue.png";
@@ -39,34 +38,13 @@ function Feature({ icon, title, body }: { icon: React.ReactNode; title: string; 
   );
 }
 
-function Step({ n, title, body }: { n: string; title: string; body: string }) {
-  return (
-    <div className="flex gap-4">
-      <div
-        className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-sm font-bold"
-        style={{ background: "var(--lp-navy)", color: "#fff" }}
-      >
-        {n}
-      </div>
-      <div>
-        <h3 className="font-semibold" style={{ color: "var(--text-primary)" }}>
-          {title}
-        </h3>
-        <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-          {body}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export function LandingPage() {
   return (
     <div style={{ background: "var(--page-plane)" }}>
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <div className="flex items-center gap-2.5">
-          <span className="icon-chip font-display" style={{ width: "2.2rem", height: "2.2rem", fontWeight: 700 }}>
-            RC
+          <span className="icon-chip" style={{ width: "2.2rem", height: "2.2rem" }}>
+            <SchoolIcon size={18} />
           </span>
           <span className="hidden font-display text-base font-bold sm:inline" style={{ color: "var(--text-primary)" }}>
             School Admin Tools
@@ -194,55 +172,6 @@ export function LandingPage() {
               title="A printable analysis for every subject"
               body="Pick any subject and see grade trends, top performers, and students needing attention for the whole class — plus which exam chapters are worth the most marks, from the real SSC blueprint."
             />
-          </div>
-        </section>
-
-        <section className="border-y" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
-          <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-16 md:grid-cols-2 md:py-24">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>
-                Report Card Generator
-              </p>
-              <span className="mt-4 icon-chip" style={{ width: "2.2rem", height: "2.2rem" }}>
-                <BarChartIcon size={18} />
-              </span>
-              <h2
-                className="mt-4 font-serif text-2xl font-semibold md:text-3xl"
-                style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}
-              >
-                See the whole class at a glance
-              </h2>
-              <p className="mt-4 max-w-md text-base leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                Pass rate, grade distribution, subject averages, and who needs attention — computed the moment you
-                upload, from the same sheet, no extra work. This is the real dashboard, not a mockup.
-              </p>
-            </div>
-            <div className="overflow-hidden rounded-lg" style={{ boxShadow: "var(--shadow-pop)", border: "1px solid rgba(15,23,42,0.08)" }}>
-              <img
-                src={classOverviewScreenshot}
-                alt="The real class overview dashboard: pass rate, grade distribution, subject averages, top performers, and students needing attention"
-                className="block w-full"
-              />
-            </div>
-          </div>
-
-          <div className="mx-auto max-w-3xl border-t px-6 py-16 md:py-24" style={{ borderColor: "var(--border)" }}>
-            <h2 className="font-serif text-2xl font-semibold md:text-3xl" style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}>
-              How it works
-            </h2>
-            <div className="mt-10 space-y-8">
-              <Step n="1" title="Upload your marks sheet" body="An Excel file, a CSV export, or a Google Sheets link — whatever your school already uses." />
-              <Step
-                n="2"
-                title="Check the class overview"
-                body="See pass rate, grade distribution, and who needs attention before anything goes out."
-              />
-              <Step
-                n="3"
-                title="Print or send"
-                body="Print the full set for your records, or send each parent their own child's link over WhatsApp or SMS."
-              />
-            </div>
           </div>
         </section>
 
