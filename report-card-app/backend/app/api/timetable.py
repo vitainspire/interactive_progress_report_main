@@ -12,6 +12,7 @@ from app.db import timetable as repo
 from app.db.database import session
 from app.integrations import sms
 from app.integrations.phone import InvalidPhoneNumber, normalize_phone
+from app.reports.substitution_sheet import render_substitution_sheet
 from app.reports.timetable_print import render_class_timetable_print
 from app.timetable.generator import ClassSpec, SubjectRequirement, generate_timetable
 
@@ -636,6 +637,51 @@ def remove_substitution(class_id: int, date: str, period: int, current_user=Depe
         if not repo.delete_substitution(conn, class_id, date, period):
             raise HTTPException(404, "No substitution found for this date/period")
     return {"ok": True}
+
+
+@router.get("/substitutions/sheet", response_class=HTMLResponse)
+def print_substitution_sheet(date: str, current_user=Depends(get_current_user_from_header_or_query)):
+    """One printable page listing every confirmed substitution across the
+    whole school for this date — for the staff noticeboard, not scoped
+    to a single class like /classes/{id}/timetable/print."""
+    if not _DATE_RE.match(date):
+        raise HTTPException(422, "date must be in YYYY-MM-DD format")
+    with session() as conn:
+        rows = repo.list_substitutions_for_account(conn, current_user["id"], date)
+        html_out = render_substitution_sheet(current_user["default_school_name"] or "School", date, rows)
+        return HTMLResponse(content=html_out)
+
+
+def _substitution_notify_out(r: dict, status: str) -> dict:
+    return {
+        "class_name": _class_label(r),
+        "period": r["period"],
+        "subject_name": r["subject_name"],
+        "substitute_teacher_name": r["substitute_teacher_name"],
+        "substitute_teacher_code": r["substitute_teacher_code"],
+        "notify_status": status,
+    }
+
+
+@router.post("/substitutions/notify")
+def notify_substitutes(date: str, current_user=Depends(get_current_user)):
+    """(Re)sends the substitute-coverage SMS for every confirmed
+    substitution on this date in one action — for when the automatic
+    per-confirm send failed, wasn't configured yet at the time, or the
+    admin just wants to be sure everyone's been told before the day
+    starts."""
+    if not _DATE_RE.match(date):
+        raise HTTPException(422, "date must be in YYYY-MM-DD format")
+    with session() as conn:
+        rows = repo.list_substitutions_for_account(conn, current_user["id"], date)
+        results = []
+        for r in rows:
+            class_row = {"grade": r["grade"], "section": r["section"]}
+            entry = {"subject_name": r["subject_name"], "teacher_name": r["original_teacher_name"], "period": r["period"]}
+            substitute = {"phone": r["substitute_teacher_phone"]}
+            status = _notify_substitute(current_user, class_row, entry, date, substitute)
+            results.append(_substitution_notify_out(r, status))
+        return results
 
 
 # ---- Planned leave ----

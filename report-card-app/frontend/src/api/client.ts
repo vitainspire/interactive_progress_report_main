@@ -51,6 +51,10 @@ export const api = {
     const params = new URLSearchParams({ token: getToken() ?? "" });
     return `${API_BASE}/timetable/classes/${classId}/timetable/print?${params.toString()}`;
   },
+  substitutionSheetUrl: (date: string) => {
+    const params = new URLSearchParams({ token: getToken() ?? "", date });
+    return `${API_BASE}/timetable/substitutions/sheet?${params.toString()}`;
+  },
 };
 
 export { UnauthorizedError };

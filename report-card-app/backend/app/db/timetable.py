@@ -417,6 +417,27 @@ def create_or_update_substitution(
     return row["id"]
 
 
+def list_substitutions_for_account(conn: psycopg.Connection, user_id: int, date: str) -> list[dict]:
+    """Every confirmed substitution across the whole school for one date —
+    powers the printable staff-noticeboard sheet and the batch "notify
+    substitutes" action, so neither has to loop class by class."""
+    return conn.execute(
+        """SELECT sub.class_id, c.grade, c.section, sub.day, sub.period,
+                  sub.subject_id, s.name AS subject_name,
+                  sub.original_teacher_id, ot.name AS original_teacher_name,
+                  sub.substitute_teacher_id, st.name AS substitute_teacher_name,
+                  st.code AS substitute_teacher_code, st.phone AS substitute_teacher_phone
+           FROM tt_substitution sub
+           JOIN tt_class c ON c.id = sub.class_id
+           LEFT JOIN tt_subject s ON s.id = sub.subject_id
+           LEFT JOIN tt_teacher ot ON ot.id = sub.original_teacher_id
+           JOIN tt_teacher st ON st.id = sub.substitute_teacher_id
+           WHERE c.user_id = %s AND sub.date = %s
+           ORDER BY sub.period, c.grade, c.section""",
+        (user_id, date),
+    ).fetchall()
+
+
 def list_substitutions(conn: psycopg.Connection, class_id: int, date: str) -> list[dict]:
     return conn.execute(
         """SELECT sub.period, sub.day, sub.subject_id, s.name AS subject_name,

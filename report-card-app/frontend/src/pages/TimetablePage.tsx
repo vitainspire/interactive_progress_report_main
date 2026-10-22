@@ -13,6 +13,7 @@ import type {
   TtSubject,
   TtNotifyStatus,
   TtSubstituteCandidate,
+  TtSubstituteNotifyResult,
   TtSubstituteOptions,
   TtSubstitution,
   TtSubstitutionResult,
@@ -1251,6 +1252,20 @@ function GeneratedTimetableTab({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TtGenerateResult | null>(null);
+  const [notifying, setNotifying] = useState(false);
+  const [notifyResults, setNotifyResults] = useState<TtSubstituteNotifyResult[] | null>(null);
+
+  async function notifySubstitutes() {
+    setNotifying(true);
+    setError(null);
+    try {
+      setNotifyResults(await api.post<TtSubstituteNotifyResult[]>(`/timetable/substitutions/notify?date=${viewDate}`));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not notify substitutes");
+    } finally {
+      setNotifying(false);
+    }
+  }
 
   const schedule = buildDaySchedule(config.start_time, config.end_time, config.periods_per_day, config.breaks);
   const workingDays = ALL_DAYS.filter((d) => config.working_days.includes(d));
@@ -1336,9 +1351,46 @@ function GeneratedTimetableTab({
             Print this class
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => window.open(api.substitutionSheetUrl(viewDate), "_blank", "noopener")}
+          className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+          style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+        >
+          <PrinterIcon size={15} />
+          Print substitutes for {viewDate}
+        </button>
+        <button
+          type="button"
+          onClick={notifySubstitutes}
+          disabled={notifying}
+          className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-60"
+          style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+        >
+          {notifying ? "Notifying…" : "Notify substitutes"}
+        </button>
       </div>
 
       {error && <p className="mt-3 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
+
+      {notifyResults && (
+        <div className="mt-3 rounded-lg p-3 text-sm soft-card">
+          {notifyResults.length === 0 ? (
+            <p style={{ color: "var(--text-secondary)" }}>No confirmed substitutions for {viewDate}.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {notifyResults.map((r, i) => (
+                <li key={i} style={{ color: "var(--text-secondary)" }}>
+                  <strong style={{ color: "var(--text-primary)" }}>
+                    {r.class_name} · Period {r.period}
+                  </strong>{" "}
+                  — {r.substitute_teacher_name} ({r.substitute_teacher_code}): {notifyNote(r.notify_status) || r.notify_status}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {result && (
         <div className="mt-3 rounded-lg p-3 text-sm" style={{ background: result.ok ? "var(--status-good-soft)" : "var(--accent-mark-soft)" }}>
@@ -1465,7 +1517,7 @@ function LeaveTab({
   pendingNeeds: TtPendingNeed[] | null;
   onAddLeave: (teacherId: number, startDate: string, endDate: string, reason: string) => Promise<void>;
   onDeleteLeave: (id: number) => void;
-  onConfirmNeed: (need: TtPendingNeed, substituteTeacherId: number) => Promise<void>;
+  onConfirmNeed: (need: TtPendingNeed, substituteTeacherId: number) => Promise<TtSubstitutionResult>;
   onRefreshPending: () => void;
 }) {
   const [teacherId, setTeacherId] = useState<number | "">("");
@@ -1476,6 +1528,7 @@ function LeaveTab({
   const [error, setError] = useState<string | null>(null);
   const [picks, setPicks] = useState<Record<string, number>>({});
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [lastConfirmed, setLastConfirmed] = useState<{ text: string; status: TtNotifyStatus } | null>(null);
 
   function needKey(n: TtPendingNeed): string {
     return `${n.leave_id}-${n.class_id}-${n.date}-${n.period}`;
@@ -1504,7 +1557,11 @@ function LeaveTab({
     if (!chosen) return;
     setConfirming(key);
     try {
-      await onConfirmNeed(n, chosen);
+      const result = await onConfirmNeed(n, chosen);
+      setLastConfirmed({
+        text: `${n.class_name} · Period ${n.period} — ${result.substitute_teacher_name}`,
+        status: result.notify_status,
+      });
     } finally {
       setConfirming(null);
     }
@@ -1584,6 +1641,12 @@ function LeaveTab({
         <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
           Every period a leave above affects, with its top-ranked substitute suggested — pick someone else if you'd rather, then confirm.
         </p>
+
+        {lastConfirmed && (
+          <div className="mt-3 rounded-lg p-2.5 text-xs" style={{ background: "var(--status-good-soft)", color: "var(--status-good)" }}>
+            Confirmed: {lastConfirmed.text}. {notifyNote(lastConfirmed.status)}
+          </div>
+        )}
 
         {pendingNeeds === null && (
           <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -2070,14 +2133,15 @@ export function TimetablePage() {
     refreshPendingNeeds();
   }
 
-  async function confirmNeed(need: TtPendingNeed, substituteTeacherId: number) {
-    await api.post<TtSubstitutionResult>(`/timetable/classes/${need.class_id}/substitutions`, {
+  async function confirmNeed(need: TtPendingNeed, substituteTeacherId: number): Promise<TtSubstitutionResult> {
+    const result = await api.post<TtSubstitutionResult>(`/timetable/classes/${need.class_id}/substitutions`, {
       date: need.date,
       day: need.day,
       period: need.period,
       substitute_teacher_id: substituteTeacherId,
     });
     refreshPendingNeeds();
+    return result;
   }
 
   async function saveConfig(next: TtSchoolConfig) {

@@ -180,6 +180,15 @@ export interface TtSubstitutionResult extends TtSubstitution {
   notify_status: TtNotifyStatus;
 }
 
+export interface TtSubstituteNotifyResult {
+  class_name: string;
+  period: number;
+  subject_name: string | null;
+  substitute_teacher_name: string;
+  substitute_teacher_code: string;
+  notify_status: TtNotifyStatus;
+}
+
 export interface TtLeave {
   id: number;
   teacher_id: number;
