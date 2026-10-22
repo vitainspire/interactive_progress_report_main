@@ -7,6 +7,8 @@ import type {
   TtClass,
   TtClassSubject,
   TtGenerateResult,
+  TtLeave,
+  TtPendingNeed,
   TtSchoolConfig,
   TtSubject,
   TtNotifyStatus,
@@ -19,16 +21,22 @@ import type {
   TtTimetableEntry,
 } from "../types";
 
-type Tab = "classes" | "subjects" | "teachers" | "assignments" | "schedule" | "timetable";
+type Tab = "classes" | "subjects" | "teachers" | "assignments" | "schedule" | "timetable" | "leave";
 
-const TABS: { id: Tab; label: string }[] = [
+const SETUP_TABS: { id: Tab; label: string }[] = [
   { id: "schedule", label: "Schedule" },
   { id: "classes", label: "Classes" },
   { id: "subjects", label: "Subjects" },
   { id: "teachers", label: "Teachers" },
   { id: "assignments", label: "Assignments" },
-  { id: "timetable", label: "Timetable" },
 ];
+
+const PRIMARY_TABS: { id: Tab; label: string }[] = [
+  { id: "timetable", label: "Timetable" },
+  { id: "leave", label: "Leave" },
+];
+
+const SETUP_TAB_IDS = new Set<Tab>(SETUP_TABS.map((t) => t.id));
 
 const ALL_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const DAY_LABEL: Record<string, string> = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
@@ -1443,6 +1451,205 @@ function GeneratedTimetableTab({
   );
 }
 
+function LeaveTab({
+  teachers,
+  leaves,
+  pendingNeeds,
+  onAddLeave,
+  onDeleteLeave,
+  onConfirmNeed,
+  onRefreshPending,
+}: {
+  teachers: TtTeacher[];
+  leaves: TtLeave[];
+  pendingNeeds: TtPendingNeed[] | null;
+  onAddLeave: (teacherId: number, startDate: string, endDate: string, reason: string) => Promise<void>;
+  onDeleteLeave: (id: number) => void;
+  onConfirmNeed: (need: TtPendingNeed, substituteTeacherId: number) => Promise<void>;
+  onRefreshPending: () => void;
+}) {
+  const [teacherId, setTeacherId] = useState<number | "">("");
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(todayStr);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [picks, setPicks] = useState<Record<string, number>>({});
+  const [confirming, setConfirming] = useState<string | null>(null);
+
+  function needKey(n: TtPendingNeed): string {
+    return `${n.leave_id}-${n.class_id}-${n.date}-${n.period}`;
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (teacherId === "") return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onAddLeave(teacherId, startDate, endDate, reason.trim());
+      setTeacherId("");
+      setReason("");
+      onRefreshPending();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add this leave");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirm(n: TtPendingNeed) {
+    const key = needKey(n);
+    const chosen = picks[key] ?? n.candidates[0]?.teacher_id;
+    if (!chosen) return;
+    setConfirming(key);
+    try {
+      await onConfirmNeed(n, chosen);
+    } finally {
+      setConfirming(null);
+    }
+  }
+
+  return (
+    <Panel
+      title="Leave"
+      hint="Enter a teacher's upcoming leave here. Nothing is assigned automatically — you'll see a ranked suggestion for every period it affects and confirm each one yourself."
+    >
+      <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
+        <div className="w-52">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Teacher
+          </label>
+          <select
+            value={teacherId}
+            onChange={(e) => setTeacherId(e.target.value ? Number(e.target.value) : "")}
+            className="w-full rounded-md border px-3 py-2 text-sm font-medium"
+            style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+            required
+          >
+            <option value="">Choose a teacher…</option>
+            {teachers.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.code ? ` (${t.code})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="w-40">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            From
+          </label>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+        </div>
+        <div className="w-40">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            To
+          </label>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+        </div>
+        <div className="w-44">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Reason (optional)
+          </label>
+          <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Medical leave" />
+        </div>
+        <button type="submit" disabled={busy || teacherId === ""} className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+          <PlusIcon size={14} />
+          Add leave
+        </button>
+      </form>
+      {error && <p className="mt-2 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
+
+      <div className="mt-4 divide-y" style={{ borderColor: "var(--border)" }}>
+        {leaves.map((l) => (
+          <Row key={l.id} onDelete={() => onDeleteLeave(l.id)}>
+            <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              {l.teacher_name}
+              {l.teacher_code && <span className="pill ml-2">{l.teacher_code}</span>}
+              <span className="ml-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                {l.start_date} → {l.end_date}
+                {l.reason ? ` · ${l.reason}` : ""}
+              </span>
+            </span>
+          </Row>
+        ))}
+        {leaves.length === 0 && <EmptyHint>No leave entered yet — add one above.</EmptyHint>}
+      </div>
+
+      <div className="mt-6 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+        <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          Needs review{pendingNeeds && pendingNeeds.length > 0 ? ` (${pendingNeeds.length})` : ""}
+        </h3>
+        <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
+          Every period a leave above affects, with its top-ranked substitute suggested — pick someone else if you'd rather, then confirm.
+        </p>
+
+        {pendingNeeds === null && (
+          <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
+            Loading…
+          </p>
+        )}
+        {pendingNeeds && pendingNeeds.length === 0 && (
+          <p className="mt-3 text-sm" style={{ color: "var(--status-good)" }}>
+            Nothing waiting on you — every affected period already has a confirmed substitute, or there's no leave entered.
+          </p>
+        )}
+        {pendingNeeds && pendingNeeds.length > 0 && (
+          <div className="mt-3 divide-y" style={{ borderColor: "var(--border)" }}>
+            {pendingNeeds.map((n) => {
+              const key = needKey(n);
+              const chosen = picks[key] ?? n.candidates[0]?.teacher_id ?? "";
+              return (
+                <div key={key} className="flex flex-wrap items-center gap-2 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                      {n.date} ({DAY_LABEL[n.day]}), Period {n.period}
+                    </div>
+                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {n.class_name} · {n.subject_name} — {n.teacher_name} on leave
+                    </div>
+                  </div>
+                  {n.candidates.length > 0 ? (
+                    <>
+                      <select
+                        value={chosen}
+                        onChange={(e) => setPicks((prev) => ({ ...prev, [key]: Number(e.target.value) }))}
+                        className="min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm"
+                        style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)", maxWidth: 220 }}
+                      >
+                        {n.candidates.map((c) => (
+                          <option key={c.teacher_id} value={c.teacher_id}>
+                            {c.teacher_name}
+                            {c.teacher_code ? ` (${c.teacher_code})` : ""} —{" "}
+                            {c.reason === "subject" ? "teaches this subject" : c.reason === "class" ? "teaches this class" : "free"}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => confirm(n)}
+                        disabled={confirming === key}
+                        className="accent-fill flex-none rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                      >
+                        {confirming === key ? "Confirming…" : "Confirm"}
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs" style={{ color: "var(--accent-mark)" }}>
+                      No teacher is free at this period.
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
 function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (config: TtSchoolConfig) => Promise<void> }) {
   const [days, setDays] = useState<Set<string>>(new Set(config.working_days));
   const [periodsPerDay, setPeriodsPerDay] = useState(String(config.periods_per_day));
@@ -1746,7 +1953,27 @@ export function TimetablePage() {
   const [subjects, setSubjects] = useState<TtSubject[] | null>(null);
   const [teachers, setTeachers] = useState<TtTeacher[] | null>(null);
   const [config, setConfig] = useState<TtSchoolConfig | null>(null);
+  const [leaves, setLeaves] = useState<TtLeave[]>([]);
+  const [pendingNeeds, setPendingNeeds] = useState<TtPendingNeed[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hasTimetable, setHasTimetable] = useState<boolean | null>(null);
+  const [setupOpen, setSetupOpen] = useState(true);
+
+  function closeSetup() {
+    setSetupOpen(false);
+    setTab((prev) => (SETUP_TAB_IDS.has(prev) ? "timetable" : prev));
+  }
+
+  function refreshLeaves() {
+    api.get<TtLeave[]>("/timetable/leaves").then(setLeaves).catch(() => {});
+  }
+
+  function refreshPendingNeeds() {
+    api
+      .get<TtPendingNeed[]>("/timetable/leaves/pending")
+      .then(setPendingNeeds)
+      .catch(() => setPendingNeeds([]));
+  }
 
   useEffect(() => {
     Promise.all([
@@ -1762,6 +1989,18 @@ export function TimetablePage() {
         setConfig(cfg);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load the timetable setup"));
+    api
+      .get<{ has_timetable: boolean }>("/timetable/status")
+      .then(({ has_timetable }) => {
+        setHasTimetable(has_timetable);
+        if (has_timetable) {
+          setTab("timetable");
+          setSetupOpen(false);
+        }
+      })
+      .catch(() => setHasTimetable(false));
+    refreshLeaves();
+    refreshPendingNeeds();
   }, []);
 
   async function addClass(grade: string, section: string) {
@@ -1815,13 +2054,42 @@ export function TimetablePage() {
     setTeachers((prev) => prev?.map((t) => (t.id === teacherId ? updated : t)) ?? prev);
   }
 
+  async function addLeave(teacherId: number, startDate: string, endDate: string, reason: string) {
+    const created = await api.post<TtLeave>("/timetable/leaves", {
+      teacher_id: teacherId,
+      start_date: startDate,
+      end_date: endDate,
+      reason,
+    });
+    setLeaves((prev) => [...prev, created]);
+  }
+
+  async function deleteLeave(id: number) {
+    await api.del(`/timetable/leaves/${id}`);
+    setLeaves((prev) => prev.filter((l) => l.id !== id));
+    refreshPendingNeeds();
+  }
+
+  async function confirmNeed(need: TtPendingNeed, substituteTeacherId: number) {
+    await api.post<TtSubstitutionResult>(`/timetable/classes/${need.class_id}/substitutions`, {
+      date: need.date,
+      day: need.day,
+      period: need.period,
+      substitute_teacher_id: substituteTeacherId,
+    });
+    refreshPendingNeeds();
+  }
+
   async function saveConfig(next: TtSchoolConfig) {
     const updated = await api.put<TtSchoolConfig>("/timetable/config", next);
     setConfig(updated);
   }
 
   async function runGenerate(): Promise<TtGenerateResult> {
-    return api.post<TtGenerateResult>("/timetable/generate");
+    const result = await api.post<TtGenerateResult>("/timetable/generate");
+    setHasTimetable(true);
+    setSetupOpen(false);
+    return result;
   }
 
   const loaded = classes && subjects && teachers && config;
@@ -1839,15 +2107,16 @@ export function TimetablePage() {
           Timetable Creator
         </h1>
         <p className="mt-1 max-w-2xl text-sm" style={{ color: "var(--text-secondary)" }}>
-          Set up your classes, subjects, and teachers here. Once this is in place, the automatic weekly timetable
-          generator and substitute-teacher assignment will build on exactly this data.
+          {hasTimetable
+            ? "Your weekly timetable and substitute coverage, at a glance. Need to add a class or teacher? Open Setup below."
+            : "Set up your schedule, classes, subjects, and teachers here, then generate the weekly timetable. Once it's in place, substitute-teacher assignment builds on exactly this data."}
         </p>
       </header>
 
       {error && <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>{error}</p>}
 
-      <div className="mt-5 flex flex-wrap gap-1.5">
-        {TABS.map((t) => (
+      <div className="mt-5 flex flex-wrap items-center gap-1.5">
+        {PRIMARY_TABS.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -1860,9 +2129,56 @@ export function TimetablePage() {
             }
           >
             {t.label}
+            {t.id === "leave" && pendingNeeds && pendingNeeds.length > 0 && (
+              <span
+                className="ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold"
+                style={
+                  tab === t.id
+                    ? { background: "#fff", color: "var(--accent)" }
+                    : { background: "var(--accent-mark)", color: "#fff" }
+                }
+              >
+                {pendingNeeds.length}
+              </span>
+            )}
           </button>
         ))}
+        {hasTimetable && !setupOpen && (
+          <button
+            type="button"
+            onClick={() => setSetupOpen(true)}
+            className="rounded-full border border-dashed px-3.5 py-1.5 text-sm font-medium"
+            style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
+          >
+            Setup (classes, subjects, teachers…)
+          </button>
+        )}
       </div>
+
+      {(setupOpen || !hasTimetable) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {SETUP_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className="rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200"
+              style={
+                tab === t.id
+                  ? { background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" }
+                  : { borderColor: "var(--border)", color: "var(--text-secondary)" }
+              }
+            >
+              {t.label}
+            </button>
+          ))}
+          {hasTimetable && (
+            <button type="button" onClick={closeSetup} className="text-xs underline" style={{ color: "var(--text-muted)" }}>
+              Hide setup
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="mt-4">
         {!loaded && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading…</p>}
@@ -1892,6 +2208,17 @@ export function TimetablePage() {
           <GeneratedTimetableTab classes={classes} teachers={teachers} config={config} onGenerate={runGenerate} />
         )}
         {loaded && tab === "schedule" && <ScheduleTab config={config} onSave={saveConfig} />}
+        {loaded && tab === "leave" && (
+          <LeaveTab
+            teachers={teachers}
+            leaves={leaves}
+            pendingNeeds={pendingNeeds}
+            onAddLeave={addLeave}
+            onDeleteLeave={deleteLeave}
+            onConfirmNeed={confirmNeed}
+            onRefreshPending={refreshPendingNeeds}
+          />
+        )}
       </div>
     </section>
   );

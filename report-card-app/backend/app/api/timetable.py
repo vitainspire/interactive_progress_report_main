@@ -1,5 +1,7 @@
 import json
 import re
+from datetime import date as date_cls
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -326,6 +328,15 @@ def get_config(current_user=Depends(get_current_user)):
         return repo.get_school_config(conn, current_user["id"])
 
 
+@router.get("/status")
+def get_status(current_user=Depends(get_current_user)):
+    """Whether this account has ever generated a timetable — the signal
+    the frontend uses to decide between the first-time setup wizard and
+    the day-to-day Timetable/Leave view."""
+    with session() as conn:
+        return {"has_timetable": repo.has_generated_timetable(conn, current_user["id"])}
+
+
 @router.put("/config")
 def update_config(req: SchoolConfigUpdate, current_user=Depends(get_current_user)):
     days = [d.strip().upper() for d in req.working_days if d.strip()]
@@ -625,3 +636,115 @@ def remove_substitution(class_id: int, date: str, period: int, current_user=Depe
         if not repo.delete_substitution(conn, class_id, date, period):
             raise HTTPException(404, "No substitution found for this date/period")
     return {"ok": True}
+
+
+# ---- Planned leave ----
+
+_WEEKDAY_CODES = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+_MAX_LEAVE_DAYS = 31  # guards against an accidental 10-year range blowing up the pending-needs scan
+
+
+def _leave_out(row: dict) -> dict:
+    return {
+        "id": row["id"],
+        "teacher_id": row["teacher_id"],
+        "teacher_name": row["teacher_name"],
+        "teacher_code": row["teacher_code"],
+        "start_date": row["start_date"],
+        "end_date": row["end_date"],
+        "reason": row["reason"],
+    }
+
+
+class LeaveCreate(BaseModel):
+    teacher_id: int
+    start_date: str
+    end_date: str
+    reason: str = ""
+
+
+@router.get("/leaves")
+def list_leaves(current_user=Depends(get_current_user)):
+    with session() as conn:
+        return [_leave_out(r) for r in repo.list_leaves(conn, current_user["id"])]
+
+
+@router.post("/leaves")
+def create_leave(req: LeaveCreate, current_user=Depends(get_current_user)):
+    if not _DATE_RE.match(req.start_date) or not _DATE_RE.match(req.end_date):
+        raise HTTPException(422, "Dates must be in YYYY-MM-DD format")
+    if req.end_date < req.start_date:
+        raise HTTPException(422, "End date must be on or after the start date")
+    if (date_cls.fromisoformat(req.end_date) - date_cls.fromisoformat(req.start_date)).days + 1 > _MAX_LEAVE_DAYS:
+        raise HTTPException(422, f"A single leave can span at most {_MAX_LEAVE_DAYS} days")
+    with session() as conn:
+        if not repo.get_teacher(conn, current_user["id"], req.teacher_id):
+            raise HTTPException(404, "Teacher not found")
+        leave_id = repo.create_leave(conn, req.teacher_id, req.start_date, req.end_date, req.reason.strip())
+        return _leave_out(repo.get_leave(conn, leave_id))
+
+
+@router.delete("/leaves/{leave_id}")
+def delete_leave(leave_id: int, current_user=Depends(get_current_user)):
+    with session() as conn:
+        if not repo.delete_leave(conn, current_user["id"], leave_id):
+            raise HTTPException(404, "Leave not found")
+    return {"ok": True}
+
+
+@router.get("/leaves/pending")
+def get_pending_substitution_needs(current_user=Depends(get_current_user)):
+    """Everything a planned leave will leave uncovered unless someone
+    confirms a substitute — the review queue. Never assigns anyone by
+    itself: each entry just carries the same ranked-candidate list the
+    single-day absence flow uses, for the admin to confirm or override."""
+    with session() as conn:
+        leaves = repo.list_leaves(conn, current_user["id"])
+        if not leaves:
+            return []
+
+        min_date = min(leave["start_date"] for leave in leaves)
+        max_date = max(leave["end_date"] for leave in leaves)
+        ctx = repo.pending_substitution_context(conn, current_user["id"], min_date, max_date)
+
+        needs = []
+        for leave in leaves:
+            start = date_cls.fromisoformat(leave["start_date"])
+            end = date_cls.fromisoformat(leave["end_date"])
+            d = start
+            while d <= end:
+                date_str = d.isoformat()
+                weekday = _WEEKDAY_CODES[d.weekday()]
+                for entry in ctx["entries_by_teacher_day"].get((leave["teacher_id"], weekday), []):
+                    if (entry["class_id"], date_str, entry["period"]) in ctx["existing_substitutions"]:
+                        continue
+                    busy = (
+                        ctx["busy_by_day_period"].get((weekday, entry["period"]), set())
+                        | ctx["busy_substituting_by_date_period"].get((date_str, entry["period"]), set())
+                        | {leave["teacher_id"]}
+                    )
+                    candidates = repo.rank_candidates(
+                        ctx["teachers"],
+                        busy,
+                        ctx["same_subject_by_subject"].get(entry["subject_id"], set()),
+                        ctx["teachers_by_class"].get(entry["class_id"], set()),
+                    )
+                    class_label = f'Grade {entry["grade"]} · {entry["section"]}' if entry["section"] else f'Grade {entry["grade"]}'
+                    needs.append(
+                        {
+                            "leave_id": leave["id"],
+                            "teacher_id": leave["teacher_id"],
+                            "teacher_name": leave["teacher_name"],
+                            "date": date_str,
+                            "day": weekday,
+                            "period": entry["period"],
+                            "class_id": entry["class_id"],
+                            "class_name": class_label,
+                            "subject_id": entry["subject_id"],
+                            "subject_name": entry["subject_name"],
+                            "candidates": [_candidate_out(c) for c in candidates],
+                        }
+                    )
+                d += timedelta(days=1)
+        needs.sort(key=lambda n: (n["date"], n["period"]))
+        return needs

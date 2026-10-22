@@ -317,15 +317,40 @@ def is_teacher_busy_elsewhere(
 # ---- Substitutions ----
 
 
+def rank_candidates(
+    teachers: list[dict], busy: set[int], same_subject_ids: set[int], this_class_teacher_ids: set[int]
+) -> list[dict]:
+    """Shared ranking step behind find_substitute_candidates and the
+    bulk-computed pending-leave queue: teaches the same subject first,
+    then anyone who already teaches this class some other subject (a
+    familiar face), then everyone else not already busy."""
+    candidates = []
+    for t in teachers:
+        if t["id"] in busy:
+            continue
+        if t["id"] in same_subject_ids:
+            reason = "subject"
+        elif t["id"] in this_class_teacher_ids:
+            reason = "class"
+        else:
+            reason = "other"
+        candidates.append({"teacher_id": t["id"], "teacher_name": t["name"], "teacher_code": t["code"], "reason": reason})
+
+    order = {"subject": 0, "class": 1, "other": 2}
+    candidates.sort(key=lambda c: (order[c["reason"]], c["teacher_name"]))
+    return candidates
+
+
 def find_substitute_candidates(
     conn: psycopg.Connection, user_id: int, class_id: int, day: str, period: int, date: str, exclude_teacher_id: int | None
 ) -> list[dict]:
     """Every teacher for this account who could cover a (class, day,
-    period) slot, ranked: teaches the same subject first, then anyone who
-    already teaches this class some other subject (a familiar face), then
-    everyone else — excluding whoever's already busy at that exact
+    period) slot, ranked — excluding whoever's already busy at that exact
     day/period in the generated timetable, or already covering a
-    different substitution at that same date/period."""
+    different substitution at that same date/period. For a single slot
+    at a time (the day/period absence flow); see
+    pending_substitution_needs() for the batched equivalent used by the
+    planned-leave queue, which avoids repeating these queries per slot."""
     entry = get_timetable_entry(conn, class_id, day, period)
     subject_id = entry["subject_id"] if entry else None
 
@@ -365,21 +390,7 @@ def find_substitute_candidates(
         ).fetchall()
     }
 
-    candidates = []
-    for t in teachers:
-        if t["id"] in busy:
-            continue
-        if t["id"] in same_subject_ids:
-            reason = "subject"
-        elif t["id"] in this_class_teacher_ids:
-            reason = "class"
-        else:
-            reason = "other"
-        candidates.append({"teacher_id": t["id"], "teacher_name": t["name"], "teacher_code": t["code"], "reason": reason})
-
-    order = {"subject": 0, "class": 1, "other": 2}
-    candidates.sort(key=lambda c: (order[c["reason"]], c["teacher_name"]))
-    return candidates
+    return rank_candidates(teachers, busy, same_subject_ids, this_class_teacher_ids)
 
 
 def create_or_update_substitution(
@@ -440,3 +451,94 @@ def get_teacher_timetable(conn: psycopg.Connection, user_id: int, teacher_id: in
            ORDER BY te.day, te.period""",
         (teacher_id, user_id),
     ).fetchall()
+
+
+# ---- Planned leave ----
+
+
+def create_leave(conn: psycopg.Connection, teacher_id: int, start_date: str, end_date: str, reason: str) -> int:
+    row = conn.execute(
+        "INSERT INTO tt_leave (teacher_id, start_date, end_date, reason, created_at) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (teacher_id, start_date, end_date, reason, datetime.now(timezone.utc).isoformat()),
+    ).fetchone()
+    return row["id"]
+
+
+def list_leaves(conn: psycopg.Connection, user_id: int) -> list[dict]:
+    return conn.execute(
+        """SELECT l.id, l.teacher_id, t.name AS teacher_name, t.code AS teacher_code, l.start_date, l.end_date, l.reason
+           FROM tt_leave l JOIN tt_teacher t ON t.id = l.teacher_id
+           WHERE t.user_id = %s ORDER BY l.start_date""",
+        (user_id,),
+    ).fetchall()
+
+
+def get_leave(conn: psycopg.Connection, leave_id: int) -> dict | None:
+    return conn.execute(
+        """SELECT l.id, l.teacher_id, t.name AS teacher_name, t.code AS teacher_code, l.start_date, l.end_date, l.reason
+           FROM tt_leave l JOIN tt_teacher t ON t.id = l.teacher_id WHERE l.id = %s""",
+        (leave_id,),
+    ).fetchone()
+
+
+def delete_leave(conn: psycopg.Connection, user_id: int, leave_id: int) -> bool:
+    cur = conn.execute(
+        "DELETE FROM tt_leave WHERE id = %s AND teacher_id IN (SELECT id FROM tt_teacher WHERE user_id = %s)", (leave_id, user_id)
+    )
+    return cur.rowcount > 0
+
+
+def pending_substitution_context(conn: psycopg.Connection, user_id: int, start_date: str, end_date: str) -> dict:
+    """Everything pending_substitution_needs() needs to rank a substitute
+    for every (leave teacher, weekday, period) slot a batch of leaves
+    touches, fetched as a handful of account-wide queries instead of one
+    round trip per slot — the naive per-slot version took over a minute
+    against a remote Postgres pooler once a leave spanned more than a
+    couple of days."""
+    teachers = list_teachers(conn, user_id)
+
+    entries_by_teacher_day: dict[tuple[int, str], list[dict]] = {}
+    busy_by_day_period: dict[tuple[str, int], set[int]] = {}
+    teachers_by_class: dict[int, set[int]] = {}
+    for r in conn.execute(
+        """SELECT te.teacher_id, te.day, te.period, te.class_id, c.grade, c.section, te.subject_id, s.name AS subject_name
+           FROM tt_timetable_entry te
+           JOIN tt_class c ON c.id = te.class_id
+           JOIN tt_subject s ON s.id = te.subject_id
+           WHERE c.user_id = %s""",
+        (user_id,),
+    ).fetchall():
+        if r["teacher_id"] is not None:
+            entries_by_teacher_day.setdefault((r["teacher_id"], r["day"]), []).append(r)
+            busy_by_day_period.setdefault((r["day"], r["period"]), set()).add(r["teacher_id"])
+            teachers_by_class.setdefault(r["class_id"], set()).add(r["teacher_id"])
+
+    existing_substitutions: set[tuple[int, str, int]] = set()
+    busy_substituting_by_date_period: dict[tuple[str, int], set[int]] = {}
+    for r in conn.execute(
+        """SELECT sub.class_id, sub.date, sub.period, sub.substitute_teacher_id
+           FROM tt_substitution sub
+           JOIN tt_class c ON c.id = sub.class_id
+           WHERE c.user_id = %s AND sub.date BETWEEN %s AND %s""",
+        (user_id, start_date, end_date),
+    ).fetchall():
+        existing_substitutions.add((r["class_id"], r["date"], r["period"]))
+        busy_substituting_by_date_period.setdefault((r["date"], r["period"]), set()).add(r["substitute_teacher_id"])
+
+    same_subject_by_subject: dict[int, set[int]] = {}
+    for r in conn.execute(
+        """SELECT ts.subject_id, ts.teacher_id FROM tt_teacher_subject ts
+           JOIN tt_teacher t ON t.id = ts.teacher_id WHERE t.user_id = %s""",
+        (user_id,),
+    ).fetchall():
+        same_subject_by_subject.setdefault(r["subject_id"], set()).add(r["teacher_id"])
+
+    return {
+        "teachers": teachers,
+        "entries_by_teacher_day": entries_by_teacher_day,
+        "busy_by_day_period": busy_by_day_period,
+        "teachers_by_class": teachers_by_class,
+        "existing_substitutions": existing_substitutions,
+        "busy_substituting_by_date_period": busy_substituting_by_date_period,
+        "same_subject_by_subject": same_subject_by_subject,
+    }

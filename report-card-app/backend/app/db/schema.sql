@@ -307,3 +307,20 @@ CREATE INDEX IF NOT EXISTS idx_tt_substitution_class_date ON tt_substitution(cla
 -- Powers "is this teacher already covering something else at this exact
 -- date+period" checks, so one substitute never gets double-booked either.
 CREATE INDEX IF NOT EXISTS idx_tt_substitution_sub_slot ON tt_substitution(substitute_teacher_id, date, period);
+
+-- A planned, multi-day leave — distinct from tt_substitution, which
+-- records one already-confirmed cover for one specific (class, date,
+-- period). A leave doesn't assign anyone by itself: it's the input the
+-- "needs review" queue (GET /timetable/leaves/pending) uses to work out
+-- which of the teacher's normal periods fall inside the range, suggest a
+-- ranked substitute for each via the same logic as a same-day absence,
+-- and leave the actual confirmation to the admin — never auto-assigned.
+CREATE TABLE IF NOT EXISTS tt_leave (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    teacher_id INTEGER NOT NULL REFERENCES tt_teacher(id) ON DELETE CASCADE,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tt_leave_teacher ON tt_leave(teacher_id);

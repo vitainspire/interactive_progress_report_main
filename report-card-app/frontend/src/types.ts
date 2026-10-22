@@ -180,6 +180,30 @@ export interface TtSubstitutionResult extends TtSubstitution {
   notify_status: TtNotifyStatus;
 }
 
+export interface TtLeave {
+  id: number;
+  teacher_id: number;
+  teacher_name: string;
+  teacher_code: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
+}
+
+export interface TtPendingNeed {
+  leave_id: number;
+  teacher_id: number;
+  teacher_name: string;
+  date: string;
+  day: string;
+  period: number;
+  class_id: number;
+  class_name: string;
+  subject_id: number;
+  subject_name: string;
+  candidates: TtSubstituteCandidate[];
+}
+
 export interface TtSchoolConfig {
   working_days: string[];
   periods_per_day: number;
