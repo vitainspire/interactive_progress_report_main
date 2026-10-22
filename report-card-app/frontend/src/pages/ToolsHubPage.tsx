@@ -66,8 +66,7 @@ export function ToolsHubPage() {
         <ToolCard
           to="/timetable"
           icon={<CalendarIcon size={20} />}
-          title="Timetable Creator"
-          badge="Coming soon"
+          title="Dynamic Timetable"
           body="Build your school's weekly timetable across every class and teacher, and instantly find a substitute when someone's absent."
         />
       </div>

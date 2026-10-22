@@ -2100,11 +2100,11 @@ export function TimetablePage() {
         <Link to="/tools" className="hover:underline" style={{ color: "var(--text-muted)" }}>
           Tools
         </Link>{" "}
-        / Timetable Creator
+        / Dynamic Timetable
       </nav>
       <header className="mt-1">
         <h1 className="text-2xl font-extrabold" style={{ color: "var(--text-primary)" }}>
-          Timetable Creator
+          Dynamic Timetable
         </h1>
         <p className="mt-1 max-w-2xl text-sm" style={{ color: "var(--text-secondary)" }}>
           {hasTimetable
