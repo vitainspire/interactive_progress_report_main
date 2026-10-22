@@ -393,6 +393,31 @@ def find_substitute_candidates(
     return rank_candidates(teachers, busy, same_subject_ids, this_class_teacher_ids)
 
 
+def teacher_is_busy_at_slot(
+    conn: psycopg.Connection, user_id: int, teacher_id: int, day: str, period: int, date: str, exclude_class_id: int
+) -> bool:
+    """True if this teacher is already teaching another class at this
+    exact day/period in the generated timetable, or already covering a
+    different substitution at this same date/period — the same
+    exclusion find_substitute_candidates applies when ranking, enforced
+    here too so a stale or direct API request can't double-book a
+    teacher into two places at once."""
+    busy_teaching = conn.execute(
+        """SELECT 1 FROM tt_timetable_entry te JOIN tt_class c ON c.id = te.class_id
+           WHERE c.user_id = %s AND te.day = %s AND te.period = %s AND te.teacher_id = %s""",
+        (user_id, day, period, teacher_id),
+    ).fetchone()
+    if busy_teaching:
+        return True
+    busy_substituting = conn.execute(
+        """SELECT 1 FROM tt_substitution sub JOIN tt_class c ON c.id = sub.class_id
+           WHERE c.user_id = %s AND sub.date = %s AND sub.period = %s
+             AND sub.substitute_teacher_id = %s AND sub.class_id != %s""",
+        (user_id, date, period, teacher_id, exclude_class_id),
+    ).fetchone()
+    return busy_substituting is not None
+
+
 def create_or_update_substitution(
     conn: psycopg.Connection,
     class_id: int,

@@ -586,6 +586,10 @@ def create_substitution(class_id: int, req: SubstitutionCreate, current_user=Dep
         substitute = repo.get_teacher(conn, current_user["id"], req.substitute_teacher_id)
         if not substitute:
             raise HTTPException(404, "Substitute teacher not found")
+        if req.substitute_teacher_id == entry["teacher_id"]:
+            raise HTTPException(422, "A teacher can't substitute for their own class")
+        if repo.teacher_is_busy_at_slot(conn, current_user["id"], req.substitute_teacher_id, req.day, req.period, req.date, class_id):
+            raise HTTPException(409, f"{substitute['name']} is already teaching or covering another class at that exact day and period")
         repo.create_or_update_substitution(
             conn, class_id, req.date, req.day, req.period, entry["subject_id"], entry["teacher_id"], req.substitute_teacher_id
         )
