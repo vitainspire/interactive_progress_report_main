@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
-import { BarChartIcon, SheetIcon, SpeakerWaveIcon, TeluguGlyphIcon } from "../components/Icons";
+import { BarChartIcon, CalendarIcon, SheetIcon, SpeakerWaveIcon, TeluguGlyphIcon } from "../components/Icons";
 import classOverviewScreenshot from "../assets/landing/class-overview.png";
 import reportCardScreenshot from "../assets/landing/report-card.png";
+import timetableScreenshot from "../assets/landing/timetable.png";
+import leaveQueueScreenshot from "../assets/landing/leave-queue.png";
 
 function ReportCardShot() {
   return (
@@ -67,7 +69,7 @@ export function LandingPage() {
             RC
           </span>
           <span className="hidden font-display text-base font-bold sm:inline" style={{ color: "var(--text-primary)" }}>
-            Report Card Generator
+            School Admin Tools
           </span>
         </div>
         <nav className="flex flex-none items-center gap-1 sm:gap-2">
@@ -91,17 +93,17 @@ export function LandingPage() {
               className="font-serif text-[2.6rem] font-semibold leading-[1.08] tracking-tight md:text-[3.4rem]"
               style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}
             >
-              One spreadsheet.
+              One account.
               <br />
-              Every report card, done.
+              Every school tool, done.
             </h1>
             <p className="mt-5 max-w-md text-base leading-relaxed md:text-lg" style={{ color: "var(--text-secondary)" }}>
-              Upload your class's marks once and get bilingual report cards, a class performance overview, and
-              parent-ready WhatsApp links — no manual formatting, no translating by hand.
+              Bilingual report cards from a marks sheet, a full weekly timetable with substitute coverage handled for
+              you — generated from your school's own data, not built by hand.
             </p>
             <div className="mt-7 flex flex-col items-start gap-3">
               <Link to="/signup" className="accent-fill rounded-md px-6 py-3.5 text-base font-semibold text-white">
-                Create your first report card
+                Get started free
               </Link>
               <Link to="/login" className="text-sm font-medium underline-offset-4 hover:underline" style={{ color: "var(--text-secondary)" }}>
                 Already using it? Log in
@@ -114,6 +116,45 @@ export function LandingPage() {
         </section>
 
         <section className="border-y" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
+          <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 px-6 py-12 sm:grid-cols-3">
+            <div>
+              <span className="icon-chip" style={{ width: "2.2rem", height: "2.2rem" }}>
+                <SheetIcon size={18} />
+              </span>
+              <h3 className="mt-3 font-semibold" style={{ color: "var(--text-primary)" }}>
+                Report Card Generator
+              </h3>
+              <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                Bilingual report cards, class analysis, and parent links from one spreadsheet.
+              </p>
+            </div>
+            <div>
+              <span className="icon-chip" style={{ width: "2.2rem", height: "2.2rem" }}>
+                <CalendarIcon size={18} />
+              </span>
+              <h3 className="mt-3 font-semibold" style={{ color: "var(--text-primary)" }}>
+                Dynamic Timetable
+              </h3>
+              <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                Generate the weekly timetable and get a ranked substitute the moment a teacher is away.
+              </p>
+            </div>
+            <div className="opacity-60">
+              <span className="icon-chip" style={{ width: "2.2rem", height: "2.2rem" }}>
+                <BarChartIcon size={18} />
+              </span>
+              <h3 className="mt-3 flex items-center gap-2 font-semibold" style={{ color: "var(--text-primary)" }}>
+                Student Grade Promoter
+                <span className="pill text-[10px]">Coming soon</span>
+              </h3>
+              <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                Promote every class to the next grade at year-end, in one step.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="border-b" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
           <div className="mx-auto max-w-3xl px-6 py-14 text-center">
             <p className="font-serif text-xl leading-snug md:text-2xl" style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}>
               Report card season usually means a week of copy-pasting marks into a template, translating comments by
@@ -126,7 +167,10 @@ export function LandingPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-6 py-16 md:py-24">
-          <h2 className="font-serif text-2xl font-semibold md:text-3xl" style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}>
+          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>
+            Report Card Generator
+          </p>
+          <h2 className="mt-2 font-serif text-2xl font-semibold md:text-3xl" style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}>
             What happens when you upload a sheet
           </h2>
           <div className="mt-10 grid grid-cols-1 gap-10 sm:grid-cols-2">
@@ -156,7 +200,10 @@ export function LandingPage() {
         <section className="border-y" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
           <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-16 md:grid-cols-2 md:py-24">
             <div>
-              <span className="icon-chip" style={{ width: "2.2rem", height: "2.2rem" }}>
+              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>
+                Report Card Generator
+              </p>
+              <span className="mt-4 icon-chip" style={{ width: "2.2rem", height: "2.2rem" }}>
                 <BarChartIcon size={18} />
               </span>
               <h2
@@ -199,9 +246,57 @@ export function LandingPage() {
           </div>
         </section>
 
+        <section className="mx-auto max-w-6xl px-6 py-16 md:py-24">
+          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>
+            Dynamic Timetable
+          </p>
+          <h2 className="mt-2 font-serif text-2xl font-semibold md:text-3xl" style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}>
+            A full weekly timetable, generated for every class
+          </h2>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+            Set up your classes, subjects, and teachers once, and generate the whole school's weekly schedule in one
+            click — every class, every period, no teacher double-booked.
+          </p>
+          <div className="mt-10 overflow-hidden rounded-lg" style={{ boxShadow: "var(--shadow-pop)", border: "1px solid rgba(15,23,42,0.08)" }}>
+            <img
+              src={timetableScreenshot}
+              alt="A real generated weekly timetable for one class, with subject and teacher for every period"
+              className="block w-full"
+            />
+          </div>
+        </section>
+
+        <section className="border-y" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
+          <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-16 md:grid-cols-2 md:py-24">
+            <div className="order-2 md:order-1 overflow-hidden rounded-lg" style={{ boxShadow: "var(--shadow-pop)", border: "1px solid rgba(15,23,42,0.08)" }}>
+              <img
+                src={leaveQueueScreenshot}
+                alt="A teacher's multi-day leave, expanded into every affected period with a ranked substitute suggestion to confirm"
+                className="block w-full"
+              />
+            </div>
+            <div className="order-1 md:order-2">
+              <span className="icon-chip" style={{ width: "2.2rem", height: "2.2rem" }}>
+                <CalendarIcon size={18} />
+              </span>
+              <h2
+                className="mt-4 font-serif text-2xl font-semibold md:text-3xl"
+                style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}
+              >
+                Never scramble to find a substitute
+              </h2>
+              <p className="mt-4 max-w-md text-base leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                Mark a teacher absent for a day, or on leave for a week, and every affected period shows up with a
+                ranked substitute suggestion — someone who already teaches that subject first, then someone who
+                already teaches that class. Nothing is assigned automatically; you confirm each one.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section className="mx-auto max-w-6xl px-6 py-20 text-center md:py-28">
           <h2 className="font-serif text-2xl font-semibold md:text-3xl" style={{ color: "var(--text-primary)", fontFamily: "var(--font-serif)" }}>
-            Ready to see your class's first report card?
+            Ready to get started?
           </h2>
           <div className="mt-7">
             <Link to="/signup" className="accent-fill inline-block rounded-md px-7 py-3.5 text-base font-semibold text-white">
@@ -213,7 +308,7 @@ export function LandingPage() {
 
       <footer className="px-6 py-8 text-center text-xs" style={{ color: "var(--text-muted)" }}>
         <span className="font-display font-semibold" style={{ color: "var(--text-secondary)" }}>
-          Report Card Generator
+          School Admin Tools
         </span>
         {" · "}
         <Link to="/login" className="hover:underline">
