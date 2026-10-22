@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { CalendarIcon, SheetIcon } from "../components/Icons";
+import { BarChartIcon, CalendarIcon, SheetIcon } from "../components/Icons";
 
 function ToolCard({
   to,
@@ -9,17 +9,14 @@ function ToolCard({
   body,
   badge,
 }: {
-  to: string;
+  to?: string;
   icon: React.ReactNode;
   title: string;
   body: string;
   badge?: string;
 }) {
-  return (
-    <Link
-      to={to}
-      className="soft-card reveal group relative flex flex-col p-6 transition-all duration-200 hover:shadow-lg"
-    >
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <span className="icon-chip" style={{ width: "2.6rem", height: "2.6rem" }}>
           {icon}
@@ -32,12 +29,31 @@ function ToolCard({
       <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
         {body}
       </p>
-      <span
-        className="mt-4 text-sm font-semibold transition-colors duration-200"
-        style={{ color: "var(--accent)" }}
-      >
-        Open →
-      </span>
+      {to && (
+        <span
+          className="mt-4 text-sm font-semibold transition-colors duration-200"
+          style={{ color: "var(--accent)" }}
+        >
+          Open →
+        </span>
+      )}
+    </>
+  );
+
+  if (!to) {
+    return (
+      <div className="soft-card relative flex flex-col p-6 opacity-70" style={{ cursor: "not-allowed" }}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={to}
+      className="soft-card reveal group relative flex flex-col p-6 transition-all duration-200 hover:shadow-lg"
+    >
+      {content}
     </Link>
   );
 }
@@ -68,6 +84,12 @@ export function ToolsHubPage() {
           icon={<CalendarIcon size={20} />}
           title="Dynamic Timetable"
           body="Build your school's weekly timetable across every class and teacher, and instantly find a substitute when someone's absent."
+        />
+        <ToolCard
+          icon={<BarChartIcon size={20} />}
+          title="Student Grade Promoter"
+          badge="Coming soon"
+          body="Promote students to their next grade at year-end based on their results, in one step across every class."
         />
       </div>
     </section>
