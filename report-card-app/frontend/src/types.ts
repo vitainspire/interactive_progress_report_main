@@ -143,6 +143,15 @@ export interface TtTeacherTimetableEntry {
   subject_code: string;
 }
 
+export interface TtTeacherSubstitution {
+  day: string;
+  period: number;
+  class_id: number;
+  class_name: string;
+  subject_id: number | null;
+  subject_name: string | null;
+}
+
 export interface TtGenerateResult {
   ok: boolean;
   classes_generated: number;

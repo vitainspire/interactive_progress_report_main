@@ -499,6 +499,22 @@ def get_teacher_timetable(conn: psycopg.Connection, user_id: int, teacher_id: in
     ).fetchall()
 
 
+def list_teacher_substitutions(conn: psycopg.Connection, user_id: int, teacher_id: int, date: str) -> list[dict]:
+    """Every class this teacher is covering as a substitute on one
+    specific date — overlaid on their own weekly timetable so they can
+    see at a glance where they actually need to be that day, not just
+    their regular schedule."""
+    return conn.execute(
+        """SELECT sub.day, sub.period, sub.class_id, c.grade, c.section,
+                  sub.subject_id, s.name AS subject_name
+           FROM tt_substitution sub
+           JOIN tt_class c ON c.id = sub.class_id
+           LEFT JOIN tt_subject s ON s.id = sub.subject_id
+           WHERE sub.substitute_teacher_id = %s AND c.user_id = %s AND sub.date = %s""",
+        (teacher_id, user_id, date),
+    ).fetchall()
+
+
 # ---- Planned leave ----
 
 

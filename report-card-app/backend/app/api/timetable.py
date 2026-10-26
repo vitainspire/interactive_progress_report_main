@@ -244,6 +244,29 @@ def get_teacher_timetable(teacher_id: int, current_user=Depends(get_current_user
         ]
 
 
+@router.get("/teachers/{teacher_id}/substitutions")
+def get_teacher_substitutions(teacher_id: int, date: str, current_user=Depends(get_current_user)):
+    """Every class this teacher is covering as a substitute on one date —
+    overlaid on their personal timetable view."""
+    if not _DATE_RE.match(date):
+        raise HTTPException(422, "date must be in YYYY-MM-DD format")
+    with session() as conn:
+        if not repo.get_teacher(conn, current_user["id"], teacher_id):
+            raise HTTPException(404, "Teacher not found")
+        rows = repo.list_teacher_substitutions(conn, current_user["id"], teacher_id, date)
+        return [
+            {
+                "day": r["day"],
+                "period": r["period"],
+                "class_id": r["class_id"],
+                "class_name": f'{r["grade"]} {r["section"]}'.strip(),
+                "subject_id": r["subject_id"],
+                "subject_name": r["subject_name"],
+            }
+            for r in rows
+        ]
+
+
 @router.put("/teachers/{teacher_id}/subjects")
 def update_teacher_subjects(teacher_id: int, req: TeacherSubjectsUpdate, current_user=Depends(get_current_user)):
     with session() as conn:
