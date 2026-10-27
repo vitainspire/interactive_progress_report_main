@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { DotsIcon, FolderIcon, PlusIcon, SearchIcon, SheetIcon, TrashIcon } from "../components/Icons";
-import type { BatchSummary, DriveImportFolderResult, DriveSyncFolderResult, SendResult } from "../types";
+import { DriveDuplicateResolver } from "../components/DriveDuplicateResolver";
+import type { BatchSummary, DriveImportFileResult, DriveImportFolderResult, DriveSyncFolderResult, SendResult } from "../types";
 
 type SortOrder = "recent" | "alphabetical";
 
@@ -170,6 +171,7 @@ export function DashboardPage() {
   const [setupError, setSetupError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [syncDuplicates, setSyncDuplicates] = useState<DriveImportFileResult[]>([]);
 
   function refreshBatches() {
     return api
@@ -203,7 +205,9 @@ export function DashboardPage() {
     try {
       const result = await api.post<DriveImportFolderResult>("/batches/import-folder", { folder_url: folderUrl.trim() });
       const created = result.results.filter((r) => r.status === "created").length;
-      if (created === 0) {
+      const possibleDuplicates = result.results.filter((r) => r.status === "possible_duplicate");
+      setSyncDuplicates(possibleDuplicates);
+      if (created === 0 && possibleDuplicates.length === 0) {
         setSetupError("No class sheets were found directly inside that folder.");
       } else {
         await refreshBatches();
@@ -224,11 +228,14 @@ export function DashboardPage() {
       const created = result.results.filter((r) => r.status === "created").length;
       const synced = result.results.filter((r) => r.status === "synced").length;
       const failed = result.results.filter((r) => r.status === "failed").length;
+      const possibleDuplicates = result.results.filter((r) => r.status === "possible_duplicate");
       const bits = [];
       if (created) bits.push(`${created} new class${created === 1 ? "" : "es"}`);
       if (synced) bits.push(`${synced} updated`);
       if (failed) bits.push(`${failed} failed`);
+      if (possibleDuplicates.length) bits.push(`${possibleDuplicates.length} need a decision below`);
       setSyncNote(bits.length ? bits.join(", ") : "Already up to date.");
+      setSyncDuplicates(possibleDuplicates);
       await refreshBatches();
     } catch (err) {
       setSyncNote(err instanceof Error ? err.message : "Could not sync the Drive folder");
@@ -296,6 +303,21 @@ export function DashboardPage() {
         </p>
       )}
 
+      {syncDuplicates.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          {syncDuplicates.map((r) => (
+            <DriveDuplicateResolver
+              key={r.file_name}
+              result={r}
+              onResolved={() => {
+                setSyncDuplicates((prev) => prev.filter((x) => x !== r));
+                refreshBatches();
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       {error && <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>{error}</p>}
 
       {batches && batches.length > 0 && (
@@ -347,7 +369,11 @@ export function DashboardPage() {
           <p className="mx-auto mt-1 max-w-sm text-sm" style={{ color: "var(--text-secondary)" }}>
             Paste the link to the Drive folder where this school keeps its class mark sheets — one file per class.
             Every class in it becomes a sheet here, and adding a class to that same folder later picks it up
-            automatically with "Sync Drive folder".
+            automatically with "Sync Drive folder". Not sure of the layout each sheet needs?{" "}
+            <a href={api.uploadTemplateUrl()} className="font-semibold hover:underline" style={{ color: "var(--accent)" }}>
+              Download a template
+            </a>
+            .
           </p>
           <form onSubmit={setUpDriveFolder} className="mt-4 flex w-full max-w-sm flex-col gap-2">
             <input

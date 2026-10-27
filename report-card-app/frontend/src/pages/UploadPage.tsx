@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { FolderIcon } from "../components/Icons";
+import { DriveDuplicateResolver } from "../components/DriveDuplicateResolver";
 import { ReferenceDocumentReview } from "../components/ReferenceDocumentReview";
 import { isGooglePickerConfigured, pickGoogleSheet, preloadGooglePicker } from "../integrations/googlePicker";
 import type { BatchSummary, DriveImportFolderResult, ReferenceDocument } from "../types";
@@ -102,7 +103,11 @@ export function UploadPage() {
       </h1>
       <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
         Expected layout: three header rows — exam names, subject names, then "Marks"/"Grade" sub-labels — one row per
-        student below, with optional RANK and ATTENDANCE columns. Grades A1–D1 count as a pass, D2 as a fail.
+        student below, with optional RANK and ATTENDANCE columns. Grades A1–D1 count as a pass, D2 as a fail.{" "}
+        <a href={api.uploadTemplateUrl()} className="font-semibold hover:underline" style={{ color: "var(--accent)" }}>
+          Download a template
+        </a>{" "}
+        to see it filled in with sample students.
       </p>
 
       <div className="mt-5 flex flex-wrap gap-2">
@@ -251,24 +256,38 @@ export function UploadPage() {
 
         {error && (
           <p className="rounded-lg p-3 text-sm" style={{ background: "var(--accent-mark-soft)", color: "var(--accent-mark)" }}>
-            {error}
+            {error}{" "}
+            <a href={api.uploadTemplateUrl()} className="font-semibold underline">
+              Download the template
+            </a>{" "}
+            to see the expected layout.
           </p>
         )}
 
         {folderResults && (
           <div className="space-y-1.5 rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
-            {folderResults.results.map((r) => (
-              <div key={r.file_name} className="flex items-center justify-between gap-2 text-sm">
-                <span style={{ color: "var(--text-primary)" }}>{r.file_name}</span>
-                {r.status === "created" && r.batch_id ? (
-                  <Link to={`/batches/${r.batch_id}`} className="font-medium hover:underline" style={{ color: "var(--status-good)" }}>
-                    Imported ({r.student_count} students) →
-                  </Link>
-                ) : (
-                  <span style={{ color: "var(--accent-mark)" }}>{r.error || "Failed"}</span>
-                )}
-              </div>
-            ))}
+            {folderResults.results.map((r) =>
+              r.status === "possible_duplicate" ? (
+                <DriveDuplicateResolver
+                  key={r.file_name}
+                  result={r}
+                  onResolved={() =>
+                    setFolderResults((prev) => (prev ? { ...prev, results: prev.results.filter((x) => x !== r) } : prev))
+                  }
+                />
+              ) : (
+                <div key={r.file_name} className="flex items-center justify-between gap-2 text-sm">
+                  <span style={{ color: "var(--text-primary)" }}>{r.file_name}</span>
+                  {r.status === "created" && r.batch_id ? (
+                    <Link to={`/batches/${r.batch_id}`} className="font-medium hover:underline" style={{ color: "var(--status-good)" }}>
+                      Imported ({r.student_count} students) →
+                    </Link>
+                  ) : (
+                    <span style={{ color: "var(--accent-mark)" }}>{r.error || "Failed"}</span>
+                  )}
+                </div>
+              ),
+            )}
             {folderResults.reference_documents.length > 0 && (
               <p className="pt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
                 Also found {folderResults.reference_documents.length} syllabus/blueprint document

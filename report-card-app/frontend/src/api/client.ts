@@ -81,6 +81,7 @@ export const api = {
     const params = new URLSearchParams({ token: getToken() ?? "", date });
     return `${API_BASE}/timetable/substitutions/sheet?${params.toString()}`;
   },
+  uploadTemplateUrl: () => `${API_BASE}/batches/upload-template`,
 };
 
 export { UnauthorizedError };

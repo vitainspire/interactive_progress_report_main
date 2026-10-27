@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -236,6 +237,56 @@ def resync_batch(conn: psycopg.Connection, batch_id: int, parsed: dict) -> dict:
     )
 
     return {"added": len(new_rows), "updated": updated_count, "removed": len(removed_ids), "student_count": len(all_ids)}
+
+
+def _roster_key(name: str, roll: str) -> tuple[str, str] | None:
+    if not roll:
+        return None
+    return (re.sub(r"\s+", " ", (name or "").strip()).upper(), roll)
+
+
+def find_duplicate_candidate(conn: psycopg.Connection, user_id: int, new_students: list[dict]) -> dict | None:
+    """Looks for an existing batch of this account whose roster looks like
+    the same class as `new_students` (freshly parsed, not yet saved) —
+    matched by (name, roll) pairs rather than filename, since a re-uploaded
+    or copied Drive file gets a brand-new file id with nothing else linking
+    it back to the class it actually represents. Deliberately conservative
+    (needs both a minimum absolute overlap and a majority of the smaller
+    roster to match) since a false positive would offer to silently
+    overwrite the wrong class's data — see resolve_drive_duplicate in
+    api/batches.py, which never acts on this by itself, only surfaces it
+    for a teacher to confirm."""
+    new_keys = {k for k in (_roster_key(s["name"], s["roll"]) for s in new_students) if k}
+    if not new_keys:
+        return None
+
+    best = None
+    for b in conn.execute("SELECT id, name FROM batch WHERE user_id = %s", (user_id,)).fetchall():
+        existing = conn.execute("SELECT name, roll_no FROM student WHERE batch_id = %s", (b["id"],)).fetchall()
+        existing_keys = {k for k in (_roster_key(r["name"], r["roll_no"]) for r in existing) if k}
+        if not existing_keys:
+            continue
+        overlap = new_keys & existing_keys
+        if len(overlap) < 5:
+            continue
+        if len(overlap) / min(len(new_keys), len(existing_keys)) < 0.5:
+            continue
+        if best is None or len(overlap) > best["overlap_count"]:
+            best = {"id": b["id"], "name": b["name"], "overlap_count": len(overlap), "existing_student_count": len(existing_keys)}
+    return best
+
+
+def rebind_batch_source(
+    conn: psycopg.Connection, batch_id: int, source_type: str, source_ref: str | None, source_mime_type: str | None, source_folder_id: str | None
+) -> None:
+    """Points an already-existing batch at a different source file going
+    forward — used when a teacher confirms a newly found Drive file is
+    really a re-upload of this same class, so the next Sync tracks the new
+    file instead of the old, now-stale one."""
+    conn.execute(
+        "UPDATE batch SET source_type = %s, source_ref = %s, source_mime_type = %s, source_folder_id = %s, last_synced_at = %s WHERE id = %s",
+        (source_type, source_ref, source_mime_type, source_folder_id, datetime.now(timezone.utc).isoformat(), batch_id),
+    )
 
 
 def list_batches_by_folder(conn: psycopg.Connection, user_id: int, folder_id: str) -> list[dict]:

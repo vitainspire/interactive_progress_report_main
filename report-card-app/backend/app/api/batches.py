@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.core.deps import get_current_user, get_current_user_from_header_or_query
@@ -30,8 +30,26 @@ from app.parsing.sheet_parser import SheetParseError, parse_uploaded_file, parse
 from app.reports.card_render import render_report_page
 from app.reports.class_stats import compute_class_stats
 from app.reports.subject_analysis import discover_subjects, render_subject_analysis
+from app.reports.upload_template import build_upload_template
 
 router = APIRouter(prefix="/batches", tags=["batches"])
+
+
+@router.get("/upload-template")
+def download_upload_template():
+    """A ready-made .xlsx matching the exact layout parse_uploaded_file
+    expects, with two sample students already filled in — for a school
+    confused by (or about to hit) a SheetParseError on their own sheet.
+    No auth: it's a generic example with no real data in it, and a
+    confused admin shouldn't need to be logged in just to see the expected
+    shape. Registered before any /{batch_id} route in this file so it can
+    never be shadowed by a dynamic path."""
+    data = build_upload_template()
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="report_card_upload_template.xlsx"'},
+    )
 
 # Classes with a syllabus actually seeded (see app/db/syllabus_seed.py) —
 # an unrecognized value just falls back to "10" rather than erroring, since
@@ -197,6 +215,26 @@ async def _ingest_reference_documents(account_id: int, folder_url_or_id: str) ->
     return results
 
 
+def _duplicate_out(f: dict, dup: dict, folder_id: str | None, new_student_count: int) -> dict:
+    """A file whose roster looks like an already-imported class (see
+    repo.find_duplicate_candidate) — carries everything the frontend needs
+    to either re-fetch and fold it into that class or force-create it as a
+    separate one, via POST /batches/resolve-drive-duplicate, without this
+    account having to re-paste the folder link."""
+    return {
+        "file_name": f["name"],
+        "status": "possible_duplicate",
+        "file_id": f["id"],
+        "mime_type": f["mime_type"],
+        "folder_id": folder_id,
+        "candidate_batch_id": dup["id"],
+        "candidate_batch_name": dup["name"],
+        "overlap_count": dup["overlap_count"],
+        "existing_student_count": dup["existing_student_count"],
+        "new_student_count": new_student_count,
+    }
+
+
 @router.post("/import-folder")
 async def import_drive_folder(req: ImportFolderRequest, current_user=Depends(get_current_user)):
     """One batch per spreadsheet file found directly inside a publicly-
@@ -227,6 +265,12 @@ async def import_drive_folder(req: ImportFolderRequest, current_user=Depends(get
             continue
         except Exception:
             results.append({"file_name": f["name"], "status": "failed", "error": "Could not read this file — check it follows the expected layout."})
+            continue
+
+        with session() as conn:
+            dup = repo.find_duplicate_candidate(conn, current_user["id"], parsed["students"])
+        if dup:
+            results.append(_duplicate_out(f, dup, folder_id, len(parsed["students"])))
             continue
 
         batch_name = f["name"].rsplit(".", 1)[0]
@@ -288,25 +332,33 @@ async def sync_drive_folder(req: SyncFolderRequest, current_user=Depends(get_cur
             continue
 
         existing = by_file_id.get(f["id"])
-        with session() as conn:
-            if existing:
+        if existing:
+            with session() as conn:
                 sync_result = repo.resync_batch(conn, existing["id"], parsed)
-                results.append({"file_name": f["name"], "status": "synced", "batch_id": existing["id"], **sync_result})
-            else:
-                batch_id = repo.create_batch(
-                    conn,
-                    current_user["id"],
-                    f["name"].rsplit(".", 1)[0],
-                    existing_batches[0]["school_name"],
-                    f["name"],
-                    parsed,
-                    _guess_class_level_from_filename(f["name"]) or existing_batches[0]["class_level"],
-                    source_type="drive_folder_item",
-                    source_ref=f["id"],
-                    source_mime_type=f["mime_type"],
-                    source_folder_id=req.folder_id,
-                )
-                results.append({"file_name": f["name"], "status": "created", "batch_id": batch_id})
+            results.append({"file_name": f["name"], "status": "synced", "batch_id": existing["id"], **sync_result})
+            continue
+
+        with session() as conn:
+            dup = repo.find_duplicate_candidate(conn, current_user["id"], parsed["students"])
+        if dup:
+            results.append(_duplicate_out(f, dup, req.folder_id, len(parsed["students"])))
+            continue
+
+        with session() as conn:
+            batch_id = repo.create_batch(
+                conn,
+                current_user["id"],
+                f["name"].rsplit(".", 1)[0],
+                existing_batches[0]["school_name"],
+                f["name"],
+                parsed,
+                _guess_class_level_from_filename(f["name"]) or existing_batches[0]["class_level"],
+                source_type="drive_folder_item",
+                source_ref=f["id"],
+                source_mime_type=f["mime_type"],
+                source_folder_id=req.folder_id,
+            )
+        results.append({"file_name": f["name"], "status": "created", "batch_id": batch_id})
 
     missing = [b for b in existing_batches if b["source_ref"] not in seen_file_ids]
     reference_results = await _ingest_reference_documents(current_user["id"], req.folder_id)
@@ -315,6 +367,60 @@ async def sync_drive_folder(req: SyncFolderRequest, current_user=Depends(get_cur
         "missing_batches": [{"id": b["id"], "name": b["name"]} for b in missing],
         "reference_documents": reference_results,
     }
+
+
+class ResolveDuplicateRequest(BaseModel):
+    file_id: str
+    mime_type: str
+    file_name: str
+    folder_id: str | None = None
+    action: str  # "replace" | "create_separate"
+    target_batch_id: int | None = None  # required for "replace"
+    class_level: str | None = None  # used for "create_separate"
+
+
+@router.post("/resolve-drive-duplicate")
+async def resolve_drive_duplicate(req: ResolveDuplicateRequest, current_user=Depends(get_current_user)):
+    """Carries out whichever choice a teacher made for a file flagged as a
+    likely duplicate during import/sync (see repo.find_duplicate_candidate
+    and _duplicate_out) — either folds it into the existing class it looks
+    like a re-upload of ("replace"), or creates it as a genuinely separate
+    class despite the roster overlap ("create_separate"). Re-fetches and
+    re-parses the file itself rather than trusting anything from the
+    original scan, since nothing's been read from Drive since the teacher
+    was shown the choice."""
+    try:
+        raw = await run_in_threadpool(fetch_drive_file_bytes, req.file_id, req.mime_type)
+        parsed = parse_uploaded_file(filename_for(req.file_name, req.mime_type), raw)
+    except (GoogleDriveFetchError, SheetParseError) as exc:
+        raise HTTPException(422, str(exc))
+
+    with session() as conn:
+        if req.action == "replace":
+            if not req.target_batch_id:
+                raise HTTPException(422, "target_batch_id is required to replace an existing class")
+            target = repo.get_batch(conn, current_user["id"], req.target_batch_id)
+            if not target:
+                raise HTTPException(404, "Target batch not found")
+            sync_result = repo.resync_batch(conn, req.target_batch_id, parsed)
+            repo.rebind_batch_source(conn, req.target_batch_id, "drive_folder_item", req.file_id, req.mime_type, req.folder_id)
+            return {"status": "replaced", "batch_id": req.target_batch_id, "batch_name": target["name"], **sync_result}
+        if req.action == "create_separate":
+            batch_id = repo.create_batch(
+                conn,
+                current_user["id"],
+                req.file_name.rsplit(".", 1)[0],
+                current_user["default_school_name"] or "",
+                req.file_name,
+                parsed,
+                _normalize_class_level(req.class_level),
+                source_type="drive_folder_item",
+                source_ref=req.file_id,
+                source_mime_type=req.mime_type,
+                source_folder_id=req.folder_id,
+            )
+            return {"status": "created", "batch_id": batch_id, "student_count": len(parsed["students"])}
+        raise HTTPException(422, "action must be 'replace' or 'create_separate'")
 
 
 @router.post("/{batch_id}/sync")

@@ -33,13 +33,23 @@ export interface BatchSyncResult {
 
 export interface DriveImportFileResult {
   file_name: string;
-  status: "created" | "synced" | "failed";
+  status: "created" | "synced" | "failed" | "possible_duplicate";
   batch_id?: number;
   student_count?: number;
   added?: number;
   updated?: number;
   removed?: number;
   error?: string;
+  // Present when status is "possible_duplicate" — everything needed to
+  // call POST /batches/resolve-drive-duplicate without re-pasting the folder link.
+  file_id?: string;
+  mime_type?: string;
+  folder_id?: string | null;
+  candidate_batch_id?: number;
+  candidate_batch_name?: string;
+  overlap_count?: number;
+  existing_student_count?: number;
+  new_student_count?: number;
 }
 
 export interface ReferenceDocumentImportResult {
