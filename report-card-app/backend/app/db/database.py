@@ -68,13 +68,12 @@ def _migrate_student_phone(conn: psycopg.Connection) -> None:
     conn.execute("ALTER TABLE student ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT ''")
 
 
-def _migrate_tts_audio_cache(conn: psycopg.Connection) -> None:
-    """Adds `content_key` to a pre-existing `tts_audio_cache` table (see
-    schema.sql for what it's for). Rows written before this migration keep
-    a NULL content_key and are simply never cleaned up — harmless, since
-    they're still valid cached audio for whatever text hashed into them."""
-    conn.execute("ALTER TABLE tts_audio_cache ADD COLUMN IF NOT EXISTS content_key TEXT")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_tts_audio_cache_content_key ON tts_audio_cache (content_key)")
+def _migrate_drop_tts_audio_cache(conn: psycopg.Connection) -> None:
+    """Drops `tts_audio_cache` (see app/integrations/tts_audio.py) — the
+    app no longer caches TTS audio server-side at all: it ran on a
+    free-tier Postgres instance not worth spending on a disposable cache
+    that also held spoken PII (the student's/parent's name)."""
+    conn.execute("DROP TABLE IF EXISTS tts_audio_cache")
 
 
 def _migrate_class_level(conn: psycopg.Connection) -> None:
@@ -162,7 +161,7 @@ def init_db() -> None:
             if statement:
                 conn.execute(statement)
         _migrate_student_phone(conn)
-        _migrate_tts_audio_cache(conn)
+        _migrate_drop_tts_audio_cache(conn)
         _migrate_class_level(conn)
         _migrate_tt_school_config(conn)
         _migrate_tt_phone_and_excluded_periods(conn)

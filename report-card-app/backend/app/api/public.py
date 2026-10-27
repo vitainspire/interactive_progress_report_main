@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.db import batches as repo
 from app.db.database import session
-from app.integrations import bhashini, chat, tts_cache
+from app.integrations import bhashini, chat, tts_audio
 from app.integrations.sharing import get_student_id_for_token
 from app.reports import card_render, study_plan
 from app.reports.chat_canned import answer_canned_question
@@ -217,27 +217,26 @@ def get_public_report_full(token: str):
 @router.get("/report/{token}/voice/{page}")
 def get_public_report_voice(token: str, page: str):
     """Real Telugu audio for one page of the parent report (page is a
-    subject name, or the literal "conclusion"), generated via Bhashini and
-    cached in Postgres. The page's own READ_ALOUD_SCRIPT calls this first
-    and only falls back to the browser's speechSynthesis if this 503s or
-    404s. Always regenerates the narration text server-side from the
-    token — never trusts client-supplied text."""
+    subject name, or the literal "conclusion"), generated via Bhashini on
+    every call — not cached server-side, since the audio has the
+    student's and parent's own name spoken in it and this app runs on a
+    free-tier Postgres instance not worth spending on a disposable cache.
+    The page's own READ_ALOUD_SCRIPT calls this first and only falls back
+    to the browser's speechSynthesis if this 503s or 404s. Always
+    regenerates the narration text server-side from the token — never
+    trusts client-supplied text."""
     with session() as conn:
         student, all_students, batch_row = _resolve_report_context(conn, token)
         settings = repo.settings_from_row(batch_row)
         text = get_speech_text(student, all_students, json.loads(batch_row["exam_order"]), settings, batch_row["school_name"], page)
         if not text:
             raise HTTPException(404, "No narration available for this page.")
-        content_key = f"{student['id']}:{page}"
         try:
-            audio_format, audio = tts_cache.get_or_synthesize(conn, content_key, text)
+            audio_format, audio = tts_audio.synthesize(text)
         except (bhashini.BhashiniNotConfigured, bhashini.BhashiniSendError) as exc:
             raise HTTPException(503, f"Real voice narration isn't available right now: {exc}")
-        # The audio itself is cached server-side forever (keyed by the exact
-        # text), but fetching even a compressed blob from Postgres still
-        # costs a real round trip — this lets the browser skip that
-        # entirely for a repeat "Listen" tap within the same visit, without
-        # risking a permanently stale cache if marks are later corrected.
+        # Lets the browser skip re-fetching on a repeat "Listen" tap within
+        # the same visit, without this being a server-side cache.
         headers = {"Cache-Control": "private, max-age=3600"}
         media_type = "audio/mpeg" if audio_format == "mp3" else "audio/wav"
         return Response(content=audio, media_type=media_type, headers=headers)

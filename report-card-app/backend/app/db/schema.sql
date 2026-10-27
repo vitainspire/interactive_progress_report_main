@@ -117,21 +117,6 @@ CREATE TABLE IF NOT EXISTS attendance_total (
     total_present REAL
 );
 
--- Caches generated Bhashini TTS audio by a hash of (language, voice, text),
--- so repeated "Listen" taps for the same report page don't re-call a free
--- government API every time, and a slow/down Bhashini doesn't block a
--- parent who already generated this exact audio once before. content_key
--- identifies "this student's this page" independent of the exam text, so
--- the stale row left behind when a new exam changes that page's wording
--- can be found and deleted instead of accumulating forever.
-CREATE TABLE IF NOT EXISTS tts_audio_cache (
-    text_hash TEXT PRIMARY KEY,
-    content_key TEXT,
-    audio_format TEXT NOT NULL,
-    audio_bytes BYTEA NOT NULL,
-    created_at TEXT NOT NULL
-);
-
 -- Real AP syllabus chapters, one row per chapter per (class, subject) —
 -- reference data shared by every batch/user (not tied to a user_id or
 -- batch_id), since a given class+subject's syllabus is the same regardless
@@ -159,7 +144,8 @@ CREATE TABLE IF NOT EXISTS syllabus_chapter (
 
 -- Caches one generated study plan per (subject, weak-subject summary) pair
 -- so reloading the same student's report doesn't re-call the LLM every
--- time — same reasoning as tts_audio_cache, just for text instead of audio.
+-- time. Text only (no spoken/identifying PII), unlike the TTS audio this
+-- app intentionally doesn't cache.
 CREATE TABLE IF NOT EXISTS study_plan_cache (
     cache_key TEXT PRIMARY KEY,
     subject TEXT NOT NULL,
@@ -199,8 +185,8 @@ CREATE TABLE IF NOT EXISTS subject_exam_info (
 
 -- A school's own uploaded syllabus/exam-blueprint document (PDF or image),
 -- picked up from the same Drive folder used for marks-sheet import. The raw
--- file is kept (BYTEA, same pattern as tts_audio_cache) so it can be
--- re-extracted later or shown to the teacher during review. extracted_json
+-- file is kept (BYTEA) so it can be re-extracted later or shown to the
+-- teacher during review. extracted_json
 -- holds the LLM's structured guess until a teacher confirms it, at which
 -- point matching rows are written into syllabus_chapter/subject_blueprint/
 -- subject_exam_info with this account's id, never auto-merged before that.
