@@ -326,7 +326,9 @@ def delete_batch(conn: psycopg.Connection, user_id: int, batch_id: int) -> bool:
 
 
 def list_students_brief(conn: psycopg.Connection, batch_id: int) -> list[dict]:
-    return conn.execute("SELECT id, name, section, roll_no, phone FROM student WHERE batch_id = %s ORDER BY order_index", (batch_id,)).fetchall()
+    return conn.execute(
+        "SELECT id, name, section, roll_no, phone, father_name FROM student WHERE batch_id = %s ORDER BY order_index", (batch_id,)
+    ).fetchall()
 
 
 def get_student(conn: psycopg.Connection, student_id: int) -> dict | None:

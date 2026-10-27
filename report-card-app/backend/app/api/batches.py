@@ -680,7 +680,7 @@ def get_student_link(batch_id: int, student_id: int, current_user=Depends(get_cu
             except InvalidPhoneNumber:
                 whatsapp_phone = None
 
-        return {"report_url": report_url, "whatsapp_phone": whatsapp_phone}
+        return {"report_url": report_url, "whatsapp_phone": whatsapp_phone, "father_name": student_row["father_name"] or ""}
 
 
 @router.post("/{batch_id}/send-reports")

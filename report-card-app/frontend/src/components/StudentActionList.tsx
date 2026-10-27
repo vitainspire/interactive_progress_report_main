@@ -6,6 +6,15 @@ import type { StudentBrief } from "../types";
 interface StudentLink {
   report_url: string;
   whatsapp_phone: string | null;
+  father_name: string;
+}
+
+/** Greets the parent by name (the sheet's "Father" column) when on file,
+ * otherwise falls back to a plain "నమస్తే," rather than an awkward gap —
+ * many schools' sheets leave this column blank for some rows. */
+function buildParentMessage(student: StudentBrief, link: StudentLink): string {
+  const greeting = link.father_name ? `నమస్తే ${link.father_name} గారు,` : "నమస్తే,";
+  return `${greeting} మీ అబ్బాయి/అమ్మాయి ${student.name} గారి ప్రోగ్రెస్ రిపోర్ట్ ఇక్కడ చూడండి: ${link.report_url}`;
 }
 
 /** One row per student with four actions, replacing the old default view
@@ -50,7 +59,7 @@ export function StudentActionList({ batchId, students }: { batchId: number; stud
   async function openWhatsApp(student: StudentBrief) {
     const link = await fetchLink(student.id);
     if (!link) return;
-    const message = `${student.name} గారి ప్రోగ్రెస్ రిపోర్ట్ ఇక్కడ చూడండి: ${link.report_url}`;
+    const message = buildParentMessage(student, link);
     const phonePart = link.whatsapp_phone ? link.whatsapp_phone : "";
     window.open(`https://wa.me/${phonePart}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
   }
@@ -58,7 +67,7 @@ export function StudentActionList({ batchId, students }: { batchId: number; stud
   async function openSms(student: StudentBrief) {
     const link = await fetchLink(student.id);
     if (!link || !link.whatsapp_phone) return;
-    const message = `${student.name} గారి ప్రోగ్రెస్ రిపోర్ట్ ఇక్కడ చూడండి: ${link.report_url}`;
+    const message = buildParentMessage(student, link);
     window.open(`sms:+${link.whatsapp_phone}?body=${encodeURIComponent(message)}`, "_blank", "noopener");
   }
 
