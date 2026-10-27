@@ -1163,15 +1163,6 @@ function SlotFixPicker({
   );
 }
 
-function groupSlotsByClass(slots: TtGeneratedSlot[]): { classId: number; className: string; slots: TtGeneratedSlot[] }[] {
-  const map = new Map<number, { classId: number; className: string; slots: TtGeneratedSlot[] }>();
-  for (const s of slots) {
-    if (!map.has(s.class_id)) map.set(s.class_id, { classId: s.class_id, className: s.class_name, slots: [] });
-    map.get(s.class_id)!.slots.push(s);
-  }
-  return [...map.values()].sort((a, b) => a.className.localeCompare(b.className));
-}
-
 function QuickSubstitutionPanel({
   teachers,
   periodsPerDay,
@@ -1191,6 +1182,10 @@ function QuickSubstitutionPanel({
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [result, setResult] = useState<TtGenerateDayResult | null>(null);
+  // Bumped on every generate (and every manual fix of an unresolved slot)
+  // so the embedded sheet below — same src URL for the same date — is
+  // forced to re-mount and re-fetch instead of showing a stale iframe.
+  const [sheetVersion, setSheetVersion] = useState(0);
 
   const periods = Array.from({ length: periodsPerDay }, (_, i) => i + 1);
 
@@ -1242,6 +1237,7 @@ function QuickSubstitutionPanel({
         resolved: [...prev.resolved, fixed],
       };
     });
+    setSheetVersion((v) => v + 1);
   }
 
   async function generate() {
@@ -1261,6 +1257,7 @@ function QuickSubstitutionPanel({
       };
       const res = await api.post<TtGenerateDayResult>("/timetable/substitutions/generate-day", body);
       setResult(res);
+      setSheetVersion((v) => v + 1);
       onGenerated();
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Could not generate substitutions");
@@ -1387,24 +1384,14 @@ function QuickSubstitutionPanel({
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
               No periods needed covering for {result.date}.
             </p>
-          ) : (
-            groupSlotsByClass(result.resolved).map((group) => (
-              <div key={group.classId} className="mt-2 first:mt-0">
-                <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
-                  {group.className}
-                </p>
-                <ul className="mt-1 space-y-0.5">
-                  {[...group.slots]
-                    .sort((a, b) => a.period - b.period)
-                    .map((s) => (
-                      <li key={`${s.class_id}-${s.period}`} className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                        Period {s.period} · {s.subject_name} — {s.substitute_teacher_name} ({s.substitute_teacher_code})
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            ))
-          )}
+          ) : result.resolved.length > 0 ? (
+            <iframe
+              key={sheetVersion}
+              src={api.substitutionSheetUrl(date)}
+              title={`Substitute timetable for ${date}`}
+              style={{ width: "100%", height: "70vh", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+            />
+          ) : null}
 
           {result.unresolved.length > 0 && (
             <div className="mt-3 rounded-lg p-3" style={{ background: "var(--accent-mark-soft)" }}>
