@@ -197,6 +197,27 @@ CREATE TABLE IF NOT EXISTS subject_exam_info (
     PRIMARY KEY (class_level, subject)
 );
 
+-- A school's own uploaded syllabus/exam-blueprint document (PDF or image),
+-- picked up from the same Drive folder used for marks-sheet import. The raw
+-- file is kept (BYTEA, same pattern as tts_audio_cache) so it can be
+-- re-extracted later or shown to the teacher during review. extracted_json
+-- holds the LLM's structured guess until a teacher confirms it, at which
+-- point matching rows are written into syllabus_chapter/subject_blueprint/
+-- subject_exam_info with this account's id, never auto-merged before that.
+CREATE TABLE IF NOT EXISTS subject_reference_document (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    file_name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    file_bytes BYTEA NOT NULL,
+    source_drive_file_id TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    extracted_json TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_subject_reference_document_account ON subject_reference_document(account_id, status);
+
 -- Timetable Creator module — a second tool under the same login, scoped to
 -- user_id exactly like batch is (one account = one school, see ToolsHubPage).
 -- tt_teacher is declared before tt_class_subject below since that junction

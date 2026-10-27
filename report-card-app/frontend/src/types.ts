@@ -42,14 +42,60 @@ export interface DriveImportFileResult {
   error?: string;
 }
 
+export interface ReferenceDocumentImportResult {
+  file_name: string;
+  status: "pending" | "failed";
+  reference_document_id?: number;
+  error?: string;
+}
+
 export interface DriveImportFolderResult {
   folder_id: string;
   results: DriveImportFileResult[];
+  reference_documents: ReferenceDocumentImportResult[];
 }
 
 export interface DriveSyncFolderResult {
   results: DriveImportFileResult[];
   missing_batches: { id: number; name: string }[];
+  reference_documents: ReferenceDocumentImportResult[];
+}
+
+export interface SyllabusChapterDraft {
+  chapter_no: number;
+  chapter_name: string;
+  genre?: string | null;
+  theme?: string | null;
+  author?: string | null;
+  month?: string | null;
+  periods?: number | null;
+  page_range?: string | null;
+}
+
+export interface BlueprintTopicDraft {
+  topic_name: string;
+  marks: number;
+  choice_marks?: number | null;
+}
+
+export interface ReferenceDocumentExtraction {
+  subject_guess: string | null;
+  class_level_guess: string | null;
+  document_type: "syllabus" | "blueprint" | "unknown";
+  chapters: SyllabusChapterDraft[];
+  topics: BlueprintTopicDraft[];
+  exam_format: string | null;
+  tips: string[];
+}
+
+export interface ReferenceDocument {
+  id: number;
+  file_name: string;
+  mime_type: string;
+  status: "pending" | "confirmed" | "rejected" | "failed";
+  error: string | null;
+  created_at: string;
+  extracted: ReferenceDocumentExtraction | null;
 }
 
 export interface StudentBrief {

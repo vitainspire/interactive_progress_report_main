@@ -117,6 +117,34 @@ def _migrate_batch_source_sync(conn: psycopg.Connection) -> None:
     conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS last_synced_at TEXT")
 
 
+def _migrate_subject_exam_info_pk(conn: psycopg.Connection) -> None:
+    """subject_exam_info originally keyed on PRIMARY KEY (class_level,
+    subject) — fine while every row was global, but it only allows one row
+    per class+subject ever, which breaks the moment a school's own row needs
+    to coexist with the shared default for that same class+subject. Replaces
+    it with a surrogate id, matching syllabus_chapter/subject_blueprint's
+    shape. Safe to run every startup: after the DROP there's guaranteed to
+    be no primary key left (a table has at most one), so the ADD always
+    succeeds."""
+    conn.execute("ALTER TABLE subject_exam_info ADD COLUMN IF NOT EXISTS id INTEGER GENERATED ALWAYS AS IDENTITY")
+    conn.execute("ALTER TABLE subject_exam_info DROP CONSTRAINT IF EXISTS subject_exam_info_pkey")
+    conn.execute("ALTER TABLE subject_exam_info ADD PRIMARY KEY (id)")
+
+
+def _migrate_syllabus_account_scope(conn: psycopg.Connection) -> None:
+    """Adds an optional `account_id` to the three previously-global
+    reference-data tables (see schema.sql) so a school can have its own
+    syllabus/blueprint instead of everyone sharing the one hardcoded AP SSC
+    dataset. Existing rows keep account_id NULL, which the lookup functions
+    treat as "the shared default" — nothing already seeded changes meaning."""
+    conn.execute("ALTER TABLE syllabus_chapter ADD COLUMN IF NOT EXISTS account_id INTEGER REFERENCES app_user(id) ON DELETE CASCADE")
+    conn.execute("ALTER TABLE subject_blueprint ADD COLUMN IF NOT EXISTS account_id INTEGER REFERENCES app_user(id) ON DELETE CASCADE")
+    conn.execute("ALTER TABLE subject_exam_info ADD COLUMN IF NOT EXISTS account_id INTEGER REFERENCES app_user(id) ON DELETE CASCADE")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_syllabus_chapter_account ON syllabus_chapter(account_id, class_level, subject)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_subject_blueprint_account ON subject_blueprint(account_id, class_level, subject)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_subject_exam_info_account ON subject_exam_info(account_id, class_level, subject)")
+
+
 def init_db() -> None:
     with get_connection() as conn:
         schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
@@ -130,6 +158,8 @@ def init_db() -> None:
         _migrate_tt_school_config(conn)
         _migrate_tt_phone_and_excluded_periods(conn)
         _migrate_batch_source_sync(conn)
+        _migrate_subject_exam_info_pk(conn)
+        _migrate_syllabus_account_scope(conn)
         seed_syllabus(conn)
         seed_subject_blueprint(conn)
         conn.commit()

@@ -180,7 +180,8 @@ def seed(conn: psycopg.Connection) -> None:
     database."""
     for (class_level, subject), chapters in SYLLABUS_BY_CLASS_SUBJECT.items():
         existing = conn.execute(
-            "SELECT 1 FROM syllabus_chapter WHERE class_level = %s AND subject = %s LIMIT 1", (class_level, subject)
+            "SELECT 1 FROM syllabus_chapter WHERE class_level = %s AND subject = %s AND account_id IS NULL LIMIT 1",
+            (class_level, subject),
         ).fetchone()
         if existing:
             continue

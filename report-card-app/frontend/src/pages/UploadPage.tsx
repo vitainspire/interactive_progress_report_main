@@ -3,8 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { FolderIcon } from "../components/Icons";
+import { ReferenceDocumentReview } from "../components/ReferenceDocumentReview";
 import { isGooglePickerConfigured, pickGoogleSheet, preloadGooglePicker } from "../integrations/googlePicker";
-import type { BatchSummary, DriveImportFolderResult } from "../types";
+import type { BatchSummary, DriveImportFolderResult, ReferenceDocument } from "../types";
 
 type Mode = "file" | "link" | "drive" | "folder";
 
@@ -22,12 +23,24 @@ export function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [pendingReferenceDocs, setPendingReferenceDocs] = useState<ReferenceDocument[] | null>(null);
 
   const driveEnabled = isGooglePickerConfigured();
+
+  function refreshPendingReferenceDocs() {
+    api
+      .get<ReferenceDocument[]>("/reference-documents?status=pending")
+      .then((docs) => setPendingReferenceDocs(docs.length ? docs : null))
+      .catch(() => {});
+  }
 
   useEffect(() => {
     if (driveEnabled) preloadGooglePicker().catch(() => {});
   }, [driveEnabled]);
+
+  useEffect(() => {
+    refreshPendingReferenceDocs();
+  }, []);
 
   const canSubmit = mode === "link" ? sheetUrl.trim().length > 0 : mode === "folder" ? folderUrl.trim().length > 0 : !!file;
 
@@ -64,6 +77,7 @@ export function UploadPage() {
           class_level: classLevel,
         });
         setFolderResults(result);
+        if (result.reference_documents.length) refreshPendingReferenceDocs();
         return;
       }
       const form = new FormData();
@@ -255,6 +269,13 @@ export function UploadPage() {
                 )}
               </div>
             ))}
+            {folderResults.reference_documents.length > 0 && (
+              <p className="pt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                Also found {folderResults.reference_documents.length} syllabus/blueprint document
+                {folderResults.reference_documents.length === 1 ? "" : "s"} in this folder — review them below before
+                they're used.
+              </p>
+            )}
           </div>
         )}
 
@@ -266,6 +287,17 @@ export function UploadPage() {
           {busy ? (mode === "folder" ? "Importing…" : "Reading…") : mode === "folder" ? "Import folder" : "Upload"}
         </button>
       </form>
+
+      {pendingReferenceDocs && pendingReferenceDocs.length > 0 && (
+        <div className="mt-4 space-y-3">
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            Syllabus/blueprint documents waiting for review
+          </h2>
+          {pendingReferenceDocs.map((doc) => (
+            <ReferenceDocumentReview key={doc.id} doc={doc} onChanged={refreshPendingReferenceDocs} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

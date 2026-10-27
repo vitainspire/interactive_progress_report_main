@@ -13,16 +13,19 @@ from app.db import batches as repo
 from app.db.database import session
 from app.db.users import set_default_school_name
 from app.integrations import sms, whatsapp
+from app.db import reference_documents as refdocs_repo
 from app.integrations.google_drive_folder import (
     GoogleDriveFetchError,
     extract_folder_id,
     fetch_drive_file_bytes,
     filename_for,
+    list_folder_reference_files,
     list_folder_spreadsheet_files,
 )
 from app.integrations.google_sheets import GoogleSheetFetchError, fetch_google_sheet_as_xlsx
 from app.integrations.phone import InvalidPhoneNumber, normalize_phone
 from app.integrations.sharing import get_or_create_share_token, public_report_url
+from app.integrations.syllabus_extraction import ExtractionError, ExtractionNotConfigured, extract_document
 from app.parsing.sheet_parser import SheetParseError, parse_uploaded_file, parse_workbook_file
 from app.reports.card_render import render_report_page
 from app.reports.class_stats import compute_class_stats
@@ -151,6 +154,49 @@ class ImportFolderRequest(BaseModel):
     class_level: str | None = None
 
 
+async def _ingest_reference_documents(account_id: int, folder_url_or_id: str) -> list[dict]:
+    """Picks up any PDF/image reference document (syllabus or exam
+    blueprint) sitting in the same Drive folder as the class mark sheets,
+    runs it through the document-extraction LLM, and stores it as a
+    *pending* subject_reference_document row for a teacher to review (see
+    app/api/reference_documents.py) — never written into the live
+    syllabus_chapter/subject_blueprint tables directly. A bad or
+    unreadable document is recorded with status 'failed' rather than
+    aborting the rest of the import, same error-isolation style as the
+    spreadsheet-file loop above."""
+    try:
+        files = await run_in_threadpool(list_folder_reference_files, folder_url_or_id)
+    except GoogleDriveFetchError:
+        return []  # optional step — a folder-access problem is already surfaced by the spreadsheet fetch above
+
+    results = []
+    for f in files:
+        with session() as conn:
+            already = refdocs_repo.get_reference_document_by_drive_file_id(conn, account_id, f["id"])
+        if already and already["status"] != "failed":
+            continue  # already ingested (or already pending review) from a prior import/sync of this folder
+
+        try:
+            raw = await run_in_threadpool(fetch_drive_file_bytes, f["id"], f["mime_type"])
+        except GoogleDriveFetchError as exc:
+            results.append({"file_name": f["name"], "status": "failed", "error": str(exc)})
+            continue
+
+        status, extracted_json, error = "pending", None, None
+        try:
+            extracted = await run_in_threadpool(extract_document, raw, f["mime_type"], f["name"])
+            extracted_json = json.dumps(extracted)
+        except (ExtractionNotConfigured, ExtractionError) as exc:
+            status, error = "failed", str(exc)
+
+        with session() as conn:
+            doc_id = refdocs_repo.create_reference_document(
+                conn, account_id, f["name"], f["mime_type"], raw, f["id"], status, extracted_json, error
+            )
+        results.append({"file_name": f["name"], "status": status, "reference_document_id": doc_id})
+    return results
+
+
 @router.post("/import-folder")
 async def import_drive_folder(req: ImportFolderRequest, current_user=Depends(get_current_user)):
     """One batch per spreadsheet file found directly inside a publicly-
@@ -201,7 +247,8 @@ async def import_drive_folder(req: ImportFolderRequest, current_user=Depends(get
             )
         results.append({"file_name": f["name"], "status": "created", "batch_id": batch_id, "student_count": len(parsed["students"])})
 
-    return {"folder_id": folder_id, "results": results}
+    reference_results = await _ingest_reference_documents(current_user["id"], req.folder_url.strip())
+    return {"folder_id": folder_id, "results": results, "reference_documents": reference_results}
 
 
 class SyncFolderRequest(BaseModel):
@@ -262,7 +309,12 @@ async def sync_drive_folder(req: SyncFolderRequest, current_user=Depends(get_cur
                 results.append({"file_name": f["name"], "status": "created", "batch_id": batch_id})
 
     missing = [b for b in existing_batches if b["source_ref"] not in seen_file_ids]
-    return {"results": results, "missing_batches": [{"id": b["id"], "name": b["name"]} for b in missing]}
+    reference_results = await _ingest_reference_documents(current_user["id"], req.folder_id)
+    return {
+        "results": results,
+        "missing_batches": [{"id": b["id"], "name": b["name"]} for b in missing],
+        "reference_documents": reference_results,
+    }
 
 
 @router.post("/{batch_id}/sync")
@@ -428,7 +480,7 @@ def get_subject_analysis(batch_id: int, subject: str, current_user=Depends(get_c
             raise HTTPException(404, "This batch has no students")
         settings = repo.settings_from_row(row)
         html = render_subject_analysis(
-            conn, all_students, json.loads(row["exam_order"]), settings,
+            conn, current_user["id"], all_students, json.loads(row["exam_order"]), settings,
             row["class_level"], row["school_name"], row["name"], subject,
         )
         if html is None:

@@ -157,25 +157,39 @@ def compute_exam_stats(all_students: list[dict], exam_defs: list[dict], settings
     return out
 
 
-def get_blueprint(conn: psycopg.Connection, class_level: str, subject_name: str) -> list[dict]:
+def get_blueprint(conn: psycopg.Connection, account_id: int, class_level: str, subject_name: str) -> list[dict]:
+    """A school's own confirmed blueprint (see app/db/reference_documents.py)
+    takes priority over the shared account_id IS NULL default."""
     canon = classify_subject(subject_name)
     if not canon:
         return []
-    rows = conn.execute(
-        "SELECT topic_name, marks, choice_marks FROM subject_blueprint WHERE class_level = %s AND subject = %s ORDER BY marks DESC",
-        (class_level, canon),
+    own = conn.execute(
+        "SELECT topic_name, marks, choice_marks FROM subject_blueprint WHERE account_id = %s AND class_level = %s AND subject = %s ORDER BY marks DESC",
+        (account_id, class_level, canon),
     ).fetchall()
-    return list(rows)
+    if own:
+        return list(own)
+    return list(
+        conn.execute(
+            "SELECT topic_name, marks, choice_marks FROM subject_blueprint WHERE account_id IS NULL AND class_level = %s AND subject = %s ORDER BY marks DESC",
+            (class_level, canon),
+        ).fetchall()
+    )
 
 
-def get_exam_info(conn: psycopg.Connection, class_level: str, subject_name: str) -> tuple[str, list[str]]:
+def get_exam_info(conn: psycopg.Connection, account_id: int, class_level: str, subject_name: str) -> tuple[str, list[str]]:
     canon = classify_subject(subject_name)
     if not canon:
         return "", []
     row = conn.execute(
-        "SELECT exam_format, tips FROM subject_exam_info WHERE class_level = %s AND subject = %s",
-        (class_level, canon),
+        "SELECT exam_format, tips FROM subject_exam_info WHERE account_id = %s AND class_level = %s AND subject = %s",
+        (account_id, class_level, canon),
     ).fetchone()
+    if not row:
+        row = conn.execute(
+            "SELECT exam_format, tips FROM subject_exam_info WHERE account_id IS NULL AND class_level = %s AND subject = %s",
+            (class_level, canon),
+        ).fetchone()
     if not row:
         return "", []
     return row["exam_format"] or "", json.loads(row["tips"] or "[]")
@@ -354,6 +368,7 @@ def _tile(r: dict, j: int, max_marks: float, flag_fail: bool) -> str:
 
 def render_subject_analysis(
     conn: psycopg.Connection,
+    account_id: int,
     all_students: list[dict],
     exam_defs: list[dict],
     settings,
@@ -365,8 +380,8 @@ def render_subject_analysis(
     """Returns the full printable HTML page for one subject, or None if
     this subject has no numeric marks recorded in any exam yet."""
     te, en, color = _display_info(subject_name)
-    exam_format, easy_tips = get_exam_info(conn, class_level, subject_name)
-    blueprint = get_blueprint(conn, class_level, subject_name)
+    exam_format, easy_tips = get_exam_info(conn, account_id, class_level, subject_name)
+    blueprint = get_blueprint(conn, account_id, class_level, subject_name)
 
     X = compute_exam_stats(all_students, exam_defs, settings, subject_name)
     if not X:

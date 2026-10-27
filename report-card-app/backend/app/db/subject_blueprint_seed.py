@@ -176,7 +176,8 @@ GENERAL_TIPS = [
 def seed(conn: psycopg.Connection) -> None:
     for (class_level, subject), topics in BLUEPRINT_BY_CLASS_SUBJECT.items():
         existing = conn.execute(
-            "SELECT 1 FROM subject_blueprint WHERE class_level = %s AND subject = %s LIMIT 1", (class_level, subject)
+            "SELECT 1 FROM subject_blueprint WHERE class_level = %s AND subject = %s AND account_id IS NULL LIMIT 1",
+            (class_level, subject),
         ).fetchone()
         if existing:
             continue
@@ -189,7 +190,8 @@ def seed(conn: psycopg.Connection) -> None:
 
     for (class_level, subject), (exam_format, tips) in EXAM_INFO_BY_CLASS_SUBJECT.items():
         existing = conn.execute(
-            "SELECT 1 FROM subject_exam_info WHERE class_level = %s AND subject = %s LIMIT 1", (class_level, subject)
+            "SELECT 1 FROM subject_exam_info WHERE class_level = %s AND subject = %s AND account_id IS NULL LIMIT 1",
+            (class_level, subject),
         ).fetchone()
         if existing:
             continue

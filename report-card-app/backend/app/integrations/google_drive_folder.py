@@ -28,6 +28,13 @@ _SPREADSHEET_MIME_TYPES = (
 _NATIVE_SHEET_MIME = "application/vnd.google-apps.spreadsheet"
 _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
+_REFERENCE_DOC_MIME_TYPES = (
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+)
+
 
 class GoogleDriveFetchError(ValueError):
     pass
@@ -81,6 +88,22 @@ def list_folder_spreadsheet_files(url_or_id: str) -> list[dict]:
             '"Anyone with the link can view".'
         )
     return files
+
+
+def list_folder_reference_files(url_or_id: str) -> list[dict]:
+    """Every direct child of the folder that's a PDF or image — the same
+    folder a school already drops its class mark-sheets into may also hold
+    its own syllabus/exam-blueprint documents. Unlike
+    list_folder_spreadsheet_files, an empty result isn't an error: most
+    schools won't have uploaded any reference documents yet, and that's a
+    perfectly normal, silent no-op for the import flow."""
+    folder_id = extract_folder_id(url_or_id)
+    api_key = _require_api_key()
+    mime_clause = " or ".join(f"mimeType='{m}'" for m in _REFERENCE_DOC_MIME_TYPES)
+    query = f"'{folder_id}' in parents and trashed = false and ({mime_clause})"
+    params = urllib.parse.urlencode({"q": query, "fields": "files(id,name,mimeType)", "pageSize": 200, "key": api_key})
+    data = _get_json(f"https://www.googleapis.com/drive/v3/files?{params}")
+    return [{"id": f["id"], "name": f["name"], "mime_type": f["mimeType"]} for f in data.get("files", [])]
 
 
 def fetch_drive_file_bytes(file_id: str, mime_type: str) -> bytes:

@@ -191,7 +191,7 @@ def get_public_study_plan(token: str):
             return {"available": False}
 
         weak_summary = answer_canned_question("ఏ సబ్జెక్టులు మెరుగుపడాలి?", student, all_students, exam_defs, settings) or ""
-        plan = study_plan.generate_study_plan(conn, batch_row["class_level"], subject, weak_summary)
+        plan = study_plan.generate_study_plan(conn, batch_row["user_id"], batch_row["class_level"], subject, weak_summary)
         if not plan:
             return {"available": False}
         return {"available": True, "subject": subject, "plan": plan}

@@ -74,3 +74,9 @@ BHASHINI_ULCA_API_KEY = os.environ.get("BHASHINI_ULCA_API_KEY", "")
 # app/reports/chat_context.py). Get a key at openrouter.ai/keys.
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "qwen/qwen3.8-flash")
+
+# A vision/document-capable model for reading an uploaded syllabus/exam-
+# blueprint PDF or image (see app/integrations/syllabus_extraction.py) —
+# kept separate from OPENROUTER_MODEL since that one's text-only and a
+# document-capable model is typically a different (often pricier) one.
+OPENROUTER_DOCUMENT_MODEL = os.environ.get("OPENROUTER_DOCUMENT_MODEL", "google/gemini-2.5-flash")
