@@ -3,6 +3,7 @@ export interface AuthUser {
   email: string;
   display_name: string;
   default_school_name: string;
+  school_address: string;
 }
 
 export interface BatchSummary {

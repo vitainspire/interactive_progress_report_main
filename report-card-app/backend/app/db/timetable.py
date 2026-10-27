@@ -470,6 +470,54 @@ def list_substitutions_for_account(conn: psycopg.Connection, user_id: int, date:
     ).fetchall()
 
 
+def record_absences(
+    conn: psycopg.Connection, user_id: int, date: str, whole_day_absent_ids: list[int], partial_busy: list[tuple[int, list[int]]]
+) -> None:
+    """Records what Quick Substitution was actually told for this date —
+    who's out the whole day vs. just busy for specific periods — as its
+    own fact, not something to re-derive later from the tt_substitution
+    rows it produces (see tt_absence in schema.sql for why that would get
+    it wrong). Re-running generate for the same date replaces each
+    teacher's row rather than duplicating it."""
+    now = datetime.now(timezone.utc).isoformat()
+    for teacher_id in whole_day_absent_ids:
+        conn.execute(
+            """INSERT INTO tt_absence (user_id, teacher_id, date, whole_day, periods, created_at)
+               VALUES (%s, %s, %s, TRUE, '[]', %s)
+               ON CONFLICT (user_id, teacher_id, date) DO UPDATE SET whole_day = TRUE, periods = '[]', created_at = EXCLUDED.created_at""",
+            (user_id, teacher_id, date, now),
+        )
+    for teacher_id, periods in partial_busy:
+        conn.execute(
+            """INSERT INTO tt_absence (user_id, teacher_id, date, whole_day, periods, created_at)
+               VALUES (%s, %s, %s, FALSE, %s, %s)
+               ON CONFLICT (user_id, teacher_id, date) DO UPDATE SET whole_day = FALSE, periods = EXCLUDED.periods, created_at = EXCLUDED.created_at""",
+            (user_id, teacher_id, date, json.dumps(sorted(periods)), now),
+        )
+
+
+def get_absence_summary_for_account(conn: psycopg.Connection, user_id: int, date: str) -> list[dict]:
+    """The printed substitution sheet's compact "who's out today" line
+    (e.g. "IPR, CHPV, PDK (P1, 2)") — reads the real whole-day/partial
+    intent recorded by record_absences, rather than guessing it back from
+    the resulting tt_substitution rows."""
+    rows = conn.execute(
+        """SELECT t.name AS teacher_name, t.code AS teacher_code, a.whole_day, a.periods
+           FROM tt_absence a JOIN tt_teacher t ON t.id = a.teacher_id
+           WHERE a.user_id = %s AND a.date = %s ORDER BY t.name""",
+        (user_id, date),
+    ).fetchall()
+    return [
+        {
+            "teacher_name": r["teacher_name"],
+            "teacher_code": r["teacher_code"],
+            "whole_day": r["whole_day"],
+            "periods": json.loads(r["periods"]),
+        }
+        for r in rows
+    ]
+
+
 def list_substitutions(conn: psycopg.Connection, class_id: int, date: str) -> list[dict]:
     return conn.execute(
         """SELECT sub.period, sub.day, sub.subject_id, s.name AS subject_name,
@@ -631,6 +679,8 @@ def generate_day_substitutions(
     whoever's already busy from the regular timetable or an existing
     substitution) so the same teacher can't be double-booked across two
     classes in the same period before anything is committed."""
+    record_absences(conn, user_id, date, whole_day_absent_ids, partial_busy)
+
     ctx = pending_substitution_context(conn, user_id, date, date)
     partial_periods = {teacher_id: set(periods) for teacher_id, periods in partial_busy}
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { CheckIcon, PlusIcon, PrinterIcon, TrashIcon } from "../components/Icons";
 import type {
   TtBreak,
@@ -1298,6 +1299,14 @@ function QuickSubstitutionPanel({
             </button>
           ))}
         </div>
+        <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+          {wholeDayAbsent.size === 0
+            ? "No one selected."
+            : `${wholeDayAbsent.size} selected: ${teachers
+                .filter((t) => wholeDayAbsent.has(t.id))
+                .map((t) => t.name)
+                .join(", ")}`}
+        </p>
       </div>
 
       <div className="mt-3">
@@ -2073,6 +2082,56 @@ function LeaveTab({
   );
 }
 
+function SchoolAddressField() {
+  const { user, setSchoolAddress } = useAuth();
+  const [value, setValue] = useState(user?.school_address ?? "");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    setSaved(false);
+    try {
+      await setSchoolAddress(value);
+      setSaved(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-5 border-b pb-5" style={{ borderColor: "var(--border)" }}>
+      <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+        School address (optional)
+      </label>
+      <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
+        Shown under the school name on the printed substitution sheet.
+      </p>
+      <div className="mt-1.5 flex flex-wrap gap-2">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="e.g. Gurajanapalli, Karapa Mandal, Kakinada Dt."
+          className="min-w-64 flex-1"
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy}
+          className="rounded-md border px-3 py-2 text-sm font-semibold disabled:opacity-60"
+          style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+        >
+          {busy ? "Saving…" : saved ? "Saved" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (config: TtSchoolConfig) => Promise<void> }) {
   const [days, setDays] = useState<Set<string>>(new Set(config.working_days));
   const [periodsPerDay, setPeriodsPerDay] = useState(String(config.periods_per_day));
@@ -2145,6 +2204,7 @@ function ScheduleTab({ config, onSave }: { config: TtSchoolConfig; onSave: (conf
 
   return (
     <Panel title="Weekly schedule" hint="Start with this — the school day's shape. Which days run classes, what time the day starts and ends, and how many periods fit in it.">
+      <SchoolAddressField />
       <form onSubmit={submit}>
         <div>
           <label className="text-xs" style={{ color: "var(--text-secondary)" }}>

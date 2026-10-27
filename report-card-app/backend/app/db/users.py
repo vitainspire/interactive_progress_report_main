@@ -23,3 +23,7 @@ def create_user(conn: psycopg.Connection, email: str, password: str, display_nam
 
 def set_default_school_name(conn: psycopg.Connection, user_id: int, school_name: str) -> None:
     conn.execute("UPDATE app_user SET default_school_name = %s WHERE id = %s", (school_name.strip(), user_id))
+
+
+def set_school_address(conn: psycopg.Connection, user_id: int, address: str) -> None:
+    conn.execute("UPDATE app_user SET school_address = %s WHERE id = %s", (address.strip(), user_id))

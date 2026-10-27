@@ -117,6 +117,15 @@ def _migrate_batch_source_sync(conn: psycopg.Connection) -> None:
     conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS last_synced_at TEXT")
 
 
+def _migrate_school_address(conn: psycopg.Connection) -> None:
+    """Adds an optional `school_address` to the pre-existing `app_user`
+    table (see schema.sql) — used on the printed substitution sheet below
+    the school name. Blank by default, and the sheet simply omits the line
+    rather than forcing every account to fill it in before this feature
+    can be used."""
+    conn.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS school_address TEXT NOT NULL DEFAULT ''")
+
+
 def _migrate_subject_exam_info_pk(conn: psycopg.Connection) -> None:
     """subject_exam_info originally keyed on PRIMARY KEY (class_level,
     subject) — fine while every row was global, but it only allows one row
@@ -158,6 +167,7 @@ def init_db() -> None:
         _migrate_tt_school_config(conn)
         _migrate_tt_phone_and_excluded_periods(conn)
         _migrate_batch_source_sync(conn)
+        _migrate_school_address(conn)
         _migrate_subject_exam_info_pk(conn)
         _migrate_syllabus_account_scope(conn)
         seed_syllabus(conn)

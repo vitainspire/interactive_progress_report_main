@@ -6,7 +6,7 @@ from pydantic import BaseModel, field_validator
 from app.core.deps import get_current_user
 from app.core.security import create_access_token, verify_password
 from app.db.database import session
-from app.db.users import create_user, get_user_by_email, get_user_by_id, set_default_school_name
+from app.db.users import create_user, get_user_by_email, get_user_by_id, set_default_school_name, set_school_address
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -59,6 +59,10 @@ class SchoolNameRequest(BaseModel):
         return v.strip()
 
 
+class SchoolAddressRequest(BaseModel):
+    school_address: str
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -70,6 +74,7 @@ def _user_out(user) -> dict:
         "email": user["email"],
         "display_name": user["display_name"],
         "default_school_name": user["default_school_name"],
+        "school_address": user["school_address"],
     }
 
 
@@ -105,4 +110,14 @@ def update_school_name(req: SchoolNameRequest, current_user=Depends(get_current_
     signup, since a fresh signup already has it set from registration."""
     with session() as conn:
         set_default_school_name(conn, current_user["id"], req.school_name)
+        return _user_out(get_user_by_id(conn, current_user["id"]))
+
+
+@router.put("/school-address")
+def update_school_address(req: SchoolAddressRequest, current_user=Depends(get_current_user)):
+    """Optional — shown under the school name on the printed substitution
+    sheet (see app/reports/substitution_sheet.py) when set; the sheet
+    simply omits that line otherwise."""
+    with session() as conn:
+        set_school_address(conn, current_user["id"], req.school_address)
         return _user_out(get_user_by_id(conn, current_user["id"]))

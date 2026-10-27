@@ -341,6 +341,26 @@ CREATE INDEX IF NOT EXISTS idx_tt_substitution_class_date ON tt_substitution(cla
 -- date+period" checks, so one substitute never gets double-booked either.
 CREATE INDEX IF NOT EXISTS idx_tt_substitution_sub_slot ON tt_substitution(substitute_teacher_id, date, period);
 
+-- Records what a teacher was actually marked as on one date when Quick
+-- Substitution ran (see generate_day_substitutions) — whole day absent, or
+-- just busy for specific periods. Kept as its own fact rather than
+-- re-derived later from the resulting tt_substitution rows: a teacher who
+-- only teaches 1-2 periods that day would look "whole day covered" either
+-- way, so inferring intent from the outcome gets it wrong exactly when it
+-- matters. Powers the printed substitution sheet's "Today: X, Y (P1, 2)"
+-- summary line.
+CREATE TABLE IF NOT EXISTS tt_absence (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    teacher_id INTEGER NOT NULL REFERENCES tt_teacher(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    whole_day BOOLEAN NOT NULL,
+    periods TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    UNIQUE (user_id, teacher_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_tt_absence_lookup ON tt_absence(user_id, date);
+
 -- A planned, multi-day leave — distinct from tt_substitution, which
 -- records one already-confirmed cover for one specific (class, date,
 -- period). A leave doesn't assign anyone by itself: it's the input the

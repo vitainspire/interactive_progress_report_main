@@ -671,12 +671,42 @@ def remove_substitution(class_id: int, date: str, period: int, current_user=Depe
 def print_substitution_sheet(date: str, current_user=Depends(get_current_user_from_header_or_query)):
     """One printable page listing every confirmed substitution across the
     whole school for this date — for the staff noticeboard, not scoped
-    to a single class like /classes/{id}/timetable/print."""
+    to a single class like /classes/{id}/timetable/print. Each row's
+    substitute is a live dropdown, so a wrong auto-pick can be fixed right
+    here before printing."""
     if not _DATE_RE.match(date):
         raise HTTPException(422, "date must be in YYYY-MM-DD format")
+    day = _WEEKDAY_CODES[date_cls.fromisoformat(date).weekday()]
     with session() as conn:
         rows = repo.list_substitutions_for_account(conn, current_user["id"], date)
-        html_out = render_substitution_sheet(current_user["default_school_name"] or "School", date, rows)
+        absence_summary = repo.get_absence_summary_for_account(conn, current_user["id"], date)
+        row_candidates: dict[tuple[int, int], list[dict]] = {}
+        for r in rows:
+            candidates = repo.find_substitute_candidates(
+                conn, current_user["id"], r["class_id"], day, r["period"], date, r["original_teacher_id"]
+            )
+            if not any(c["teacher_id"] == r["substitute_teacher_id"] for c in candidates):
+                # find_substitute_candidates treats whoever's already
+                # substituting at this exact date/period as "busy" — which
+                # includes this row's own current substitute, who would
+                # otherwise vanish from their own dropdown.
+                candidates = [
+                    {
+                        "teacher_id": r["substitute_teacher_id"],
+                        "teacher_name": r["substitute_teacher_name"],
+                        "teacher_code": r["substitute_teacher_code"],
+                        "reason": "current",
+                    }
+                ] + candidates
+            row_candidates[(r["class_id"], r["period"])] = candidates
+        html_out = render_substitution_sheet(
+            current_user["default_school_name"] or "School",
+            current_user["school_address"],
+            date,
+            rows,
+            absence_summary,
+            row_candidates,
+        )
         return HTMLResponse(content=html_out)
 
 
