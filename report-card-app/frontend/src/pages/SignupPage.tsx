@@ -7,20 +7,21 @@ export function SignupPage() {
   const { user, signup } = useAuth();
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
+  const [schoolName, setSchoolName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to="/tools" replace />;
+  if (user) return <Navigate to={user.default_school_name ? "/tools" : "/school-setup"} replace />;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      await signup(email, password, displayName);
+      await signup(email, password, displayName, schoolName);
       navigate("/tools");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create account");
@@ -59,6 +60,21 @@ export function SignupPage() {
               placeholder="Your name"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="mt-3">
+            <label htmlFor="signup-school" className="sr-only">
+              School name
+            </label>
+            <input
+              id="signup-school"
+              type="text"
+              autoComplete="organization"
+              placeholder="School name"
+              value={schoolName}
+              onChange={(e) => setSchoolName(e.target.value)}
               required
             />
           </div>

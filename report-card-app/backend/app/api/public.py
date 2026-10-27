@@ -1,8 +1,10 @@
 import json
+import time
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.db import batches as repo
 from app.db.database import session
@@ -19,11 +21,46 @@ from app.reports.parent_report import (
 )
 
 
+class ChatTurn(BaseModel):
+    # Deliberately not "system" — a parent-supplied history item can never
+    # be allowed to masquerade as the system prompt that scopes the LLM to
+    # this one student's own data.
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
+
+
 class AskRequest(BaseModel):
-    question: str
-    history: list[dict] = []
+    question: str = Field(min_length=1, max_length=1000)
+    history: list[ChatTurn] = Field(default_factory=list, max_length=20)
 
 router = APIRouter(prefix="/public", tags=["public"])
+
+# This endpoint feeds a child's full report (marks, attendance, rank) into
+# an LLM on every call that isn't one of the canned starter questions, so
+# it needs a hard ceiling against being hammered — scripted or just a
+# confused double-tap — independent of the chat's own upstream retry. A
+# simple in-memory per-token fixed window is enough for this app's
+# single-process deployment; it resets on restart and never explicitly
+# evicts old tokens, which is fine for an abuse guard rather than a
+# strict quota at this app's scale.
+_RATE_LIMIT_WINDOW_SECONDS = 600
+_RATE_LIMIT_MAX_REQUESTS = 15
+_rate_limit_state: dict[str, tuple[float, int]] = {}
+
+
+def _check_rate_limit(token: str) -> None:
+    now = time.monotonic()
+    window_start, count = _rate_limit_state.get(token, (now, 0))
+    if now - window_start > _RATE_LIMIT_WINDOW_SECONDS:
+        window_start, count = now, 0
+    count += 1
+    _rate_limit_state[token] = (window_start, count)
+    if count > _RATE_LIMIT_MAX_REQUESTS:
+        raise HTTPException(
+            429,
+            "చాలా ప్రశ్నలు అడిగారు, కొంచెం సేపు తర్వాత మళ్ళీ ప్రయత్నించండి. / "
+            "Too many questions — please wait a few minutes and try again.",
+        )
 
 
 def _resolve_report_context(conn, token: str):
@@ -97,6 +134,7 @@ def post_report_ask(token: str, req: AskRequest):
     server-side. The student's report data is rebuilt fresh from the
     database on every call (never cached), so answers can't go stale if
     marks are corrected mid-conversation."""
+    _check_rate_limit(token)
     question = req.question.strip()
     if not question:
         raise HTTPException(422, "Question can't be empty.")
@@ -117,7 +155,8 @@ def post_report_ask(token: str, req: AskRequest):
 
         context = build_student_context(student, all_students, exam_defs, settings, batch_row["school_name"])
     try:
-        answer = chat.ask_about_student(context, req.history, question)
+        history = [turn.model_dump() for turn in req.history]
+        answer = chat.ask_about_student(context, history, question)
     except chat.ChatNotConfigured as exc:
         raise HTTPException(503, str(exc))
     except chat.ChatSendError as exc:
@@ -152,7 +191,7 @@ def get_public_study_plan(token: str):
             return {"available": False}
 
         weak_summary = answer_canned_question("ఏ సబ్జెక్టులు మెరుగుపడాలి?", student, all_students, exam_defs, settings) or ""
-        plan = study_plan.generate_study_plan(conn, batch_row["class_level"], subject, student["name"], weak_summary)
+        plan = study_plan.generate_study_plan(conn, batch_row["class_level"], subject, weak_summary)
         if not plan:
             return {"available": False}
         return {"available": True, "subject": subject, "plan": plan}

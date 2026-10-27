@@ -94,7 +94,7 @@ _SYSTEM_PROMPT = (
 )
 
 
-def generate_study_plan(conn: psycopg.Connection, class_level: str, subject: str, student_name: str, weak_summary: str) -> str | None:
+def generate_study_plan(conn: psycopg.Connection, class_level: str, subject: str, weak_summary: str) -> str | None:
     """Returns a cached or freshly-generated syllabus-aware plan, or None if
     there's no syllabus on file for this class+subject (caller shows
     nothing) or the LLM call isn't configured/fails (same silent-fallback
@@ -109,7 +109,6 @@ def generate_study_plan(conn: psycopg.Connection, class_level: str, subject: str
         return row["plan_text"]
 
     user_prompt = (
-        f"Student: {student_name}\n"
         f"Class: {class_level}\n"
         f"Weak subject: {subject}\n"
         f"What we already know about this weakness: {weak_summary}\n\n"

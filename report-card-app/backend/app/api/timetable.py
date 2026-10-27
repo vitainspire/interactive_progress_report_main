@@ -521,6 +521,7 @@ def print_class_timetable(class_id: int, current_user=Depends(get_current_user_f
 # ---- Substitutions ----
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_WEEKDAY_CODES = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 
 
 def _candidate_out(c: dict) -> dict:
@@ -711,9 +712,69 @@ def notify_substitutes(date: str, current_user=Depends(get_current_user)):
         return results
 
 
+class PartialBusyEntry(BaseModel):
+    teacher_id: int
+    periods: list[int]
+
+
+class GenerateDayRequest(BaseModel):
+    date: str
+    whole_day_absent_teacher_ids: list[int] = []
+    partial_busy: list[PartialBusyEntry] = []
+
+
+def _generated_slot_out(s: dict) -> dict:
+    out = {
+        "class_id": s["class_id"],
+        "class_name": _class_label(s),
+        "day": s["day"],
+        "period": s["period"],
+        "subject_id": s["subject_id"],
+        "subject_name": s["subject_name"],
+        "original_teacher_id": s["original_teacher_id"],
+    }
+    if "substitute_teacher_id" in s:
+        out["substitute_teacher_id"] = s["substitute_teacher_id"]
+        out["substitute_teacher_name"] = s["substitute_teacher_name"]
+        out["substitute_teacher_code"] = s["substitute_teacher_code"]
+    return out
+
+
+@router.post("/substitutions/generate-day")
+def generate_day_substitutions(req: GenerateDayRequest, current_user=Depends(get_current_user)):
+    """One-shot replacement for confirming substitutes period by period:
+    given the teachers who are out (whole day) or tied up (specific
+    periods) on one date, auto-assigns and commits a substitute for every
+    period that leaves uncovered. Slots with no eligible teacher come
+    back unresolved instead of being silently dropped, so the admin can
+    still fix those few by hand with the existing single-slot endpoints."""
+    if not _DATE_RE.match(req.date):
+        raise HTTPException(422, "date must be in YYYY-MM-DD format")
+    day = _WEEKDAY_CODES[date_cls.fromisoformat(req.date).weekday()]
+    with session() as conn:
+        all_teacher_ids = {t["id"] for t in repo.list_teachers(conn, current_user["id"])}
+        for tid in req.whole_day_absent_teacher_ids:
+            if tid not in all_teacher_ids:
+                raise HTTPException(404, f"Teacher {tid} not found")
+        partial_busy = []
+        for entry in req.partial_busy:
+            if entry.teacher_id not in all_teacher_ids:
+                raise HTTPException(404, f"Teacher {entry.teacher_id} not found")
+            partial_busy.append((entry.teacher_id, entry.periods))
+
+        result = repo.generate_day_substitutions(
+            conn, current_user["id"], req.date, day, req.whole_day_absent_teacher_ids, partial_busy
+        )
+        return {
+            "date": req.date,
+            "day": day,
+            "resolved": [_generated_slot_out(s) for s in result["resolved"]],
+            "unresolved": [_generated_slot_out(s) for s in result["unresolved"]],
+        }
+
+
 # ---- Planned leave ----
 
-_WEEKDAY_CODES = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 _MAX_LEAVE_DAYS = 31  # guards against an accidental 10-year range blowing up the pending-needs scan
 
 

@@ -318,12 +318,19 @@ def is_teacher_busy_elsewhere(
 
 
 def rank_candidates(
-    teachers: list[dict], busy: set[int], same_subject_ids: set[int], this_class_teacher_ids: set[int]
+    teachers: list[dict],
+    busy: set[int],
+    same_subject_ids: set[int],
+    this_class_teacher_ids: set[int],
+    workload: dict[int, int] | None = None,
 ) -> list[dict]:
     """Shared ranking step behind find_substitute_candidates and the
     bulk-computed pending-leave queue: teaches the same subject first,
     then anyone who already teaches this class some other subject (a
-    familiar face), then everyone else not already busy."""
+    familiar face), then everyone else not already busy. `workload`
+    (teacher_id -> slots already assigned) breaks ties within a reason by
+    preferring whoever has taken on the least so far — only meaningful
+    within a single bulk generation run, since it's not persisted."""
     candidates = []
     for t in teachers:
         if t["id"] in busy:
@@ -337,7 +344,7 @@ def rank_candidates(
         candidates.append({"teacher_id": t["id"], "teacher_name": t["name"], "teacher_code": t["code"], "reason": reason})
 
     order = {"subject": 0, "class": 1, "other": 2}
-    candidates.sort(key=lambda c: (order[c["reason"]], c["teacher_name"]))
+    candidates.sort(key=lambda c: (order[c["reason"]], workload.get(c["teacher_id"], 0) if workload else 0, c["teacher_name"]))
     return candidates
 
 
@@ -604,3 +611,91 @@ def pending_substitution_context(conn: psycopg.Connection, user_id: int, start_d
         "busy_substituting_by_date_period": busy_substituting_by_date_period,
         "same_subject_by_subject": same_subject_by_subject,
     }
+
+
+def generate_day_substitutions(
+    conn: psycopg.Connection,
+    user_id: int,
+    date: str,
+    day: str,
+    whole_day_absent_ids: list[int],
+    partial_busy: list[tuple[int, list[int]]],
+) -> dict:
+    """Bulk replacement for confirming substitutes one period at a time:
+    given the teachers out for the whole day and the teachers busy for
+    just a few periods, finds and commits a substitute for every slot
+    that leaves uncovered in one pass. Reuses the same batched context
+    pending_substitution_context builds for the planned-leave queue,
+    scoped to this single date, so it doesn't re-query per slot. Tracks
+    who's already been used at each period during this run (on top of
+    whoever's already busy from the regular timetable or an existing
+    substitution) so the same teacher can't be double-booked across two
+    classes in the same period before anything is committed."""
+    ctx = pending_substitution_context(conn, user_id, date, date)
+    partial_periods = {teacher_id: set(periods) for teacher_id, periods in partial_busy}
+
+    needed: list[tuple[int, dict]] = []
+    for teacher_id in whole_day_absent_ids:
+        for entry in ctx["entries_by_teacher_day"].get((teacher_id, day), []):
+            needed.append((teacher_id, entry))
+    for teacher_id, periods in partial_periods.items():
+        for entry in ctx["entries_by_teacher_day"].get((teacher_id, day), []):
+            if entry["period"] in periods:
+                needed.append((teacher_id, entry))
+    needed.sort(key=lambda ted: (ted[1]["period"], ted[1]["grade"], ted[1]["section"] or ""))
+
+    used_this_period: dict[int, set[int]] = {}
+    assigned_count: dict[int, int] = {}
+    resolved: list[dict] = []
+    unresolved: list[dict] = []
+
+    for teacher_id, entry in needed:
+        period = entry["period"]
+        busy = (
+            ctx["busy_by_day_period"].get((day, period), set())
+            | ctx["busy_substituting_by_date_period"].get((date, period), set())
+            | used_this_period.get(period, set())
+            | {teacher_id}
+        )
+        candidates = rank_candidates(
+            ctx["teachers"],
+            busy,
+            ctx["same_subject_by_subject"].get(entry["subject_id"], set()),
+            ctx["teachers_by_class"].get(entry["class_id"], set()),
+            assigned_count,
+        )
+        slot_info = {
+            "class_id": entry["class_id"],
+            "grade": entry["grade"],
+            "section": entry["section"],
+            "day": day,
+            "period": period,
+            "subject_id": entry["subject_id"],
+            "subject_name": entry["subject_name"],
+            "original_teacher_id": teacher_id,
+        }
+
+        chosen = None
+        for candidate in candidates:
+            if not teacher_is_busy_at_slot(conn, user_id, candidate["teacher_id"], day, period, date, entry["class_id"]):
+                chosen = candidate
+                break
+        if chosen is None:
+            unresolved.append(slot_info)
+            continue
+
+        create_or_update_substitution(
+            conn, entry["class_id"], date, day, period, entry["subject_id"], teacher_id, chosen["teacher_id"]
+        )
+        used_this_period.setdefault(period, set()).add(chosen["teacher_id"])
+        assigned_count[chosen["teacher_id"]] = assigned_count.get(chosen["teacher_id"], 0) + 1
+        resolved.append(
+            {
+                **slot_info,
+                "substitute_teacher_id": chosen["teacher_id"],
+                "substitute_teacher_name": chosen["teacher_name"],
+                "substitute_teacher_code": chosen["teacher_code"],
+            }
+        )
+
+    return {"resolved": resolved, "unresolved": unresolved}

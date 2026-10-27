@@ -6,6 +6,8 @@ import type {
   TtBreak,
   TtClass,
   TtClassSubject,
+  TtGenerateDayResult,
+  TtGeneratedSlot,
   TtGenerateResult,
   TtLeave,
   TtPendingNeed,
@@ -946,11 +948,11 @@ function notifyNote(status: TtNotifyStatus): string {
   }
 }
 
-function SubstituteModal({
+function EditPeriodModal({
   classId,
   day,
   period,
-  initialDate,
+  entry,
   teachers,
   onClose,
   onChanged,
@@ -958,23 +960,16 @@ function SubstituteModal({
   classId: number;
   day: string;
   period: number;
-  initialDate: string;
+  entry: TtTimetableEntry;
   teachers: TtTeacher[];
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const [date, setDate] = useState(initialDate);
-  const [options, setOptions] = useState<TtSubstituteOptions | null>(null);
-  const [existingSub, setExistingSub] = useState<TtSubstitution | null | undefined>(undefined);
-  const [error, setError] = useState<string | null>(null);
-  const [assigning, setAssigning] = useState<number | null>(null);
-  const [assigned, setAssigned] = useState<{ name: string; note: string } | null>(null);
-  const [removing, setRemoving] = useState(false);
-
-  // Editing the weekly template permanently (independent of any date).
+  // Editing the weekly template permanently — same-day absences are
+  // handled in bulk by QuickSubstitutionPanel, not from here.
   const [classSubjects, setClassSubjects] = useState<TtClassSubject[] | null>(null);
-  const [editSubjectId, setEditSubjectId] = useState<number | "">("");
-  const [editTeacherId, setEditTeacherId] = useState<number | "">("");
+  const [editSubjectId, setEditSubjectId] = useState<number | "">(entry.subject_id);
+  const [editTeacherId, setEditTeacherId] = useState<number | "">(entry.teacher_id ?? "");
   const [editError, setEditError] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editSaved, setEditSaved] = useState(false);
@@ -983,73 +978,16 @@ function SubstituteModal({
     api.get<TtClassSubject[]>(`/timetable/classes/${classId}/subjects`).then(setClassSubjects).catch(() => setClassSubjects([]));
   }, [classId]);
 
-  useEffect(() => {
-    setOptions(null);
-    setError(null);
-    setAssigned(null);
-    api
-      .get<TtSubstituteOptions>(`/timetable/classes/${classId}/substitutes?day=${day}&period=${period}&date=${date}`)
-      .then((opts) => {
-        setOptions(opts);
-        setEditSubjectId((prev) => (prev === "" ? opts.original.subject_id : prev));
-        setEditTeacherId((prev) => (prev === "" ? opts.original.teacher_id ?? "" : prev));
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "Could not load substitute options"));
-    setExistingSub(undefined);
-    api
-      .get<TtSubstitution[]>(`/timetable/classes/${classId}/substitutions?date=${date}`)
-      .then((subs) => setExistingSub(subs.find((s) => s.day === day && s.period === period) ?? null))
-      .catch(() => setExistingSub(null));
-  }, [classId, day, period, date]);
-
-  async function assign(teacherId: number, teacherName: string) {
-    setAssigning(teacherId);
-    setError(null);
-    try {
-      const result = await api.post<TtSubstitutionResult>(`/timetable/classes/${classId}/substitutions`, {
-        date,
-        day,
-        period,
-        substitute_teacher_id: teacherId,
-      });
-      setAssigned({ name: teacherName, note: notifyNote(result.notify_status) });
-      setExistingSub(result);
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not assign this substitute");
-    } finally {
-      setAssigning(null);
-    }
-  }
-
-  async function removeSub() {
-    setRemoving(true);
-    setError(null);
-    try {
-      await api.del(`/timetable/classes/${classId}/substitutions?date=${date}&period=${period}`);
-      setExistingSub(null);
-      setAssigned(null);
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove this substitution");
-    } finally {
-      setRemoving(false);
-    }
-  }
-
   async function saveEdit() {
     if (editSubjectId === "") return;
     setEditSaving(true);
     setEditError(null);
     setEditSaved(false);
     try {
-      const updated = await api.put<{ subject_id: number; subject_name: string; teacher_id: number | null; teacher_name: string | null }>(
-        `/timetable/classes/${classId}/timetable/${day}/${period}`,
-        { subject_id: editSubjectId, teacher_id: editTeacherId === "" ? null : editTeacherId }
-      );
-      setOptions((prev) =>
-        prev ? { ...prev, original: { subject_id: updated.subject_id, subject_name: updated.subject_name, teacher_id: updated.teacher_id, teacher_name: updated.teacher_name } } : prev
-      );
+      await api.put(`/timetable/classes/${classId}/timetable/${day}/${period}`, {
+        subject_id: editSubjectId,
+        teacher_id: editTeacherId === "" ? null : editTeacherId,
+      });
       setEditSaved(true);
       onChanged();
     } catch (err) {
@@ -1058,12 +996,6 @@ function SubstituteModal({
       setEditSaving(false);
     }
   }
-
-  const groups: { key: TtSubstituteCandidate["reason"]; label: string }[] = [
-    { key: "subject", label: "Teaches this subject" },
-    { key: "class", label: "Already teaches this class" },
-    { key: "other", label: "Other free teachers" },
-  ];
 
   return (
     <div
@@ -1081,11 +1013,9 @@ function SubstituteModal({
             <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
               {DAY_LABEL[day]}, Period {period}
             </h3>
-            {options && (
-              <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
-                {options.original.subject_name} — {options.original.teacher_name ?? "unassigned"}
-              </p>
-            )}
+            <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
+              {entry.subject_name} — {entry.teacher_name ?? "unassigned"}
+            </p>
           </div>
           <button type="button" onClick={onClose} className="text-xl leading-none" style={{ color: "var(--text-muted)" }}>
             ×
@@ -1150,86 +1080,348 @@ function SubstituteModal({
           {editError && <p className="mt-2 text-xs" style={{ color: "var(--accent-mark)" }}>{editError}</p>}
           {editSaved && !editError && <p className="mt-2 text-xs" style={{ color: "var(--status-good)" }}>Saved.</p>}
         </div>
+      </div>
+    </div>
+  );
+}
 
-        <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
-          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
-            Mark absent for one day
-          </p>
-          <div className="mt-2 w-44">
-            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              {options?.original.teacher_name ?? "Teacher"} is absent on
-            </label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
+function SlotFixPicker({
+  classId,
+  day,
+  period,
+  date,
+  onAssigned,
+}: {
+  classId: number;
+  day: string;
+  period: number;
+  date: string;
+  onAssigned: (teacherId: number, teacherName: string, teacherCode: string) => void;
+}) {
+  const [candidates, setCandidates] = useState<TtSubstituteCandidate[] | null>(null);
+  const [picked, setPicked] = useState<number | "">("");
+  const [assigning, setAssigning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-          {existingSub && (
-            <div className="mt-3 flex items-center justify-between rounded-lg p-2.5" style={{ background: "var(--status-good-soft)" }}>
-              <span className="text-sm" style={{ color: "var(--status-good)" }}>
-                Currently covered by {existingSub.substitute_teacher_name}
-              </span>
-              <button
-                type="button"
-                onClick={removeSub}
-                disabled={removing}
-                className="text-xs font-semibold underline-offset-2 hover:underline disabled:opacity-60"
-                style={{ color: "var(--accent-mark)" }}
-              >
-                {removing ? "Removing…" : "Remove"}
-              </button>
-            </div>
-          )}
+  useEffect(() => {
+    api
+      .get<TtSubstituteOptions>(`/timetable/classes/${classId}/substitutes?day=${day}&period=${period}&date=${date}`)
+      .then((opts) => setCandidates(opts.candidates))
+      .catch(() => setCandidates([]));
+  }, [classId, day, period, date]);
 
-          {error && <p className="mt-3 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
-          {assigned && (
-            <p className="mt-3 text-sm" style={{ color: "var(--status-good)" }}>
-              Assigned {assigned.name} to cover this period. {assigned.note}
-            </p>
-          )}
+  async function assign() {
+    if (picked === "") return;
+    setAssigning(true);
+    setError(null);
+    try {
+      const result = await api.post<TtSubstitutionResult>(`/timetable/classes/${classId}/substitutions`, {
+        date,
+        day,
+        period,
+        substitute_teacher_id: picked,
+      });
+      const code = candidates?.find((c) => c.teacher_id === picked)?.teacher_code ?? "";
+      onAssigned(result.substitute_teacher_id, result.substitute_teacher_name, code);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not assign a substitute");
+    } finally {
+      setAssigning(false);
+    }
+  }
 
-          <div className="mt-3 max-h-64 overflow-y-auto">
-            {!options && !error && (
-              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                Loading…
-              </p>
-            )}
-            {options &&
-              groups.map((g) => {
-                const list = options.candidates.filter((c) => c.reason === g.key);
-                if (list.length === 0) return null;
-                return (
-                  <div key={g.key} className="mt-3 first:mt-0">
-                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
-                      {g.label}
-                    </p>
-                    <div className="mt-1.5 divide-y" style={{ borderColor: "var(--border)" }}>
-                      {list.map((c) => (
-                        <div key={c.teacher_id} className="flex items-center justify-between py-1.5">
-                          <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-                            {c.teacher_name}
-                            {c.teacher_code && <span className="pill ml-2">{c.teacher_code}</span>}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => assign(c.teacher_id, c.teacher_name)}
-                            disabled={assigning !== null}
-                            className="accent-fill rounded-md px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
-                          >
-                            {assigning === c.teacher_id ? "Assigning…" : "Assign"}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            {options && options.candidates.length === 0 && (
-              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                No teacher is free at this period on this date.
-              </p>
-            )}
-          </div>
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+      <select
+        value={picked}
+        onChange={(e) => setPicked(e.target.value ? Number(e.target.value) : "")}
+        className="rounded-md border px-2 py-1 text-xs"
+        style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+      >
+        <option value="">{candidates === null ? "Loading…" : candidates.length === 0 ? "No one free" : "Pick a teacher"}</option>
+        {candidates?.map((c) => (
+          <option key={c.teacher_id} value={c.teacher_id}>
+            {c.teacher_name}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={assign}
+        disabled={picked === "" || assigning}
+        className="accent-fill rounded-md px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60"
+      >
+        {assigning ? "Assigning…" : "Assign"}
+      </button>
+      {error && (
+        <span className="text-xs" style={{ color: "var(--accent-mark)" }}>
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function groupSlotsByClass(slots: TtGeneratedSlot[]): { classId: number; className: string; slots: TtGeneratedSlot[] }[] {
+  const map = new Map<number, { classId: number; className: string; slots: TtGeneratedSlot[] }>();
+  for (const s of slots) {
+    if (!map.has(s.class_id)) map.set(s.class_id, { classId: s.class_id, className: s.class_name, slots: [] });
+    map.get(s.class_id)!.slots.push(s);
+  }
+  return [...map.values()].sort((a, b) => a.className.localeCompare(b.className));
+}
+
+function QuickSubstitutionPanel({
+  teachers,
+  periodsPerDay,
+  date,
+  onGenerated,
+}: {
+  teachers: TtTeacher[];
+  periodsPerDay: number;
+  date: string;
+  onGenerated: () => void;
+}) {
+  const [wholeDayAbsent, setWholeDayAbsent] = useState<Set<number>>(new Set());
+  const [partialRows, setPartialRows] = useState<{ teacherId: number | ""; periods: Set<number> }[]>([
+    { teacherId: "", periods: new Set() },
+    { teacherId: "", periods: new Set() },
+  ]);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [result, setResult] = useState<TtGenerateDayResult | null>(null);
+
+  const periods = Array.from({ length: periodsPerDay }, (_, i) => i + 1);
+
+  function toggleAbsent(id: number) {
+    setWholeDayAbsent((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function addPartialRow() {
+    setPartialRows((prev) => [...prev, { teacherId: "", periods: new Set() }]);
+  }
+
+  function removePartialRow(idx: number) {
+    setPartialRows((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function setPartialTeacher(idx: number, teacherId: number) {
+    setPartialRows((prev) => prev.map((r, i) => (i === idx ? { ...r, teacherId } : r)));
+  }
+
+  function togglePartialPeriod(idx: number, period: number) {
+    setPartialRows((prev) =>
+      prev.map((r, i) => {
+        if (i !== idx) return r;
+        const next = new Set(r.periods);
+        if (next.has(period)) next.delete(period);
+        else next.add(period);
+        return { ...r, periods: next };
+      })
+    );
+  }
+
+  function moveSlotToResolved(slot: TtGeneratedSlot, teacherId: number, teacherName: string, teacherCode: string) {
+    setResult((prev) => {
+      if (!prev) return prev;
+      const fixed: TtGeneratedSlot = {
+        ...slot,
+        substitute_teacher_id: teacherId,
+        substitute_teacher_name: teacherName,
+        substitute_teacher_code: teacherCode,
+      };
+      return {
+        ...prev,
+        unresolved: prev.unresolved.filter((s) => !(s.class_id === slot.class_id && s.period === slot.period)),
+        resolved: [...prev.resolved, fixed],
+      };
+    });
+  }
+
+  async function generate() {
+    const validPartial = partialRows.filter((r) => r.teacherId !== "" && r.periods.size > 0);
+    if (wholeDayAbsent.size === 0 && validPartial.length === 0) {
+      setGenError("Mark at least one teacher absent or busy first.");
+      return;
+    }
+    if (result && !confirm(`Generate again for ${date}? This redoes substitutions for the periods marked above.`)) return;
+    setGenerating(true);
+    setGenError(null);
+    try {
+      const body = {
+        date,
+        whole_day_absent_teacher_ids: [...wholeDayAbsent],
+        partial_busy: validPartial.map((r) => ({ teacher_id: r.teacherId as number, periods: [...r.periods].sort((a, b) => a - b) })),
+      };
+      const res = await api.post<TtGenerateDayResult>("/timetable/substitutions/generate-day", body);
+      setResult(res);
+      onGenerated();
+    } catch (err) {
+      setGenError(err instanceof Error ? err.message : "Could not generate substitutions");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <div className="soft-card mt-4 p-4">
+      <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+        Quick substitution for {date}
+      </p>
+      <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
+        Mark who's out today, then generate every substitute at once.
+      </p>
+
+      <div className="mt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+          Absent for the whole day
+        </p>
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {teachers.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => toggleAbsent(t.id)}
+              className="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-200"
+              style={
+                wholeDayAbsent.has(t.id)
+                  ? { background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" }
+                  : { borderColor: "var(--border)", color: "var(--text-secondary)" }
+              }
+            >
+              {t.name}
+            </button>
+          ))}
         </div>
       </div>
+
+      <div className="mt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+          Present, but busy for specific periods
+        </p>
+        <div className="mt-1.5 space-y-2">
+          {partialRows.map((row, idx) => (
+            <div key={idx} className="soft-card relative p-3">
+              <button
+                type="button"
+                onClick={() => removePartialRow(idx)}
+                title="Remove this row"
+                className="absolute right-2 top-2 text-xs"
+                style={{ color: "var(--text-muted)" }}
+              >
+                ×
+              </button>
+              <select
+                value={row.teacherId}
+                onChange={(e) => setPartialTeacher(idx, Number(e.target.value))}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+              >
+                <option value="">Select teacher</option>
+                {teachers.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+                Select periods
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {periods.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => togglePartialPeriod(idx, p)}
+                    disabled={row.teacherId === ""}
+                    className="rounded-md border px-2.5 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40"
+                    style={
+                      row.periods.has(p)
+                        ? { background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" }
+                        : { borderColor: "var(--border)", color: "var(--text-secondary)" }
+                    }
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button type="button" onClick={addPartialRow} className="flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--accent)" }}>
+            <PlusIcon size={12} /> Add a teacher
+          </button>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={generate}
+        disabled={generating}
+        className="accent-fill mt-3 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        {generating ? "Generating…" : "Generate substitutions"}
+      </button>
+      {genError && (
+        <p className="mt-2 text-xs" style={{ color: "var(--accent-mark)" }}>
+          {genError}
+        </p>
+      )}
+
+      {result && (
+        <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--border)" }}>
+          {result.resolved.length === 0 && result.unresolved.length === 0 ? (
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              No periods needed covering for {result.date}.
+            </p>
+          ) : (
+            groupSlotsByClass(result.resolved).map((group) => (
+              <div key={group.classId} className="mt-2 first:mt-0">
+                <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                  {group.className}
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {[...group.slots]
+                    .sort((a, b) => a.period - b.period)
+                    .map((s) => (
+                      <li key={`${s.class_id}-${s.period}`} className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                        Period {s.period} · {s.subject_name} — {s.substitute_teacher_name} ({s.substitute_teacher_code})
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ))
+          )}
+
+          {result.unresolved.length > 0 && (
+            <div className="mt-3 rounded-lg p-3" style={{ background: "var(--accent-mark-soft)" }}>
+              <p className="text-xs font-semibold" style={{ color: "var(--accent-mark)" }}>
+                No free teacher found for these — assign one by hand:
+              </p>
+              <ul className="mt-2 space-y-2">
+                {result.unresolved.map((s) => (
+                  <li key={`${s.class_id}-${s.period}`}>
+                    <span className="text-xs" style={{ color: "var(--text-primary)" }}>
+                      {s.class_name} · Period {s.period} · {s.subject_name}
+                    </span>
+                    <SlotFixPicker
+                      classId={s.class_id}
+                      day={s.day}
+                      period={s.period}
+                      date={date}
+                      onAssigned={(teacherId, teacherName, teacherCode) => moveSlotToResolved(s, teacherId, teacherName, teacherCode)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1246,11 +1438,12 @@ function GeneratedTimetableTab({
   onGenerate: () => Promise<TtGenerateResult>;
 }) {
   const [viewMode, setViewMode] = useState<"class" | "teacher">("class");
+  const [showTimetable, setShowTimetable] = useState(false);
   const [classId, setClassId] = useState<number | null>(classes[0]?.id ?? null);
   const [entries, setEntries] = useState<TtTimetableEntry[] | null>(null);
   const [viewDate, setViewDate] = useState(todayStr);
   const [dateSubs, setDateSubs] = useState<TtSubstitution[]>([]);
-  const [selectedCell, setSelectedCell] = useState<{ day: string; period: number } | null>(null);
+  const [editCell, setEditCell] = useState<{ day: string; period: number; entry: TtTimetableEntry } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TtGenerateResult | null>(null);
@@ -1369,26 +1562,13 @@ function GeneratedTimetableTab({
 
   return (
     <Panel title="Timetable" hint="Generate the weekly timetable for every class from your Schedule, Classes, Subjects, Teachers, and Assignments.">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={runGenerate}
-          disabled={busy}
-          className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-        >
-          {busy ? "Generating…" : "Generate timetable"}
-        </button>
-        {viewMode === "class" && classId !== null && entries && entries.length > 0 && (
-          <button
-            type="button"
-            onClick={() => window.open(api.timetablePrintUrl(classId), "_blank", "noopener")}
-            className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)]"
-            style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
-          >
-            <PrinterIcon size={15} />
-            Print this class
-          </button>
-        )}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="w-44">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Date
+          </label>
+          <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} />
+        </div>
         <button
           type="button"
           onClick={() => window.open(api.substitutionSheetUrl(viewDate), "_blank", "noopener")}
@@ -1406,6 +1586,14 @@ function GeneratedTimetableTab({
           style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
         >
           {notifying ? "Notifying…" : "Notify substitutes"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowTimetable((v) => !v)}
+          className="ml-auto text-sm font-semibold underline-offset-2 hover:underline"
+          style={{ color: "var(--accent)" }}
+        >
+          {showTimetable ? "Hide timetable" : "Show timetable"}
         </button>
       </div>
 
@@ -1430,214 +1618,241 @@ function GeneratedTimetableTab({
         </div>
       )}
 
-      {result && (
-        <div className="mt-3 rounded-lg p-3 text-sm" style={{ background: result.ok ? "var(--status-good-soft)" : "var(--accent-mark-soft)" }}>
-          <p style={{ color: result.ok ? "var(--status-good)" : "var(--accent-mark)" }}>
-            {result.ok
-              ? `Done — generated a full timetable for ${result.classes_generated} class${result.classes_generated === 1 ? "" : "es"} (${result.total_periods_placed} periods placed).`
-              : `Placed ${result.total_periods_placed} periods across ${result.classes_generated} class${result.classes_generated === 1 ? "" : "es"}, but some couldn't be fully scheduled:`}
-          </p>
-          {result.issues.length > 0 && (
-            <ul className="mt-1.5 list-disc space-y-1 pl-5">
-              {result.issues.map((issue, i) => (
-                <li key={i} style={{ color: "var(--text-secondary)" }}>
-                  <strong>{issue.class_name}</strong> — {issue.subject_name}: {issue.reason}
-                </li>
-              ))}
-            </ul>
+      <QuickSubstitutionPanel
+        teachers={teachers}
+        periodsPerDay={config.periods_per_day}
+        date={viewDate}
+        onGenerated={() => {
+          if (classId !== null) refreshSubs(classId, viewDate);
+        }}
+      />
+
+      {showTimetable && (
+        <div className="mt-6 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={runGenerate}
+              disabled={busy}
+              className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {busy ? "Generating…" : "Generate timetable"}
+            </button>
+            {viewMode === "class" && classId !== null && entries && entries.length > 0 && (
+              <button
+                type="button"
+                onClick={() => window.open(api.timetablePrintUrl(classId), "_blank", "noopener")}
+                className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+                style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+              >
+                <PrinterIcon size={15} />
+                Print this class
+              </button>
+            )}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("class")}
+              className="rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200"
+              style={
+                viewMode === "class"
+                  ? { background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" }
+                  : { borderColor: "var(--border)", color: "var(--text-secondary)" }
+              }
+            >
+              By class
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("teacher")}
+              className="rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200"
+              style={
+                viewMode === "teacher"
+                  ? { background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" }
+                  : { borderColor: "var(--border)", color: "var(--text-secondary)" }
+              }
+            >
+              By teacher
+            </button>
+          </div>
+
+          {viewMode === "class" ? (
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <div className="w-56">
+                <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  Class
+                </label>
+                <select
+                  value={classId ?? ""}
+                  onChange={(e) => setClassId(Number(e.target.value))}
+                  className="w-full rounded-md border px-3 py-2 text-sm font-medium"
+                  style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+                >
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      Grade {c.grade}
+                      {c.section ? ` · ${c.section}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <div className="w-56">
+                <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  Teacher
+                </label>
+                <select
+                  value={teacherId ?? ""}
+                  onChange={(e) => setTeacherId(Number(e.target.value))}
+                  className="w-full rounded-md border px-3 py-2 text-sm font-medium"
+                  style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+                >
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {t.code ? ` (${t.code})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {result && (
+            <div className="mt-3 rounded-lg p-3 text-sm" style={{ background: result.ok ? "var(--status-good-soft)" : "var(--accent-mark-soft)" }}>
+              <p style={{ color: result.ok ? "var(--status-good)" : "var(--accent-mark)" }}>
+                {result.ok
+                  ? `Done — generated a full timetable for ${result.classes_generated} class${result.classes_generated === 1 ? "" : "es"} (${result.total_periods_placed} periods placed).`
+                  : `Placed ${result.total_periods_placed} periods across ${result.classes_generated} class${result.classes_generated === 1 ? "" : "es"}, but some couldn't be fully scheduled:`}
+              </p>
+              {result.issues.length > 0 && (
+                <ul className="mt-1.5 list-disc space-y-1 pl-5">
+                  {result.issues.map((issue, i) => (
+                    <li key={i} style={{ color: "var(--text-secondary)" }}>
+                      <strong>{issue.class_name}</strong> — {issue.subject_name}: {issue.reason}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {!schedule && (
+            <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>
+              Set up a valid Schedule first (the breaks need to fit in the school day) before the timetable can be displayed.
+            </p>
+          )}
+
+          {schedule && viewMode === "class" && (
+            <div className="mt-4">
+              <WeekGrid
+                schedule={schedule}
+                workingDays={workingDays}
+                renderCell={(day, period) => {
+                  const entry = entryBySlot.get(`${day}-${period}`);
+                  if (!entry) {
+                    return entries === null ? null : (
+                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        —
+                      </span>
+                    );
+                  }
+                  const sub = dateSubs.find((s) => s.day === day && s.period === period);
+                  return (
+                    <div className="group relative flex w-full flex-col items-start rounded-md p-1 text-left">
+                      <button
+                        type="button"
+                        onClick={() => setEditCell({ day, period, entry })}
+                        title="Edit this period's subject/teacher permanently"
+                        className="absolute right-0.5 top-0.5 hidden rounded px-1 text-[10px] leading-tight group-hover:block hover:bg-[var(--accent-soft)]"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        ✎
+                      </button>
+                      <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                        {entry.subject_name}
+                      </div>
+                      {sub ? (
+                        <div className="text-xs" style={{ color: "var(--status-good)" }}>
+                          Sub: {sub.substitute_teacher_name}
+                        </div>
+                      ) : (
+                        entry.teacher_name && (
+                          <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            {entry.teacher_name}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  );
+                }}
+              />
+            </div>
+          )}
+
+          {schedule && viewMode === "teacher" && (
+            <div className="mt-4">
+              <WeekGrid
+                schedule={schedule}
+                workingDays={workingDays}
+                renderCell={(day, period) => {
+                  const sub = teacherSubs.find((s) => s.day === day && s.period === period);
+                  if (sub) {
+                    const [grade, section] = sub.class_name.split(" ");
+                    return (
+                      <div className="rounded-md p-1" style={{ background: "var(--accent-soft)" }}>
+                        <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "var(--accent)" }}>
+                          Substitute
+                        </div>
+                        <div className="text-xs font-semibold" style={{ color: "var(--accent)" }}>
+                          Grade {grade}
+                          {section ? ` · ${section}` : ""}
+                        </div>
+                        <div className="text-xs" style={{ color: "var(--accent)" }}>
+                          {sub.subject_name}
+                        </div>
+                      </div>
+                    );
+                  }
+                  const entry = teacherEntries?.find((e) => e.day === day && e.period === period);
+                  if (!entry) {
+                    return teacherEntries === null ? null : (
+                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        Free
+                      </span>
+                    );
+                  }
+                  const [grade, section] = entry.class_name.split(" ");
+                  return (
+                    <div>
+                      <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                        Grade {grade}
+                        {section ? ` · ${section}` : ""}
+                      </div>
+                      <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {entry.subject_name}
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+            </div>
           )}
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        <button
-          type="button"
-          onClick={() => setViewMode("class")}
-          className="rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200"
-          style={
-            viewMode === "class"
-              ? { background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" }
-              : { borderColor: "var(--border)", color: "var(--text-secondary)" }
-          }
-        >
-          By class
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode("teacher")}
-          className="rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200"
-          style={
-            viewMode === "teacher"
-              ? { background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" }
-              : { borderColor: "var(--border)", color: "var(--text-secondary)" }
-          }
-        >
-          By teacher
-        </button>
-      </div>
-
-      {viewMode === "class" ? (
-        <div className="mt-3 flex flex-wrap items-end gap-3">
-          <div className="w-56">
-            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              Class
-            </label>
-            <select
-              value={classId ?? ""}
-              onChange={(e) => setClassId(Number(e.target.value))}
-              className="w-full rounded-md border px-3 py-2 text-sm font-medium"
-              style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
-            >
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  Grade {c.grade}
-                  {c.section ? ` · ${c.section}` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="w-44">
-            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              Showing substitutes for
-            </label>
-            <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} />
-          </div>
-        </div>
-      ) : (
-        <div className="mt-3 flex flex-wrap items-end gap-3">
-          <div className="w-56">
-            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              Teacher
-            </label>
-            <select
-              value={teacherId ?? ""}
-              onChange={(e) => setTeacherId(Number(e.target.value))}
-              className="w-full rounded-md border px-3 py-2 text-sm font-medium"
-              style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
-            >
-              {teachers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                  {t.code ? ` (${t.code})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="w-44">
-            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              Showing substitute coverage for
-            </label>
-            <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} />
-          </div>
-        </div>
-      )}
-
-      {!schedule && (
-        <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>
-          Set up a valid Schedule first (the breaks need to fit in the school day) before the timetable can be displayed.
-        </p>
-      )}
-
-      {schedule && viewMode === "class" && (
-        <div className="mt-4">
-          <WeekGrid
-            schedule={schedule}
-            workingDays={workingDays}
-            renderCell={(day, period) => {
-              const entry = entryBySlot.get(`${day}-${period}`);
-              if (!entry) {
-                return entries === null ? null : (
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    —
-                  </span>
-                );
-              }
-              const sub = dateSubs.find((s) => s.day === day && s.period === period);
-              return (
-                <button
-                  type="button"
-                  onClick={() => setSelectedCell({ day, period })}
-                  title="Click to find a substitute if this teacher is absent"
-                  className="flex w-full flex-col items-start rounded-md text-left transition-colors duration-200 hover:bg-[var(--accent-soft)]"
-                >
-                  <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
-                    {entry.subject_name}
-                  </div>
-                  {sub ? (
-                    <div className="text-xs" style={{ color: "var(--status-good)" }}>
-                      Sub: {sub.substitute_teacher_name}
-                    </div>
-                  ) : (
-                    entry.teacher_name && (
-                      <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {entry.teacher_name}
-                      </div>
-                    )
-                  )}
-                </button>
-              );
-            }}
-          />
-        </div>
-      )}
-
-      {schedule && viewMode === "teacher" && (
-        <div className="mt-4">
-          <WeekGrid
-            schedule={schedule}
-            workingDays={workingDays}
-            renderCell={(day, period) => {
-              const sub = teacherSubs.find((s) => s.day === day && s.period === period);
-              if (sub) {
-                const [grade, section] = sub.class_name.split(" ");
-                return (
-                  <div className="rounded-md p-1" style={{ background: "var(--accent-soft)" }}>
-                    <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "var(--accent)" }}>
-                      Substitute
-                    </div>
-                    <div className="text-xs font-semibold" style={{ color: "var(--accent)" }}>
-                      Grade {grade}
-                      {section ? ` · ${section}` : ""}
-                    </div>
-                    <div className="text-xs" style={{ color: "var(--accent)" }}>
-                      {sub.subject_name}
-                    </div>
-                  </div>
-                );
-              }
-              const entry = teacherEntries?.find((e) => e.day === day && e.period === period);
-              if (!entry) {
-                return teacherEntries === null ? null : (
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Free
-                  </span>
-                );
-              }
-              const [grade, section] = entry.class_name.split(" ");
-              return (
-                <div>
-                  <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
-                    Grade {grade}
-                    {section ? ` · ${section}` : ""}
-                  </div>
-                  <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {entry.subject_name}
-                  </div>
-                </div>
-              );
-            }}
-          />
-        </div>
-      )}
-
-      {selectedCell && classId !== null && (
-        <SubstituteModal
+      {editCell && classId !== null && (
+        <EditPeriodModal
           classId={classId}
-          day={selectedCell.day}
-          period={selectedCell.period}
-          initialDate={viewDate}
+          day={editCell.day}
+          period={editCell.period}
+          entry={editCell.entry}
           teachers={teachers}
-          onClose={() => setSelectedCell(null)}
+          onClose={() => setEditCell(null)}
           onChanged={() => {
             refreshEntries(classId);
             refreshSubs(classId, viewDate);

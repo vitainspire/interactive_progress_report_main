@@ -26,7 +26,19 @@ CREATE TABLE IF NOT EXISTS batch (
     class_level TEXT NOT NULL DEFAULT '10',
     source_filename TEXT,
     exam_order TEXT NOT NULL DEFAULT '[]',
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    -- Where this batch's data came from, so "Sync now" knows how to
+    -- re-fetch it: 'file' (a local upload or Drive-picker file, can't be
+    -- re-synced since there's nothing to re-fetch from), 'sheet_link' (a
+    -- pasted Google Sheets URL), or 'drive_folder_item' (one file inside
+    -- an imported Drive folder). source_ref holds the sheet/file id to
+    -- re-fetch, and source_folder_id groups drive_folder_item batches so
+    -- a whole folder can be re-synced in one action.
+    source_type TEXT NOT NULL DEFAULT 'file',
+    source_ref TEXT,
+    source_mime_type TEXT,
+    source_folder_id TEXT,
+    last_synced_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_batch_user ON batch(user_id);
 

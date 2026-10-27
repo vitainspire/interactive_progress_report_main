@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { FolderIcon } from "../components/Icons";
 import { isGooglePickerConfigured, pickGoogleSheet, preloadGooglePicker } from "../integrations/googlePicker";
-import type { BatchSummary } from "../types";
+import type { BatchSummary, DriveImportFolderResult } from "../types";
 
-type Mode = "file" | "link" | "drive";
+type Mode = "file" | "link" | "drive" | "folder";
 
 export function UploadPage() {
   const { user } = useAuth();
@@ -13,6 +14,8 @@ export function UploadPage() {
   const [mode, setMode] = useState<Mode>("file");
   const [file, setFile] = useState<File | null>(null);
   const [sheetUrl, setSheetUrl] = useState("");
+  const [folderUrl, setFolderUrl] = useState("");
+  const [folderResults, setFolderResults] = useState<DriveImportFolderResult | null>(null);
   const [name, setName] = useState("");
   const [schoolName, setSchoolName] = useState(user?.default_school_name ?? "");
   const [classLevel, setClassLevel] = useState("10");
@@ -26,7 +29,7 @@ export function UploadPage() {
     if (driveEnabled) preloadGooglePicker().catch(() => {});
   }, [driveEnabled]);
 
-  const canSubmit = mode === "link" ? sheetUrl.trim().length > 0 : !!file;
+  const canSubmit = mode === "link" ? sheetUrl.trim().length > 0 : mode === "folder" ? folderUrl.trim().length > 0 : !!file;
 
   async function browseGoogleDrive() {
     setError(null);
@@ -51,8 +54,18 @@ export function UploadPage() {
     e.preventDefault();
     if (!canSubmit) return;
     setError(null);
+    setFolderResults(null);
     setBusy(true);
     try {
+      if (mode === "folder") {
+        const result = await api.post<DriveImportFolderResult>("/batches/import-folder", {
+          folder_url: folderUrl.trim(),
+          school_name: schoolName.trim() || undefined,
+          class_level: classLevel,
+        });
+        setFolderResults(result);
+        return;
+      }
       const form = new FormData();
       if (mode !== "link" && file) form.append("file", file);
       if (mode === "link") form.append("sheet_url", sheetUrl.trim());
@@ -105,6 +118,15 @@ export function UploadPage() {
         >
           Google Sheets link
         </button>
+        <button
+          type="button"
+          onClick={() => setMode("folder")}
+          className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors"
+          style={mode === "folder" ? { background: "var(--accent-soft)", color: "var(--accent)" } : { color: "var(--text-secondary)" }}
+        >
+          <FolderIcon size={14} />
+          Drive folder (one class per file)
+        </button>
       </div>
 
       <form onSubmit={onSubmit} className="soft-card mt-3 space-y-4 p-6">
@@ -114,12 +136,14 @@ export function UploadPage() {
           </label>
           <input type="text" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} placeholder="e.g. S.P.P. High School, Gurajanapalli" />
         </div>
-        <div>
-          <label className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            Batch name (optional — defaults to the filename)
-          </label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Class 9 - Section A" />
-        </div>
+        {mode !== "folder" && (
+          <div>
+            <label className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Batch name (optional — defaults to the filename)
+            </label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Class 9 - Section A" />
+          </div>
+        )}
         <div>
           <label className="text-sm" style={{ color: "var(--text-secondary)" }}>
             Class
@@ -191,17 +215,55 @@ export function UploadPage() {
           </div>
         )}
 
+        {mode === "folder" && (
+          <div>
+            <label className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Google Drive folder link
+            </label>
+            <input
+              type="text"
+              value={folderUrl}
+              onChange={(e) => setFolderUrl(e.target.value)}
+              placeholder="https://drive.google.com/drive/folders/..."
+            />
+            <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+              Creates one batch per Google Sheet/.xlsx/.csv file found directly inside the folder — e.g. a "Grade
+              6.xlsx", "Grade 7.xlsx" per class. The folder and every file in it must be shared as{" "}
+              <b>"Anyone with the link can view"</b>. It guesses each file's class from its name (e.g. "Grade 7",
+              "9th Class"); the "Class" picked above is only the fallback for a file whose name doesn't say.
+            </p>
+          </div>
+        )}
+
         {error && (
           <p className="rounded-lg p-3 text-sm" style={{ background: "var(--accent-mark-soft)", color: "var(--accent-mark)" }}>
             {error}
           </p>
         )}
+
+        {folderResults && (
+          <div className="space-y-1.5 rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
+            {folderResults.results.map((r) => (
+              <div key={r.file_name} className="flex items-center justify-between gap-2 text-sm">
+                <span style={{ color: "var(--text-primary)" }}>{r.file_name}</span>
+                {r.status === "created" && r.batch_id ? (
+                  <Link to={`/batches/${r.batch_id}`} className="font-medium hover:underline" style={{ color: "var(--status-good)" }}>
+                    Imported ({r.student_count} students) →
+                  </Link>
+                ) : (
+                  <span style={{ color: "var(--accent-mark)" }}>{r.error || "Failed"}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={!canSubmit || busy}
           className="accent-fill w-full rounded-md px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
         >
-          {busy ? "Reading…" : "Upload"}
+          {busy ? (mode === "folder" ? "Importing…" : "Reading…") : mode === "folder" ? "Import folder" : "Upload"}
         </button>
       </form>
     </div>

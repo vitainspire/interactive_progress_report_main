@@ -16,6 +16,13 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 CORS_ORIGINS = os.environ.get("REPORTCARD_APP_CORS_ORIGINS", "http://localhost:5175").split(",")
 
+# A Google API key (same one used by the frontend's Drive picker) — used
+# server-side to read publicly-shared Google Sheets/Drive folders (the
+# "paste a link" and "import a Drive folder" upload modes) without any
+# per-user OAuth. Only works against files/folders shared "Anyone with the
+# link can view"; this key has no access to anything else.
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
+
 # Defaults for a freshly-uploaded batch — editable afterwards per batch,
 # matching the original tool's "Settings" panel (class strength / FA & SA
 # exam totals / marks-per-subject used for the Total column and the AI

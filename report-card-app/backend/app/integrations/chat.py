@@ -59,6 +59,12 @@ def _post(messages: list[dict]) -> httpx.Response:
             # unified reasoning config, works the same across providers
             # that support it).
             "reasoning": {"max_tokens": 600},
+            # This prompt carries a real child's name/marks/attendance —
+            # restrict routing to upstream providers that commit not to
+            # retain or train on the request. OpenRouter simply excludes
+            # any provider that doesn't meet this from the routing choice,
+            # rather than silently falling back to one that does.
+            "provider": {"data_collection": "deny"},
         },
         headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
         timeout=30,

@@ -15,7 +15,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to="/tools" replace />;
+  if (user) return <Navigate to={user.default_school_name ? "/tools" : "/school-setup"} replace />;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

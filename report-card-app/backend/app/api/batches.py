@@ -1,5 +1,6 @@
 import io
 import json
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -12,6 +13,13 @@ from app.db import batches as repo
 from app.db.database import session
 from app.db.users import set_default_school_name
 from app.integrations import sms, whatsapp
+from app.integrations.google_drive_folder import (
+    GoogleDriveFetchError,
+    extract_folder_id,
+    fetch_drive_file_bytes,
+    filename_for,
+    list_folder_spreadsheet_files,
+)
 from app.integrations.google_sheets import GoogleSheetFetchError, fetch_google_sheet_as_xlsx
 from app.integrations.phone import InvalidPhoneNumber, normalize_phone
 from app.integrations.sharing import get_or_create_share_token, public_report_url
@@ -34,6 +42,23 @@ def _normalize_class_level(value: str | None) -> str:
     return v if v in _KNOWN_CLASS_LEVELS else "10"
 
 
+# A class number in a filename, optionally with an ordinal suffix — "Grade
+# 7.xlsx", "9th Class.xlsx", "10-A.xlsx", "6B Section.xlsx" all match.
+# Lookaround keeps it from matching inside an unrelated bigger number like
+# "Batch16.xlsx" or a year like "2024".
+_CLASS_LEVEL_IN_FILENAME_RE = re.compile(r"(?<![0-9])(10|[6-9])(?:st|nd|rd|th)?(?![0-9])", re.IGNORECASE)
+
+
+def _guess_class_level_from_filename(filename: str) -> str | None:
+    """Best-effort class detection for a Drive-folder import, so a folder
+    of per-class files ("Grade 6.xlsx", "Grade 7.xlsx", ...) doesn't need
+    every file tagged with the same class by hand. Returns None when
+    nothing in the name looks like a class number — the caller falls back
+    to whatever class was picked in the upload form."""
+    m = _CLASS_LEVEL_IN_FILENAME_RE.search(filename)
+    return m.group(1) if m else None
+
+
 def _batch_out(row, student_count: int | None = None) -> dict:
     exam_defs = json.loads(row["exam_order"])
     return {
@@ -47,6 +72,9 @@ def _batch_out(row, student_count: int | None = None) -> dict:
         "class_strength_override": row["class_strength_override"],
         "class_level": row["class_level"],
         "source_filename": row["source_filename"],
+        "source_type": row["source_type"],
+        "source_folder_id": row["source_folder_id"],
+        "last_synced_at": row["last_synced_at"],
         "exam_codes": [e["key"] for e in exam_defs],
         "created_at": row["created_at"],
         "student_count": student_count if student_count is not None else (row["student_count"] if "student_count" in row.keys() else None),
@@ -103,10 +131,183 @@ async def upload_batch(
         if school_name and school_name.strip():
             set_default_school_name(conn, current_user["id"], school_name.strip())
         batch_id = repo.create_batch(
-            conn, current_user["id"], batch_name, effective_school_name, source_label, parsed, _normalize_class_level(class_level)
+            conn,
+            current_user["id"],
+            batch_name,
+            effective_school_name,
+            source_label,
+            parsed,
+            _normalize_class_level(class_level),
+            source_type="sheet_link" if has_link else "file",
+            source_ref=sheet_url.strip() if has_link else None,
         )
         row = repo.get_batch(conn, current_user["id"], batch_id)
         return _batch_out(row, student_count=len(parsed["students"]))
+
+
+class ImportFolderRequest(BaseModel):
+    folder_url: str
+    school_name: str | None = None
+    class_level: str | None = None
+
+
+@router.post("/import-folder")
+async def import_drive_folder(req: ImportFolderRequest, current_user=Depends(get_current_user)):
+    """One batch per spreadsheet file found directly inside a publicly-
+    shared Drive folder — e.g. a school keeps "Grade 6.xlsx", "Grade
+    7.xlsx", etc. in one folder and imports all of them in one go. A
+    failure on one file (bad layout, deleted mid-import) is reported per
+    file rather than aborting the whole import."""
+    try:
+        files = await run_in_threadpool(list_folder_spreadsheet_files, req.folder_url.strip())
+    except GoogleDriveFetchError as exc:
+        raise HTTPException(422, str(exc))
+
+    folder_id = extract_folder_id(req.folder_url)
+    effective_school_name = (req.school_name or "").strip() or current_user["default_school_name"] or ""
+    fallback_class_level = _normalize_class_level(req.class_level)
+
+    if req.school_name and req.school_name.strip():
+        with session() as conn:
+            set_default_school_name(conn, current_user["id"], req.school_name.strip())
+
+    results = []
+    for f in files:
+        try:
+            raw = await run_in_threadpool(fetch_drive_file_bytes, f["id"], f["mime_type"])
+            parsed = parse_uploaded_file(filename_for(f["name"], f["mime_type"]), raw)
+        except (GoogleDriveFetchError, SheetParseError) as exc:
+            results.append({"file_name": f["name"], "status": "failed", "error": str(exc)})
+            continue
+        except Exception:
+            results.append({"file_name": f["name"], "status": "failed", "error": "Could not read this file — check it follows the expected layout."})
+            continue
+
+        batch_name = f["name"].rsplit(".", 1)[0]
+        class_level = _guess_class_level_from_filename(f["name"]) or fallback_class_level
+        with session() as conn:
+            batch_id = repo.create_batch(
+                conn,
+                current_user["id"],
+                batch_name,
+                effective_school_name,
+                f["name"],
+                parsed,
+                class_level,
+                source_type="drive_folder_item",
+                source_ref=f["id"],
+                source_mime_type=f["mime_type"],
+                source_folder_id=folder_id,
+            )
+        results.append({"file_name": f["name"], "status": "created", "batch_id": batch_id, "student_count": len(parsed["students"])})
+
+    return {"folder_id": folder_id, "results": results}
+
+
+class SyncFolderRequest(BaseModel):
+    folder_id: str
+
+
+@router.post("/sync-folder")
+async def sync_drive_folder(req: SyncFolderRequest, current_user=Depends(get_current_user)):
+    """Re-syncs every batch previously imported from one Drive folder, and
+    also picks up any class file added to the folder since the last
+    import. A file removed from the folder isn't deleted automatically —
+    its batch is left alone and listed under `missing_batches` so you can
+    decide whether to remove it yourself."""
+    with session() as conn:
+        existing_batches = repo.list_batches_by_folder(conn, current_user["id"], req.folder_id)
+    if not existing_batches:
+        raise HTTPException(404, "No batches were imported from that folder yet.")
+    by_file_id = {b["source_ref"]: b for b in existing_batches}
+
+    try:
+        files = await run_in_threadpool(list_folder_spreadsheet_files, req.folder_id)
+    except GoogleDriveFetchError as exc:
+        raise HTTPException(422, str(exc))
+
+    results = []
+    seen_file_ids = set()
+    for f in files:
+        seen_file_ids.add(f["id"])
+        try:
+            raw = await run_in_threadpool(fetch_drive_file_bytes, f["id"], f["mime_type"])
+            parsed = parse_uploaded_file(filename_for(f["name"], f["mime_type"]), raw)
+        except (GoogleDriveFetchError, SheetParseError) as exc:
+            results.append({"file_name": f["name"], "status": "failed", "error": str(exc)})
+            continue
+        except Exception:
+            results.append({"file_name": f["name"], "status": "failed", "error": "Could not read this file."})
+            continue
+
+        existing = by_file_id.get(f["id"])
+        with session() as conn:
+            if existing:
+                sync_result = repo.resync_batch(conn, existing["id"], parsed)
+                results.append({"file_name": f["name"], "status": "synced", "batch_id": existing["id"], **sync_result})
+            else:
+                batch_id = repo.create_batch(
+                    conn,
+                    current_user["id"],
+                    f["name"].rsplit(".", 1)[0],
+                    existing_batches[0]["school_name"],
+                    f["name"],
+                    parsed,
+                    _guess_class_level_from_filename(f["name"]) or existing_batches[0]["class_level"],
+                    source_type="drive_folder_item",
+                    source_ref=f["id"],
+                    source_mime_type=f["mime_type"],
+                    source_folder_id=req.folder_id,
+                )
+                results.append({"file_name": f["name"], "status": "created", "batch_id": batch_id})
+
+    missing = [b for b in existing_batches if b["source_ref"] not in seen_file_ids]
+    return {"results": results, "missing_batches": [{"id": b["id"], "name": b["name"]} for b in missing]}
+
+
+@router.post("/{batch_id}/sync")
+async def sync_batch(batch_id: int, current_user=Depends(get_current_user)):
+    """Re-fetches this batch's data from its original Google Sheet/Drive
+    file and replaces its students/marks in place — see
+    repo.resync_batch for how existing students (and their already-sent
+    parent report links) are preserved across the sync."""
+    with session() as conn:
+        row = repo.get_batch(conn, current_user["id"], batch_id)
+        if not row:
+            raise HTTPException(404, "Batch not found")
+        if row["source_type"] == "file" or not row["source_ref"]:
+            raise HTTPException(422, "This batch wasn't imported from a Google Sheet or Drive folder, so there's nothing to sync it from.")
+        source_type, source_ref, mime_type = row["source_type"], row["source_ref"], row["source_mime_type"]
+        source_filename = row["source_filename"]
+
+    try:
+        if source_type == "sheet_link":
+            raw = await run_in_threadpool(fetch_google_sheet_as_xlsx, source_ref)
+        else:
+            raw = await run_in_threadpool(fetch_drive_file_bytes, source_ref, mime_type or "")
+    except (GoogleSheetFetchError, GoogleDriveFetchError) as exc:
+        raise HTTPException(422, str(exc))
+
+    try:
+        # A Google Sheets export is always .xlsx regardless of the source
+        # sheet's own format, but a drive_folder_item could be a plain
+        # .csv file in the folder — dispatch on its remembered filename
+        # the same way a fresh upload of that file would.
+        parsed = parse_workbook_file(io.BytesIO(raw)) if source_type == "sheet_link" else parse_uploaded_file(filename_for(source_filename or "", mime_type or ""), raw)
+    except SheetParseError as exc:
+        raise HTTPException(422, str(exc))
+    except Exception:
+        raise HTTPException(422, "Could not read the refreshed sheet — check that it still follows the expected layout.")
+
+    with session() as conn:
+        sync_result = repo.resync_batch(conn, batch_id, parsed)
+        row = repo.get_batch(conn, current_user["id"], batch_id)
+        return {
+            "batch": _batch_out(row, student_count=sync_result["student_count"]),
+            "added": sync_result["added"],
+            "updated": sync_result["updated"],
+            "removed": sync_result["removed"],
+        }
 
 
 @router.get("")

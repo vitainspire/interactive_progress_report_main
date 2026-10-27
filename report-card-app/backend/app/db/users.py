@@ -13,10 +13,10 @@ def get_user_by_id(conn: psycopg.Connection, user_id: int) -> dict | None:
     return conn.execute("SELECT * FROM app_user WHERE id = %s", (user_id,)).fetchone()
 
 
-def create_user(conn: psycopg.Connection, email: str, password: str, display_name: str) -> int:
+def create_user(conn: psycopg.Connection, email: str, password: str, display_name: str, school_name: str = "") -> int:
     row = conn.execute(
-        "INSERT INTO app_user (email, password_hash, display_name, default_school_name, created_at) VALUES (%s, %s, %s, '', %s) RETURNING id",
-        (email.lower().strip(), hash_password(password), display_name.strip(), datetime.now(timezone.utc).isoformat()),
+        "INSERT INTO app_user (email, password_hash, display_name, default_school_name, created_at) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (email.lower().strip(), hash_password(password), display_name.strip(), school_name.strip(), datetime.now(timezone.utc).isoformat()),
     ).fetchone()
     return row["id"]
 

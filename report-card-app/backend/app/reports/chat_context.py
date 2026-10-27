@@ -29,7 +29,6 @@ def build_student_context(student: dict, all_students: list[dict], exam_defs: li
     lines.append(f"Student: {student['name']}")
     lines.append(f"Class/Section: {student.get('section') or '-'}")
     lines.append(f"Roll No: {student.get('roll') or '-'}")
-    lines.append(f"Father's name: {student.get('father') or '-'}")
     lines.append(f"Class strength: {class_strength} students")
     lines.append("")
 

@@ -76,50 +76,11 @@ def _batch_insert_returning_ids(conn: psycopg.Connection, table: str, columns: l
     return ids
 
 
-def create_batch(
-    conn: psycopg.Connection,
-    user_id: int,
-    name: str,
-    school_name: str,
-    source_filename: str | None,
-    parsed: dict,
-    class_level: str = "10",
-) -> int:
-    """Persists a freshly-parsed sheet (see sheet_parser.parse_worksheet)
-    as a new batch, normalized across student/exam_subject_result/
-    exam_summary/attendance_month/attendance_total. All child rows are
-    collected first and sent in a handful of batched statements rather
-    than one round trip per row. `class_level` picks which class's syllabus
-    (see syllabus_chapter) the study plan feature looks up for this batch —
-    defaults to "10" since that's the only syllabus seeded so far."""
-    exam_order = [e["key"] for e in parsed["exams"]]
-    row = conn.execute(
-        """INSERT INTO batch
-           (user_id, name, school_name, fa_total, sa_total, fa_marks_per_subject, sa_marks_per_subject,
-            class_strength_override, class_level, source_filename, exam_order, created_at)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s) RETURNING id""",
-        (
-            user_id,
-            name,
-            school_name,
-            DEFAULT_FA_TOTAL,
-            DEFAULT_SA_TOTAL,
-            DEFAULT_FA_MARKS_PER_SUBJECT,
-            DEFAULT_SA_MARKS_PER_SUBJECT,
-            class_level,
-            source_filename,
-            json.dumps(parsed["exams"]),
-            datetime.now(timezone.utc).isoformat(),
-        ),
-    ).fetchone()
-    batch_id = row["id"]
-
-    students = parsed["students"]
-    student_rows = [(batch_id, s["name"], s["section"], s["roll"], s["father"], s.get("phone", ""), i) for i, s in enumerate(students)]
-    student_ids = _batch_insert_returning_ids(
-        conn, "student", ["batch_id", "name", "section", "roll_no", "father_name", "phone", "order_index"], student_rows
-    )
-
+def _insert_student_marks(conn: psycopg.Connection, student_ids: list[int], students: list[dict], exam_order: list[str]) -> None:
+    """Inserts exam_subject_result/exam_summary/attendance_month/
+    attendance_total rows for `students` (already persisted as
+    `student_ids`, same order) — shared by create_batch and resync_batch
+    so a re-sync's marks land exactly the same way a fresh upload's do."""
     subject_rows: list[tuple] = []
     summary_rows: list[tuple] = []
     month_rows: list[tuple] = []
@@ -151,7 +112,136 @@ def create_batch(
     _batch_insert(conn, "attendance_month", ["student_id", "month", "working_days", "days_present", "order_index"], month_rows)
     _batch_insert(conn, "attendance_total", ["student_id", "total_working_days", "total_present"], total_rows)
 
+
+def create_batch(
+    conn: psycopg.Connection,
+    user_id: int,
+    name: str,
+    school_name: str,
+    source_filename: str | None,
+    parsed: dict,
+    class_level: str = "10",
+    source_type: str = "file",
+    source_ref: str | None = None,
+    source_mime_type: str | None = None,
+    source_folder_id: str | None = None,
+) -> int:
+    """Persists a freshly-parsed sheet (see sheet_parser.parse_worksheet)
+    as a new batch, normalized across student/exam_subject_result/
+    exam_summary/attendance_month/attendance_total. All child rows are
+    collected first and sent in a handful of batched statements rather
+    than one round trip per row. `class_level` picks which class's syllabus
+    (see syllabus_chapter) the study plan feature looks up for this batch —
+    defaults to "10" since that's the only syllabus seeded so far.
+    `source_type`/`source_ref` record where this came from (a pasted Sheets
+    link, or one file in an imported Drive folder) so "Sync now" later
+    knows how to re-fetch it — see resync_batch."""
+    exam_order = [e["key"] for e in parsed["exams"]]
+    row = conn.execute(
+        """INSERT INTO batch
+           (user_id, name, school_name, fa_total, sa_total, fa_marks_per_subject, sa_marks_per_subject,
+            class_strength_override, class_level, source_filename, exam_order, created_at,
+            source_type, source_ref, source_mime_type, source_folder_id, last_synced_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+        (
+            user_id,
+            name,
+            school_name,
+            DEFAULT_FA_TOTAL,
+            DEFAULT_SA_TOTAL,
+            DEFAULT_FA_MARKS_PER_SUBJECT,
+            DEFAULT_SA_MARKS_PER_SUBJECT,
+            class_level,
+            source_filename,
+            json.dumps(parsed["exams"]),
+            datetime.now(timezone.utc).isoformat(),
+            source_type,
+            source_ref,
+            source_mime_type,
+            source_folder_id,
+            datetime.now(timezone.utc).isoformat() if source_ref else None,
+        ),
+    ).fetchone()
+    batch_id = row["id"]
+
+    students = parsed["students"]
+    student_rows = [(batch_id, s["name"], s["section"], s["roll"], s["father"], s.get("phone", ""), i) for i, s in enumerate(students)]
+    student_ids = _batch_insert_returning_ids(
+        conn, "student", ["batch_id", "name", "section", "roll_no", "father_name", "phone", "order_index"], student_rows
+    )
+    _insert_student_marks(conn, student_ids, students, exam_order)
+
     return batch_id
+
+
+def resync_batch(conn: psycopg.Connection, batch_id: int, parsed: dict) -> dict:
+    """Re-applies a freshly-fetched sheet to an EXISTING batch, matching
+    students by roll number so matched students keep their id — and so
+    any parent report link already sent for them (student_share.token,
+    see schema.sql) stays valid instead of breaking on every sync. A
+    student whose roll number no longer appears is removed (cascading
+    away their share link/send history along with them); a new roll
+    number is added as a new student. Each matched student's marks/
+    attendance are fully replaced rather than diffed field-by-field —
+    simpler and correct, since there's nothing else pointing at those
+    child rows to preserve. Returns counts for the caller to report back."""
+    exam_order = [e["key"] for e in parsed["exams"]]
+    students = parsed["students"]
+
+    existing = conn.execute("SELECT id, roll_no FROM student WHERE batch_id = %s", (batch_id,)).fetchall()
+    existing_by_roll = {r["roll_no"]: r["id"] for r in existing if r["roll_no"]}
+    incoming_rolls = {s["roll"] for s in students if s["roll"]}
+
+    removed_ids = [sid for roll, sid in existing_by_roll.items() if roll not in incoming_rolls]
+    if removed_ids:
+        placeholders = ",".join(["%s"] * len(removed_ids))
+        conn.execute(f"DELETE FROM student WHERE id IN ({placeholders})", removed_ids)
+
+    student_ids: list[int | None] = [None] * len(students)
+    new_rows: list[tuple] = []
+    new_indices: list[int] = []
+    updated_count = 0
+    for i, s in enumerate(students):
+        existing_id = existing_by_roll.get(s["roll"]) if s["roll"] else None
+        if existing_id:
+            conn.execute(
+                "UPDATE student SET name = %s, section = %s, father_name = %s, phone = %s, order_index = %s WHERE id = %s",
+                (s["name"], s["section"], s["father"], s.get("phone", ""), i, existing_id),
+            )
+            student_ids[i] = existing_id
+            updated_count += 1
+        else:
+            new_rows.append((batch_id, s["name"], s["section"], s["roll"], s["father"], s.get("phone", ""), i))
+            new_indices.append(i)
+
+    if new_rows:
+        new_ids = _batch_insert_returning_ids(
+            conn, "student", ["batch_id", "name", "section", "roll_no", "father_name", "phone", "order_index"], new_rows
+        )
+        for idx, sid in zip(new_indices, new_ids):
+            student_ids[idx] = sid
+
+    all_ids = [sid for sid in student_ids if sid is not None]
+    if all_ids:
+        placeholders = ",".join(["%s"] * len(all_ids))
+        conn.execute(f"DELETE FROM exam_subject_result WHERE student_id IN ({placeholders})", all_ids)
+        conn.execute(f"DELETE FROM exam_summary WHERE student_id IN ({placeholders})", all_ids)
+        conn.execute(f"DELETE FROM attendance_month WHERE student_id IN ({placeholders})", all_ids)
+        conn.execute(f"DELETE FROM attendance_total WHERE student_id IN ({placeholders})", all_ids)
+    _insert_student_marks(conn, all_ids, students, exam_order)
+
+    conn.execute(
+        "UPDATE batch SET exam_order = %s, last_synced_at = %s WHERE id = %s",
+        (json.dumps(parsed["exams"]), datetime.now(timezone.utc).isoformat(), batch_id),
+    )
+
+    return {"added": len(new_rows), "updated": updated_count, "removed": len(removed_ids), "student_count": len(all_ids)}
+
+
+def list_batches_by_folder(conn: psycopg.Connection, user_id: int, folder_id: str) -> list[dict]:
+    return conn.execute(
+        "SELECT * FROM batch WHERE user_id = %s AND source_folder_id = %s ORDER BY name", (user_id, folder_id)
+    ).fetchall()
 
 
 def list_batches(conn: psycopg.Connection, user_id: int) -> list[dict]:

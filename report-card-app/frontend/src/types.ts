@@ -16,9 +16,40 @@ export interface BatchSummary {
   class_strength_override: number | null;
   class_level: string;
   source_filename: string | null;
+  source_type: "file" | "sheet_link" | "drive_folder_item";
+  source_folder_id: string | null;
+  last_synced_at: string | null;
   exam_codes: string[];
   created_at: string;
   student_count: number;
+}
+
+export interface BatchSyncResult {
+  batch: BatchSummary;
+  added: number;
+  updated: number;
+  removed: number;
+}
+
+export interface DriveImportFileResult {
+  file_name: string;
+  status: "created" | "synced" | "failed";
+  batch_id?: number;
+  student_count?: number;
+  added?: number;
+  updated?: number;
+  removed?: number;
+  error?: string;
+}
+
+export interface DriveImportFolderResult {
+  folder_id: string;
+  results: DriveImportFileResult[];
+}
+
+export interface DriveSyncFolderResult {
+  results: DriveImportFileResult[];
+  missing_batches: { id: number; name: string }[];
 }
 
 export interface StudentBrief {
@@ -220,6 +251,37 @@ export interface TtPendingNeed {
   subject_id: number;
   subject_name: string;
   candidates: TtSubstituteCandidate[];
+}
+
+export interface TtPartialBusyEntry {
+  teacher_id: number;
+  periods: number[];
+}
+
+export interface TtGenerateDayRequest {
+  date: string;
+  whole_day_absent_teacher_ids: number[];
+  partial_busy: TtPartialBusyEntry[];
+}
+
+export interface TtGeneratedSlot {
+  class_id: number;
+  class_name: string;
+  day: string;
+  period: number;
+  subject_id: number | null;
+  subject_name: string | null;
+  original_teacher_id: number | null;
+  substitute_teacher_id?: number;
+  substitute_teacher_name?: string;
+  substitute_teacher_code?: string;
+}
+
+export interface TtGenerateDayResult {
+  date: string;
+  day: string;
+  resolved: TtGeneratedSlot[];
+  unresolved: TtGeneratedSlot[];
 }
 
 export interface TtSchoolConfig {

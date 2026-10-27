@@ -12,12 +12,38 @@ export function setToken(token: string | null): void {
 
 class UnauthorizedError extends Error {}
 
+// A free-tier backend host spins down after a period of inactivity, so the
+// first request after a while can time out before the cold instance wakes —
+// the browser surfaces that as a bare "Failed to fetch" with no indication
+// it's transient. Retry a couple of times with growing delays before
+// surfacing a message that actually explains what's going on.
+const COLD_START_RETRY_DELAYS_MS = [8000, 15000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithColdStartRetry(url: string, init: RequestInit): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetch(url, init);
+    } catch (err) {
+      // Only retry genuine network-level failures (fetch throws a TypeError
+      // for those) — not an aborted request or anything else.
+      if (!(err instanceof TypeError) || attempt >= COLD_START_RETRY_DELAYS_MS.length) {
+        throw new Error("Could not reach the server. It may be waking up after being idle — please try again in a few seconds.");
+      }
+      await sleep(COLD_START_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = options?.body instanceof FormData ? {} : { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers: { ...headers, ...options?.headers } });
+  const res = await fetchWithColdStartRetry(`${API_BASE}${path}`, { ...options, headers: { ...headers, ...options?.headers } });
   if (res.status === 401) {
     setToken(null);
     throw new UnauthorizedError("Not authenticated");

@@ -105,6 +105,18 @@ def _migrate_tt_phone_and_excluded_periods(conn: psycopg.Connection) -> None:
     conn.execute("ALTER TABLE tt_subject ADD COLUMN IF NOT EXISTS excluded_periods TEXT NOT NULL DEFAULT '[]'")
 
 
+def _migrate_batch_source_sync(conn: psycopg.Connection) -> None:
+    """Adds the columns "Sync now" / Drive-folder import need to a
+    pre-existing `batch` table (see schema.sql) — every batch created
+    before this migration defaults to source_type='file', which is
+    correct: there's nothing to re-fetch for a plain upload."""
+    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS source_type TEXT NOT NULL DEFAULT 'file'")
+    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS source_ref TEXT")
+    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS source_mime_type TEXT")
+    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS source_folder_id TEXT")
+    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS last_synced_at TEXT")
+
+
 def init_db() -> None:
     with get_connection() as conn:
         schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
@@ -117,6 +129,7 @@ def init_db() -> None:
         _migrate_class_level(conn)
         _migrate_tt_school_config(conn)
         _migrate_tt_phone_and_excluded_periods(conn)
+        _migrate_batch_source_sync(conn)
         seed_syllabus(conn)
         seed_subject_blueprint(conn)
         conn.commit()

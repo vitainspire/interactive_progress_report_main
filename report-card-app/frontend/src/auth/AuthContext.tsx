@@ -11,7 +11,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, displayName: string) => Promise<void>;
+  signup: (email: string, password: string, displayName: string, schoolName: string) => Promise<void>;
+  setSchoolName: (schoolName: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -46,18 +47,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signup = useCallback(
-    async (email: string, password: string, displayName: string) => {
-      applyAuth(await api.post<AuthResponse>("/auth/signup", { email, password, display_name: displayName }));
+    async (email: string, password: string, displayName: string, schoolName: string) => {
+      applyAuth(await api.post<AuthResponse>("/auth/signup", { email, password, display_name: displayName, school_name: schoolName }));
     },
     [applyAuth],
   );
+
+  const setSchoolName = useCallback(async (schoolName: string) => {
+    setUser(await api.put<AuthUser>("/auth/school-name", { school_name: schoolName }));
+  }, []);
 
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
   }, []);
 
-  return <AuthContext.Provider value={{ user, loading, login, signup, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, login, signup, setSchoolName, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {

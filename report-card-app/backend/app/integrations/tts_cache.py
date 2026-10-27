@@ -22,12 +22,15 @@ deleted before the new one is inserted.
 
 Rows also expire outright after CACHE_TTL_DAYS, regardless of content_key —
 parents mostly (re-)listen in the days right after an exam, so there's
-little point keeping audio around indefinitely just in case. Once a row
-expires, the next "Listen" tap simply re-synthesizes it (one extra Bhashini
-call) rather than erroring — expiry trades a slightly slower occasional
-replay for not growing the database forever. There's no separate scheduled
-job for this; expired rows are swept opportunistically whenever any cache
-miss already has to write to this table.
+little point keeping audio around indefinitely just in case. This also
+matters for privacy, not just storage: the audio has the student's and
+parent's own name spoken in it, so a short TTL limits how long that spoken
+PII sits in the database rather than keeping it around "just in case".
+Once a row expires, the next "Listen" tap simply re-synthesizes it (one
+extra Bhashini call) rather than erroring — expiry trades a slightly
+slower occasional replay for not growing the database forever. There's no
+separate scheduled job for this; expired rows are swept opportunistically
+whenever any cache miss already has to write to this table.
 """
 from __future__ import annotations
 
@@ -41,7 +44,7 @@ import psycopg
 
 from app.integrations import bhashini
 
-CACHE_TTL_DAYS = 7
+CACHE_TTL_DAYS = 2
 
 
 def _hash_key(text: str, language: str, gender: str) -> str:
