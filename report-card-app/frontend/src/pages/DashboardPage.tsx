@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import { DotsIcon, InboxIcon, PlusIcon, SearchIcon, SheetIcon, TrashIcon } from "../components/Icons";
-import type { BatchSummary } from "../types";
+import { DotsIcon, FolderIcon, PlusIcon, SearchIcon, SheetIcon, TrashIcon } from "../components/Icons";
+import type { BatchSummary, DriveImportFolderResult, DriveSyncFolderResult, SendResult } from "../types";
 
 type SortOrder = "recent" | "alphabetical";
 
@@ -19,6 +19,38 @@ function relativeTime(iso: string): string {
 }
 
 function BatchCard({ batch, onDelete }: { batch: BatchSummary; onDelete: (id: number) => void }) {
+  const [subjects, setSubjects] = useState<string[] | null>(null);
+  const [subjectsOpen, setSubjectsOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendNote, setSendNote] = useState<string | null>(null);
+
+  async function toggleSubjects() {
+    const next = !subjectsOpen;
+    setSubjectsOpen(next);
+    if (next && subjects === null) {
+      try {
+        const res = await api.get<{ subjects: string[] }>(`/batches/${batch.id}/subjects`);
+        setSubjects(res.subjects);
+      } catch {
+        setSubjects([]);
+      }
+    }
+  }
+
+  async function sendReports() {
+    setSending(true);
+    setSendNote(null);
+    try {
+      const res = await api.post<{ results: SendResult[] }>(`/batches/${batch.id}/send-reports`, { student_ids: null });
+      const sent = res.results.filter((r) => r.status === "sent").length;
+      setSendNote(`Sent ${sent} of ${res.results.length}.`);
+    } catch (err) {
+      setSendNote(err instanceof Error ? err.message : "Could not send reports");
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <article
       className="soft-card reveal group relative flex flex-col p-5 transition-all duration-200 hover:shadow-lg"
@@ -47,9 +79,62 @@ function BatchCard({ batch, onDelete }: { batch: BatchSummary; onDelete: (id: nu
         ))}
       </div>
 
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={toggleSubjects}
+          className="rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+          style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+        >
+          {subjectsOpen ? "Hide analysis" : "View analysis"}
+        </button>
+        <button
+          type="button"
+          onClick={sendReports}
+          disabled={sending}
+          className="rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-60"
+          style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+        >
+          {sending ? "Sending…" : "Send reports"}
+        </button>
+      </div>
+
+      {subjectsOpen && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {subjects === null && (
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              Loading subjects…
+            </span>
+          )}
+          {subjects && subjects.length === 0 && (
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              No subjects found yet.
+            </span>
+          )}
+          {subjects?.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => window.open(api.subjectAnalysisUrl(batch.id, s), "_blank", "noopener")}
+              className="pill transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {sendNote && (
+        <p className="mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+          {sendNote}
+        </p>
+      )}
+
       <div className="mt-4 flex items-center justify-between border-t pt-3" style={{ borderColor: "var(--border)" }}>
         <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Uploaded {relativeTime(batch.created_at)}
+          {batch.source_type === "drive_folder_item" && batch.last_synced_at
+            ? `Synced ${relativeTime(batch.last_synced_at)}`
+            : `Uploaded ${relativeTime(batch.created_at)}`}
         </span>
         <details className="relative">
           <summary
@@ -80,12 +165,21 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortOrder>("recent");
+  const [folderUrl, setFolderUrl] = useState("");
+  const [settingUp, setSettingUp] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
 
-  useEffect(() => {
-    api
+  function refreshBatches() {
+    return api
       .get<BatchSummary[]>("/batches")
       .then(setBatches)
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load your uploads"));
+  }
+
+  useEffect(() => {
+    refreshBatches();
   }, []);
 
   async function handleDelete(id: number) {
@@ -93,6 +187,54 @@ export function DashboardPage() {
     if (!confirm(`Delete "${batch?.name ?? "this upload"}"? This can't be undone.`)) return;
     await api.del(`/batches/${id}`);
     setBatches((prev) => prev?.filter((b) => b.id !== id) ?? prev);
+  }
+
+  // Once any class has been imported from a Drive folder, that folder is
+  // this account's linked source — the same one "Sync Drive folder" re-
+  // checks for new/updated classes. Schools only ever link one folder in
+  // practice, so whichever batch has one is enough to find it.
+  const linkedFolderId = useMemo(() => batches?.find((b) => b.source_folder_id)?.source_folder_id ?? null, [batches]);
+
+  async function setUpDriveFolder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!folderUrl.trim()) return;
+    setSettingUp(true);
+    setSetupError(null);
+    try {
+      const result = await api.post<DriveImportFolderResult>("/batches/import-folder", { folder_url: folderUrl.trim() });
+      const created = result.results.filter((r) => r.status === "created").length;
+      if (created === 0) {
+        setSetupError("No class sheets were found directly inside that folder.");
+      } else {
+        await refreshBatches();
+      }
+    } catch (err) {
+      setSetupError(err instanceof Error ? err.message : "Could not read that Drive folder");
+    } finally {
+      setSettingUp(false);
+    }
+  }
+
+  async function syncDriveFolder() {
+    if (!linkedFolderId) return;
+    setSyncing(true);
+    setSyncNote(null);
+    try {
+      const result = await api.post<DriveSyncFolderResult>("/batches/sync-folder", { folder_id: linkedFolderId });
+      const created = result.results.filter((r) => r.status === "created").length;
+      const synced = result.results.filter((r) => r.status === "synced").length;
+      const failed = result.results.filter((r) => r.status === "failed").length;
+      const bits = [];
+      if (created) bits.push(`${created} new class${created === 1 ? "" : "es"}`);
+      if (synced) bits.push(`${synced} updated`);
+      if (failed) bits.push(`${failed} failed`);
+      setSyncNote(bits.length ? bits.join(", ") : "Already up to date.");
+      await refreshBatches();
+    } catch (err) {
+      setSyncNote(err instanceof Error ? err.message : "Could not sync the Drive folder");
+    } finally {
+      setSyncing(false);
+    }
   }
 
   const visibleBatches = useMemo(() => {
@@ -125,14 +267,34 @@ export function DashboardPage() {
             Every sheet you've uploaded — open one to pick students and print report cards.
           </p>
         </div>
-        <Link
-          to="/upload"
-          className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99]"
-        >
-          <PlusIcon size={15} />
-          New upload
-        </Link>
+        <div className="flex items-center gap-2">
+          {linkedFolderId && (
+            <button
+              type="button"
+              onClick={syncDriveFolder}
+              disabled={syncing}
+              className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-60"
+              style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+            >
+              <FolderIcon size={15} />
+              {syncing ? "Syncing…" : "Sync Drive folder"}
+            </button>
+          )}
+          <Link
+            to="/upload"
+            className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99]"
+          >
+            <PlusIcon size={15} />
+            New upload
+          </Link>
+        </div>
       </header>
+
+      {syncNote && (
+        <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+          {syncNote} — picks up any class added to the same folder since the last import.
+        </p>
+      )}
 
       {error && <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>{error}</p>}
 
@@ -177,20 +339,42 @@ export function DashboardPage() {
       {batches && batches.length === 0 && (
         <div className="soft-card mt-5 flex flex-col items-center p-10 text-center">
           <span className="icon-chip" style={{ width: "3rem", height: "3rem" }}>
-            <InboxIcon size={22} />
+            <FolderIcon size={22} />
           </span>
           <p className="mt-3 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-            No uploads yet
+            Set up your Drive folder
           </p>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-            Upload your first sheet to start generating report cards.
+          <p className="mx-auto mt-1 max-w-sm text-sm" style={{ color: "var(--text-secondary)" }}>
+            Paste the link to the Drive folder where this school keeps its class mark sheets — one file per class.
+            Every class in it becomes a sheet here, and adding a class to that same folder later picks it up
+            automatically with "Sync Drive folder".
           </p>
-          <Link
-            to="/upload"
-            className="accent-fill mt-4 rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200"
-          >
-            Upload your first sheet
-          </Link>
+          <form onSubmit={setUpDriveFolder} className="mt-4 flex w-full max-w-sm flex-col gap-2">
+            <input
+              type="text"
+              value={folderUrl}
+              onChange={(e) => setFolderUrl(e.target.value)}
+              placeholder="https://drive.google.com/drive/folders/..."
+            />
+            <button
+              type="submit"
+              disabled={settingUp || !folderUrl.trim()}
+              className="accent-fill rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 disabled:opacity-60"
+            >
+              {settingUp ? "Setting up…" : "Set up Drive folder"}
+            </button>
+          </form>
+          {setupError && (
+            <p className="mt-2 text-sm" style={{ color: "var(--accent-mark)" }}>
+              {setupError}
+            </p>
+          )}
+          <p className="mt-4 text-xs" style={{ color: "var(--text-muted)" }}>
+            Only have one class, or not using Drive?{" "}
+            <Link to="/upload" className="font-medium hover:underline" style={{ color: "var(--accent)" }}>
+              Upload a single sheet instead
+            </Link>
+          </p>
         </div>
       )}
 

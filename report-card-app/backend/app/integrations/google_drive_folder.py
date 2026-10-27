@@ -35,6 +35,14 @@ _REFERENCE_DOC_MIME_TYPES = (
     "image/webp",
 )
 
+# Without these, the Drive API silently excludes anything living inside a
+# Shared Drive (Google Workspace's "Shared Drives", shown as e.g.
+# "Projects > EdTech" in the UI) from both files.list and files.get — even
+# when it's genuinely shared "Anyone with the link can view". A plain
+# personal-Drive folder is unaffected either way, so it's safe to always
+# include these rather than try to detect which kind of folder this is.
+_SHARED_DRIVE_PARAMS = {"supportsAllDrives": "true", "includeItemsFromAllDrives": "true"}
+
 
 class GoogleDriveFetchError(ValueError):
     pass
@@ -79,7 +87,9 @@ def list_folder_spreadsheet_files(url_or_id: str) -> list[dict]:
     api_key = _require_api_key()
     mime_clause = " or ".join(f"mimeType='{m}'" for m in _SPREADSHEET_MIME_TYPES)
     query = f"'{folder_id}' in parents and trashed = false and ({mime_clause})"
-    params = urllib.parse.urlencode({"q": query, "fields": "files(id,name,mimeType)", "pageSize": 200, "key": api_key})
+    params = urllib.parse.urlencode(
+        {"q": query, "fields": "files(id,name,mimeType)", "pageSize": 200, "key": api_key, **_SHARED_DRIVE_PARAMS}
+    )
     data = _get_json(f"https://www.googleapis.com/drive/v3/files?{params}")
     files = [{"id": f["id"], "name": f["name"], "mime_type": f["mimeType"]} for f in data.get("files", [])]
     if not files:
@@ -101,7 +111,9 @@ def list_folder_reference_files(url_or_id: str) -> list[dict]:
     api_key = _require_api_key()
     mime_clause = " or ".join(f"mimeType='{m}'" for m in _REFERENCE_DOC_MIME_TYPES)
     query = f"'{folder_id}' in parents and trashed = false and ({mime_clause})"
-    params = urllib.parse.urlencode({"q": query, "fields": "files(id,name,mimeType)", "pageSize": 200, "key": api_key})
+    params = urllib.parse.urlencode(
+        {"q": query, "fields": "files(id,name,mimeType)", "pageSize": 200, "key": api_key, **_SHARED_DRIVE_PARAMS}
+    )
     data = _get_json(f"https://www.googleapis.com/drive/v3/files?{params}")
     return [{"id": f["id"], "name": f["name"], "mime_type": f["mimeType"]} for f in data.get("files", [])]
 
@@ -111,10 +123,13 @@ def fetch_drive_file_bytes(file_id: str, mime_type: str) -> bytes:
     native Google Sheet, or downloading an already-Excel/CSV file as-is."""
     api_key = _require_api_key()
     if mime_type == _NATIVE_SHEET_MIME:
+        # Export has no supportsAllDrives param of its own — a Shared
+        # Drive file's export works fine once files.list could see it at
+        # all, which is the step _SHARED_DRIVE_PARAMS actually fixes.
         export_mime = urllib.parse.quote(_XLSX_MIME, safe="")
         url = f"https://www.googleapis.com/drive/v3/files/{file_id}/export?mimeType={export_mime}&key={api_key}"
     else:
-        url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media&key={api_key}"
+        url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media&key={api_key}&supportsAllDrives=true"
     request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
