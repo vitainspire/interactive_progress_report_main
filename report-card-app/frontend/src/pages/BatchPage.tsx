@@ -1,22 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import { BarChartIcon, CheckIcon, CopyIcon, PrinterIcon, SearchIcon, SendIcon, SettingsIcon, TrashIcon } from "../components/Icons";
+import { BarChartIcon, CheckIcon, CopyIcon, PrinterIcon, RefreshIcon, SearchIcon, SendIcon, TrashIcon } from "../components/Icons";
 import { StudentActionList } from "../components/StudentActionList";
-import type { BatchDetail, ClassStats, RankedStudent, SendResult, StudentBrief } from "../types";
+import type { BatchDetail, BatchSyncResult, ClassStats, RankedStudent, SendResult, StudentBrief } from "../types";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-        {label}
-      </label>
-      {children}
-    </div>
-  );
+function timeAgo(iso: string): string {
+  const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
 
-function BatchHeader({ detail, onDelete }: { detail: BatchDetail; onDelete: () => void }) {
+function BatchHeader({
+  detail,
+  onDelete,
+  onSync,
+  syncing,
+}: {
+  detail: BatchDetail;
+  onDelete: () => void;
+  onSync: () => void;
+  syncing: boolean;
+}) {
+  const syncable = detail.source_type !== "file";
   return (
     <div>
       <nav className="text-xs" style={{ color: "var(--text-muted)" }} aria-label="Breadcrumb">
@@ -34,17 +44,36 @@ function BatchHeader({ detail, onDelete }: { detail: BatchDetail; onDelete: () =
             {detail.class_level}th class · {detail.student_count} students · {detail.exam_codes.join(", ")}
           </span>
         </div>
-        <button
-          onClick={onDelete}
-          className="flex items-center gap-1.5 rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200"
-          style={{ borderColor: "var(--accent-mark-soft)", color: "var(--accent-mark)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-mark-soft)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        >
-          <TrashIcon size={14} />
-          Delete upload
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {syncable && (
+            <button
+              onClick={onSync}
+              disabled={syncing}
+              title={detail.source_type === "sheet_link" ? "Re-fetch this batch from its Google Sheet" : "Re-fetch this batch from its Drive file"}
+              className="flex items-center gap-1.5 rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-60"
+              style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+            >
+              <RefreshIcon size={14} className={syncing ? "animate-spin" : undefined} />
+              {syncing ? "Syncing…" : "Sync now"}
+            </button>
+          )}
+          <button
+            onClick={onDelete}
+            className="flex items-center gap-1.5 rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200"
+            style={{ borderColor: "var(--accent-mark-soft)", color: "var(--accent-mark)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-mark-soft)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            <TrashIcon size={14} />
+            Delete upload
+          </button>
+        </div>
       </div>
+      {syncable && detail.last_synced_at && (
+        <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+          Last synced {timeAgo(detail.last_synced_at)}
+        </p>
+      )}
     </div>
   );
 }
@@ -417,91 +446,6 @@ function SubjectAnalysis({ batchId }: { batchId: number }) {
   );
 }
 
-interface SettingsState {
-  name: string;
-  schoolName: string;
-  faTotal: string;
-  saTotal: string;
-  faMarks: string;
-  saMarks: string;
-  strengthOverride: string;
-}
-
-function SettingsDrawer({
-  settings,
-  onChange,
-  onSave,
-  saving,
-  error,
-  defaultStrength,
-}: {
-  settings: SettingsState;
-  onChange: (next: Partial<SettingsState>) => void;
-  onSave: () => void;
-  saving: boolean;
-  error: string | null;
-  defaultStrength: number;
-}) {
-  return (
-    <details className="soft-card p-5">
-      <summary className="flex cursor-pointer list-none items-center gap-2 text-base font-semibold" style={{ color: "var(--text-primary)" }}>
-        <span className="icon-chip" style={{ width: "1.75rem", height: "1.75rem" }}>
-          <SettingsIcon size={14} />
-        </span>
-        Batch configuration
-      </summary>
-      <div className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-3">
-        <div className="space-y-3">
-          <Field label="School name">
-            <input type="text" value={settings.schoolName} onChange={(e) => onChange({ schoolName: e.target.value })} />
-          </Field>
-          <Field label="Batch name">
-            <input type="text" value={settings.name} onChange={(e) => onChange({ name: e.target.value })} />
-          </Field>
-          <Field label="Class strength">
-            <input
-              type="number"
-              min={0}
-              value={settings.strengthOverride}
-              onChange={(e) => onChange({ strengthOverride: e.target.value })}
-              placeholder={`auto (${defaultStrength})`}
-            />
-          </Field>
-        </div>
-        <div className="space-y-3">
-          <Field label="FA exam total">
-            <input type="number" value={settings.faTotal} onChange={(e) => onChange({ faTotal: e.target.value })} />
-          </Field>
-          <Field label="FA marks per subject">
-            <input type="number" value={settings.faMarks} onChange={(e) => onChange({ faMarks: e.target.value })} />
-          </Field>
-        </div>
-        <div className="space-y-3">
-          <Field label="SA / other exam total">
-            <input type="number" value={settings.saTotal} onChange={(e) => onChange({ saTotal: e.target.value })} />
-          </Field>
-          <Field label="SA / other marks per subject">
-            <input type="number" value={settings.saMarks} onChange={(e) => onChange({ saMarks: e.target.value })} />
-          </Field>
-        </div>
-      </div>
-      {error && (
-        <p className="mt-3 text-sm" style={{ color: "var(--accent-mark)" }}>
-          {error}
-        </p>
-      )}
-      <button
-        onClick={onSave}
-        disabled={saving}
-        className="mt-4 rounded-md border px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-60"
-        style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
-      >
-        {saving ? "Saving…" : "Apply settings"}
-      </button>
-    </details>
-  );
-}
-
 function Toolbar({
   students,
   selected,
@@ -583,10 +527,12 @@ function Toolbar({
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={onPrint}
-          className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99]"
+          disabled={selected.size === 0}
+          title={allSelected ? "Print every student's full report, one page each" : "Print the selected students' full reports, one page each"}
+          className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99] disabled:opacity-60"
         >
           <PrinterIcon size={14} />
-          Print
+          {allSelected ? `Print whole class (${students.length})` : `Print selected (${selected.size})`}
         </button>
         <button
           onClick={onSendToParents}
@@ -610,24 +556,13 @@ export function BatchPage() {
 
   const [detail, setDetail] = useState<BatchDetail | null>(null);
   const [stats, setStats] = useState<ClassStats | null>(null);
-  const [examFilter, setExamFilter] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [reloadNonce, setReloadNonce] = useState(0);
-  const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendResults, setSendResults] = useState<SendResult[] | null>(null);
   const [copiedStudentId, setCopiedStudentId] = useState<number | null>(null);
-
-  const [settings, setSettings] = useState<SettingsState>({
-    name: "",
-    schoolName: "",
-    faTotal: "350",
-    saTotal: "600",
-    faMarks: "50",
-    saMarks: "100",
-    strengthOverride: "",
-  });
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -635,20 +570,10 @@ export function BatchPage() {
       .then((d) => {
         setDetail(d);
         setSelected(new Set(d.students.map((s) => s.id)));
-        setSettings({
-          name: d.name,
-          schoolName: d.school_name,
-          faTotal: String(d.fa_total),
-          saTotal: String(d.sa_total),
-          faMarks: String(d.fa_marks_per_subject),
-          saMarks: String(d.sa_marks_per_subject),
-          strengthOverride: d.class_strength_override != null ? String(d.class_strength_override) : "",
-        });
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load this upload"));
 
     setStats(null);
-    setExamFilter(null);
     api
       .get<ClassStats>(`/batches/${batchId}/stats`)
       .then(setStats)
@@ -666,15 +591,14 @@ export function BatchPage() {
   }
 
   function changeExam(exam: string) {
-    setExamFilter(exam);
     fetchStats(exam);
   }
 
   const selectedIds = useMemo(() => [...selected].sort((a, b) => a - b), [selected]);
-  const reportUrl = useMemo(() => {
-    const base = api.reportUrl(batchId, selectedIds.length === detail?.students.length ? undefined : selectedIds);
-    return `${base}&v=${reloadNonce}`;
-  }, [batchId, selectedIds, detail, reloadNonce]);
+  const reportUrl = useMemo(
+    () => api.reportUrl(batchId, selectedIds.length === detail?.students.length ? undefined : selectedIds),
+    [batchId, selectedIds, detail],
+  );
 
   function toggleAll(checked: boolean) {
     setSelected(checked ? new Set(detail?.students.map((s) => s.id) ?? []) : new Set());
@@ -693,35 +617,32 @@ export function BatchPage() {
     navigate(`/batches/${batchId}/students/${studentId}`);
   }
 
-  async function saveSettings() {
-    setSaving(true);
-    setError(null);
-    try {
-      const payload: Record<string, unknown> = {
-        name: settings.name.trim() || undefined,
-        school_name: settings.schoolName,
-        fa_total: Number(settings.faTotal) || undefined,
-        sa_total: Number(settings.saTotal) || undefined,
-        fa_marks_per_subject: Number(settings.faMarks) || undefined,
-        sa_marks_per_subject: Number(settings.saMarks) || undefined,
-      };
-      if (settings.strengthOverride.trim()) payload.class_strength_override = Number(settings.strengthOverride);
-      else payload.clear_class_strength_override = true;
-      const updated = await api.put<BatchDetail>(`/batches/${batchId}/settings`, payload);
-      setDetail((prev) => (prev ? { ...prev, ...updated, students: prev.students } : prev));
-      setReloadNonce((n) => n + 1);
-      fetchStats(examFilter ?? undefined);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save settings");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function deleteBatch() {
     if (!confirm(`Delete "${detail?.name}"? This can't be undone.`)) return;
     await api.del(`/batches/${batchId}`);
     navigate("/dashboard");
+  }
+
+  async function syncBatch() {
+    setSyncing(true);
+    setSyncMessage(null);
+    setError(null);
+    try {
+      const result = await api.post<BatchSyncResult>(`/batches/${batchId}/sync`);
+      const refreshed = await api.get<BatchDetail>(`/batches/${batchId}`);
+      setDetail(refreshed);
+      setSelected(new Set(refreshed.students.map((s) => s.id)));
+      fetchStats();
+      const parts = [];
+      if (result.added) parts.push(`${result.added} added`);
+      if (result.updated) parts.push(`${result.updated} updated`);
+      if (result.removed) parts.push(`${result.removed} removed`);
+      setSyncMessage(parts.length ? `Synced — ${parts.join(", ")}.` : "Synced — no changes.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not sync this batch");
+    } finally {
+      setSyncing(false);
+    }
   }
 
   function printSelected() {
@@ -760,20 +681,22 @@ export function BatchPage() {
 
   return (
     <div className="space-y-5">
-      <BatchHeader detail={detail} onDelete={deleteBatch} />
+      <BatchHeader detail={detail} onDelete={deleteBatch} onSync={syncBatch} syncing={syncing} />
+
+      {error && (
+        <p className="text-sm" style={{ color: "var(--accent-mark)" }}>
+          {error}
+        </p>
+      )}
+      {syncMessage && !error && (
+        <p className="text-sm" style={{ color: "var(--status-good)" }}>
+          {syncMessage}
+        </p>
+      )}
 
       <ClassOverview stats={stats} onChangeExam={changeExam} onSelectStudent={viewOneStudent} />
 
       <SubjectAnalysis batchId={batchId} />
-
-      <SettingsDrawer
-        settings={settings}
-        onChange={(next) => setSettings((prev) => ({ ...prev, ...next }))}
-        onSave={saveSettings}
-        saving={saving}
-        error={error}
-        defaultStrength={detail.student_count}
-      />
 
       <Toolbar
         students={detail.students}
