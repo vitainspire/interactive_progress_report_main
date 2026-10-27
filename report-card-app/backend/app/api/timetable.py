@@ -680,16 +680,33 @@ def print_substitution_sheet(date: str, current_user=Depends(get_current_user_fr
     with session() as conn:
         rows = repo.list_substitutions_for_account(conn, current_user["id"], date)
         absence_summary = repo.get_absence_summary_for_account(conn, current_user["id"], date)
+        # Candidates for every row come from ONE batched context fetch
+        # (the same one generate_day_substitutions uses), not a
+        # find_substitute_candidates call per row — that function alone
+        # does ~5-6 sequential queries, and against this project's remote
+        # Postgres pooler that was measured at 30-40+ seconds for a
+        # handful of rows, the exact "over a minute per naive per-slot
+        # call" problem pending_substitution_context already exists to
+        # avoid (see its docstring).
+        ctx = repo.pending_substitution_context(conn, current_user["id"], date, date)
         row_candidates: dict[tuple[int, int], list[dict]] = {}
         for r in rows:
-            candidates = repo.find_substitute_candidates(
-                conn, current_user["id"], r["class_id"], day, r["period"], date, r["original_teacher_id"]
+            period = r["period"]
+            busy = (
+                ctx["busy_by_day_period"].get((day, period), set())
+                | ctx["busy_substituting_by_date_period"].get((date, period), set())
+                | ({r["original_teacher_id"]} if r["original_teacher_id"] else set())
+            )
+            candidates = repo.rank_candidates(
+                ctx["teachers"],
+                busy,
+                ctx["same_subject_by_subject"].get(r["subject_id"], set()),
+                ctx["teachers_by_class"].get(r["class_id"], set()),
             )
             if not any(c["teacher_id"] == r["substitute_teacher_id"] for c in candidates):
-                # find_substitute_candidates treats whoever's already
-                # substituting at this exact date/period as "busy" — which
-                # includes this row's own current substitute, who would
-                # otherwise vanish from their own dropdown.
+                # The batched "busy" set above includes this row's own
+                # current substitute (via busy_substituting_by_date_period),
+                # who would otherwise vanish from their own dropdown.
                 candidates = [
                     {
                         "teacher_id": r["substitute_teacher_id"],
@@ -698,7 +715,7 @@ def print_substitution_sheet(date: str, current_user=Depends(get_current_user_fr
                         "reason": "current",
                     }
                 ] + candidates
-            row_candidates[(r["class_id"], r["period"])] = candidates
+            row_candidates[(r["class_id"], period)] = candidates
         html_out = render_substitution_sheet(
             current_user["default_school_name"] or "School",
             current_user["school_address"],

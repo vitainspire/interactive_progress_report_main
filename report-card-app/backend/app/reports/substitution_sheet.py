@@ -22,7 +22,9 @@ body{margin:0;background:#f6f8fb;font-family:'Hind','Noto Sans Telugu',system-ui
 .title{text-align:center;font-size:1.05rem;font-weight:700;margin:14px 0 2px}
 .date{text-align:center;font-size:.9rem;color:#475569;margin:0}
 .summary{text-align:center;font-size:.82rem;color:#64748b;margin:4px 0 18px}
-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:10px}
+.table-wrap{overflow-x:auto;margin-top:10px}
+table{width:100%;min-width:480px;border-collapse:collapse;font-size:.85rem}
+@media (max-width:480px){.page{padding:16px}.bar{padding:10px 12px}.bar h1{font-size:.9rem}}
 th,td{border:1px solid rgba(15,23,42,.12);padding:8px 10px;text-align:left;vertical-align:middle}
 th{background:#166534;color:#fff;font-size:.75rem}
 tr.g-even td{background:#f8fafc}
@@ -143,8 +145,8 @@ def render_substitution_sheet(
                 f"<td>&nbsp;</td></tr>"
             )
         table_html = (
-            "<table><thead><tr><th>Period</th><th>Class</th><th>Substitute teacher</th><th>Signature</th></tr></thead>"
-            f"<tbody>{''.join(body_rows)}</tbody></table>"
+            '<div class="table-wrap"><table><thead><tr><th>Period</th><th>Class</th><th>Substitute teacher</th><th>Signature</th></tr></thead>'
+            f"<tbody>{''.join(body_rows)}</tbody></table></div>"
         )
     else:
         table_html = '<p class="empty">No substitutions confirmed for this date.</p>'

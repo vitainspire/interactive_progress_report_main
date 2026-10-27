@@ -121,7 +121,7 @@ function WeekGrid({
         <thead>
           <tr>
             <th
-              className="whitespace-nowrap border px-3 py-2 text-left text-xs font-semibold"
+              className="sticky left-0 z-10 whitespace-nowrap border px-3 py-2 text-left text-xs font-semibold"
               style={{ borderColor: "var(--border)", background: "var(--page-plane)", color: "var(--text-secondary)" }}
             >
               Time
@@ -151,7 +151,7 @@ function WeekGrid({
               </tr>
             ) : (
               <tr key={i}>
-                <td className="whitespace-nowrap border px-3 py-2 align-top" style={{ borderColor: "var(--border)", background: "var(--page-plane)" }}>
+                <td className="sticky left-0 z-10 whitespace-nowrap border px-3 py-2 align-top" style={{ borderColor: "var(--border)", background: "var(--page-plane)" }}>
                   <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
                     {row.label}
                   </div>
