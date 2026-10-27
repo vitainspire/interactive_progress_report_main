@@ -14,7 +14,7 @@ interface StudentLink {
  * many schools' sheets leave this column blank for some rows. */
 function buildParentMessage(student: StudentBrief, link: StudentLink): string {
   const greeting = link.father_name ? `నమస్తే ${link.father_name} గారు,` : "నమస్తే,";
-  return `${greeting} మీ అబ్బాయి/అమ్మాయి ${student.name} గారి ప్రోగ్రెస్ రిపోర్ట్ ఇక్కడ చూడండి: ${link.report_url}`;
+  return `${greeting} మీ అబ్బాయి/అమ్మాయి ${student.name} ప్రోగ్రెస్ రిపోర్ట్ ఇక్కడ చూడండి: ${link.report_url}`;
 }
 
 /** One row per student with four actions, replacing the old default view
