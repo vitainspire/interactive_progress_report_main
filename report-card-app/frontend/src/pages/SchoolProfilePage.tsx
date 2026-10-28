@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { SchoolIcon } from "../components/Icons";
+import { CameraIcon, SchoolIcon } from "../components/Icons";
 
 /** One place to edit everything that's stamped on a parent's report and the
  * printed substitution sheet: school name, address, and now a photo — each
@@ -77,7 +77,55 @@ export function SchoolProfilePage() {
 
   return (
     <section>
-      <header>
+      <div className="flex flex-col items-center gap-2 text-center">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={photoBusy}
+            className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border disabled:opacity-60"
+            style={{ borderColor: "var(--border)", background: "var(--surface-2)", boxShadow: "var(--shadow-pop)" }}
+          >
+            {user?.has_school_photo ? (
+              <img
+                key={photoVersion}
+                src={`${api.schoolPhotoPreviewUrl()}&v=${photoVersion}`}
+                alt="Your school"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <SchoolIcon size={32} className="opacity-40" />
+            )}
+          </button>
+          <span
+            className="pointer-events-none absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2"
+            style={{ background: "var(--accent)", borderColor: "var(--surface-1)", color: "#fff" }}
+          >
+            <CameraIcon size={14} />
+          </span>
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={onPickPhoto} className="hidden" />
+        </div>
+        <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          {photoBusy ? "Uploading…" : user?.has_school_photo ? "Tap to change" : "Tap to add your school's photo"}
+        </p>
+        {user?.has_school_photo && !photoBusy && (
+          <button
+            type="button"
+            onClick={onRemovePhoto}
+            className="text-xs font-semibold underline underline-offset-2"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Remove photo
+          </button>
+        )}
+        {photoError && (
+          <p role="alert" className="text-xs" style={{ color: "var(--accent-mark)" }}>
+            {photoError}
+          </p>
+        )}
+      </div>
+
+      <header className="mt-6">
         <h1 className="text-2xl font-extrabold" style={{ color: "var(--text-primary)" }}>
           School profile
         </h1>
@@ -153,73 +201,6 @@ export function SchoolProfilePage() {
         )}
       </div>
 
-      <div className="soft-card mt-5 p-6">
-        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-          School photo
-        </label>
-        <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
-          Shown at the top of every parent's report link — a photo of your school's gate or building works well. Until
-          you upload one, parents see a generic placeholder photo instead of your school.
-        </p>
-
-        <div className="mt-3 flex flex-col items-center gap-3">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={photoBusy}
-            className="group relative mx-auto flex aspect-[16/9] w-full max-w-sm items-center justify-center overflow-hidden rounded-xl border disabled:opacity-60"
-            style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-          >
-            {user?.has_school_photo ? (
-              <>
-                <img
-                  key={photoVersion}
-                  src={`${api.schoolPhotoPreviewUrl()}&v=${photoVersion}`}
-                  alt="Your school"
-                  className="h-full w-full object-cover"
-                />
-                <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-sm font-semibold text-white opacity-0 transition-opacity duration-150 group-hover:bg-black/35 group-hover:opacity-100">
-                  {photoBusy ? "Uploading…" : "Change photo"}
-                </span>
-              </>
-            ) : (
-              <span className="flex flex-col items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
-                <SchoolIcon size={26} className="opacity-50" />
-                <span className="text-xs font-semibold">{photoBusy ? "Uploading…" : "Tap to upload a photo"}</span>
-              </span>
-            )}
-          </button>
-
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={onPickPhoto} className="hidden" />
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={photoBusy}
-              className="accent-fill rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {photoBusy ? "Uploading…" : user?.has_school_photo ? "Change photo" : "Upload photo"}
-            </button>
-            {user?.has_school_photo && (
-              <button
-                type="button"
-                onClick={onRemovePhoto}
-                disabled={photoBusy}
-                className="rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-60"
-                style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
-              >
-                Remove
-              </button>
-            )}
-          </div>
-          {photoError && (
-            <p role="alert" className="text-xs" style={{ color: "var(--accent-mark)" }}>
-              {photoError}
-            </p>
-          )}
-        </div>
-      </div>
     </section>
   );
 }

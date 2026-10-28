@@ -290,3 +290,12 @@ export function FolderIcon({ size = 18, className }: IconProps) {
     </svg>
   );
 }
+
+export function CameraIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...base} stroke="currentColor">
+      <path d="M4 8.5a1 1 0 0 1 1-1h2l1.2-2h7.6l1.2 2h2a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8.5z" />
+      <circle cx="12" cy="13" r="3.4" />
+    </svg>
+  );
+}
