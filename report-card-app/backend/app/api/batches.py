@@ -29,6 +29,7 @@ from app.integrations.syllabus_extraction import ExtractionError, ExtractionNotC
 from app.parsing.sheet_parser import SheetParseError, parse_uploaded_file, parse_workbook_file
 from app.reports.card_render import render_report_page
 from app.reports.class_stats import compute_class_stats
+from app.reports.student_analytics import build_student_analytics
 from app.reports.subject_analysis import discover_subjects, render_subject_analysis
 from app.reports.upload_template import build_upload_template
 
@@ -496,6 +497,32 @@ def get_batch_stats(batch_id: int, exam: str | None = None, current_user=Depends
         all_students = repo.load_batch_students(conn, batch_id)
         settings = repo.settings_from_row(row)
         return compute_class_stats(all_students, json.loads(row["exam_order"]), settings, selected_exam=exam)
+
+
+@router.get("/{batch_id}/students/{student_id}/analytics")
+def get_student_analytics(batch_id: int, student_id: int, current_user=Depends(get_current_user)):
+    """The teacher-facing "Student analytics" page's data — one student's
+    own marks/rank/attendance trend across every exam, each subject also
+    compared against that exam's class average. Distinct from the report
+    card (parent-facing) and from this batch's class-wide stats (every
+    student, one exam) — see app/reports/student_analytics.py."""
+    with session() as conn:
+        row = repo.get_batch(conn, current_user["id"], batch_id)
+        if not row:
+            raise HTTPException(404, "Batch not found")
+        all_students = repo.load_batch_students(conn, batch_id)
+        student = next((s for s in all_students if s["id"] == student_id), None)
+        if not student:
+            raise HTTPException(404, "Student not found in this batch")
+        settings = repo.settings_from_row(row)
+        analytics = build_student_analytics(student, all_students, json.loads(row["exam_order"]), settings)
+        return {
+            "id": student["id"],
+            "name": student["name"],
+            "section": student.get("section") or "",
+            "roll_no": student.get("roll") or "",
+            **analytics,
+        }
 
 
 class SettingsUpdate(BaseModel):

@@ -124,6 +124,49 @@ export interface StudentBrief {
   phone: string;
 }
 
+export interface StudentSubjectExamPoint {
+  exam: string;
+  marks: number | null;
+  grade: string;
+  max_marks: number;
+  class_avg: number | null;
+}
+
+export interface StudentAnalyticsSubject {
+  name: string;
+  per_exam: StudentSubjectExamPoint[];
+  trend: "up" | "down" | "flat" | null;
+}
+
+export interface StudentRankTrendPoint {
+  exam: string;
+  rank: number;
+  class_strength: number;
+  total_marks: number | null;
+  grade: string;
+}
+
+export interface StudentAttendanceMonthPoint {
+  month: string;
+  attended: number;
+  working_days: number;
+}
+
+export interface StudentAnalytics {
+  id: number;
+  name: string;
+  section: string;
+  roll_no: string;
+  exams: string[];
+  subjects: StudentAnalyticsSubject[];
+  rank_trend: StudentRankTrendPoint[];
+  attendance_trend: StudentAttendanceMonthPoint[];
+  attendance_total: { present: number; working: number } | null;
+  strengths: string[];
+  weak_subjects: string[];
+  failing_subjects: string[];
+}
+
 export interface BatchDetail extends BatchSummary {
   students: StudentBrief[];
 }

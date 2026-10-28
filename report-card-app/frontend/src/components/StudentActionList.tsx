@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { ChatIcon, DotsIcon, EyeIcon, SheetIcon, SmsIcon } from "./Icons";
 import type { StudentBrief } from "../types";
@@ -37,8 +38,10 @@ function buildParentMessage(student: StudentBrief, link: StudentLink): string {
  *     so this one stays disabled when there's no phone on file rather than
  *     promising a fallback that may not actually work.
  *   - Eye: previews the exact parent-facing link before sending it.
- *   - Report: the full teacher-facing report (same view as the dedicated
- *     student page), for a quick look without leaving this list. */
+ *   - Report: the full teacher-facing report, for a quick look without
+ *     leaving this list — the student's own name links elsewhere, to a
+ *     dedicated per-student analytics page (StudentPage.tsx), not this
+ *     report. */
 export function StudentActionList({ batchId, students }: { batchId: number; students: StudentBrief[] }) {
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -100,9 +103,13 @@ export function StudentActionList({ batchId, students }: { batchId: number; stud
               <span className="w-6 flex-none text-sm font-semibold tabular-nums" style={{ color: "var(--text-muted)" }}>
                 {i + 1}.
               </span>
-              <span className="flex-1 truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              <Link
+                to={`/batches/${batchId}/students/${s.id}`}
+                className="flex-1 truncate text-sm font-medium hover:underline"
+                style={{ color: "var(--text-primary)" }}
+              >
                 {s.name}
-              </span>
+              </Link>
 
               {/* Wide screens: every action inline, same as before. */}
               <div className="hidden flex-none items-center gap-1.5 sm:flex">
