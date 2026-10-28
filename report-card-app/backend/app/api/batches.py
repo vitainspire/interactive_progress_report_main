@@ -605,7 +605,7 @@ def _log_send(conn, student_id: int, channel: str, status: str, detail: str) -> 
     )
 
 
-def _send_one(conn, student_row) -> dict:
+def _send_one(conn, student_row, language: str, channel_mode: str, country_code: str) -> dict:
     student_id = student_row["id"]
     name = student_row["name"]
     out = {"student_id": student_id, "name": name, "report_url": None}
@@ -617,7 +617,7 @@ def _send_one(conn, student_row) -> dict:
         return {**out, "channel": "none", "status": "skipped", "detail": detail}
 
     try:
-        phone = normalize_phone(raw_phone)
+        phone = normalize_phone(raw_phone, country_code)
     except InvalidPhoneNumber as exc:
         _log_send(conn, student_id, "none", "skipped", str(exc))
         return {**out, "channel": "none", "status": "skipped", "detail": str(exc)}
@@ -626,29 +626,41 @@ def _send_one(conn, student_row) -> dict:
     report_url = public_report_url(token)
     out = {**out, "report_url": report_url}
 
-    whatsapp_error: str | None = None
-    if whatsapp.is_configured():
-        try:
-            whatsapp.send_report_whatsapp(phone, name, token)
-            _log_send(conn, student_id, "whatsapp", "sent", "")
-            return {**out, "channel": "whatsapp", "status": "sent", "detail": ""}
-        except whatsapp.WhatsAppSendError as exc:
-            whatsapp_error = str(exc)
-    else:
-        whatsapp_error = "WhatsApp isn't configured on this server."
+    # channel_mode is this school's own choice (app_user.whatsapp_channel_mode,
+    # see PUT /auth/whatsapp-settings) — 'whatsapp_only'/'sms_only' skip the
+    # other channel entirely rather than falling back to it.
+    try_whatsapp = channel_mode != "sms_only"
+    try_sms = channel_mode != "whatsapp_only"
 
-    if sms.is_configured():
+    whatsapp_error: str | None = None
+    if try_whatsapp:
+        if whatsapp.is_configured():
+            try:
+                whatsapp.send_report_whatsapp(phone, name, token, language=language)
+                _log_send(conn, student_id, "whatsapp", "sent", "")
+                return {**out, "channel": "whatsapp", "status": "sent", "detail": ""}
+            except whatsapp.WhatsAppSendError as exc:
+                whatsapp_error = str(exc)
+        else:
+            whatsapp_error = "WhatsApp isn't configured on this server."
+
+    if try_sms and sms.is_configured():
         try:
             sms.send_report_sms(phone, name, report_url)
-            detail = f"WhatsApp failed first ({whatsapp_error}); sent via SMS instead." if whatsapp.is_configured() else ""
+            detail = f"WhatsApp failed first ({whatsapp_error}); sent via SMS instead." if whatsapp_error else ""
             _log_send(conn, student_id, "sms", "sent", detail)
             return {**out, "channel": "sms", "status": "sent", "detail": detail}
         except sms.SmsSendError as exc:
-            detail = f"WhatsApp: {whatsapp_error} | SMS: {exc}"
+            detail = f"WhatsApp: {whatsapp_error} | SMS: {exc}" if whatsapp_error else f"SMS: {exc}"
             _log_send(conn, student_id, "sms", "failed", detail)
             return {**out, "channel": "sms", "status": "failed", "detail": detail}
 
-    detail = f"{whatsapp_error} SMS isn't configured on this server either."
+    if try_whatsapp and try_sms:
+        detail = f"{whatsapp_error} SMS isn't configured on this server either."
+    elif try_whatsapp:
+        detail = whatsapp_error or "WhatsApp isn't configured on this server."
+    else:
+        detail = "SMS isn't configured on this server."
     _log_send(conn, student_id, "none", "failed", detail)
     return {**out, "channel": "none", "status": "failed", "detail": detail}
 
@@ -676,7 +688,7 @@ def get_student_link(batch_id: int, student_id: int, current_user=Depends(get_cu
         raw_phone = (student_row["phone"] or "").strip()
         if raw_phone:
             try:
-                whatsapp_phone = normalize_phone(raw_phone).lstrip("+")
+                whatsapp_phone = normalize_phone(raw_phone, current_user["default_country_code"]).lstrip("+")
             except InvalidPhoneNumber:
                 whatsapp_phone = None
 
@@ -700,5 +712,8 @@ def send_reports(batch_id: int, req: SendReportsRequest, current_user=Depends(ge
         if not student_rows:
             raise HTTPException(422, "No students selected")
 
-        results = [_send_one(conn, s) for s in student_rows]
+        results = [
+            _send_one(conn, s, current_user["whatsapp_language"], current_user["whatsapp_channel_mode"], current_user["default_country_code"])
+            for s in student_rows
+        ]
         return {"results": results}

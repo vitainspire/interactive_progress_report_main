@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, getToken, setToken } from "../api/client";
-import type { AuthUser } from "../types";
+import type { AuthUser, WhatsappChannelMode, WhatsappLanguage } from "../types";
 
 interface AuthResponse {
   token: string;
@@ -16,6 +16,11 @@ interface AuthContextValue {
   setSchoolAddress: (schoolAddress: string) => Promise<void>;
   setSchoolPhoto: (file: File) => Promise<void>;
   removeSchoolPhoto: () => Promise<void>;
+  setWhatsappSettings: (settings: {
+    whatsapp_language: WhatsappLanguage;
+    whatsapp_channel_mode: WhatsappChannelMode;
+    default_country_code: string;
+  }) => Promise<void>;
   logout: () => void;
 }
 
@@ -74,6 +79,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(await api.del<AuthUser>("/auth/school-photo"));
   }, []);
 
+  const setWhatsappSettings = useCallback(
+    async (settings: { whatsapp_language: WhatsappLanguage; whatsapp_channel_mode: WhatsappChannelMode; default_country_code: string }) => {
+      setUser(await api.put<AuthUser>("/auth/whatsapp-settings", settings));
+    },
+    [],
+  );
+
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
@@ -81,7 +93,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, signup, setSchoolName, setSchoolAddress, setSchoolPhoto, removeSchoolPhoto, logout }}
+      value={{
+        user,
+        loading,
+        login,
+        signup,
+        setSchoolName,
+        setSchoolAddress,
+        setSchoolPhoto,
+        removeSchoolPhoto,
+        setWhatsappSettings,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

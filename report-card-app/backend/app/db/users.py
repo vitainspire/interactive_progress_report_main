@@ -42,3 +42,10 @@ def get_school_photo(conn: psycopg.Connection, user_id: int) -> tuple[bytes, str
     if not row or row["school_photo"] is None:
         return None
     return bytes(row["school_photo"]), row["school_photo_mime"] or "image/jpeg"
+
+
+def set_whatsapp_settings(conn: psycopg.Connection, user_id: int, language: str, channel_mode: str, default_country_code: str) -> None:
+    conn.execute(
+        "UPDATE app_user SET whatsapp_language = %s, whatsapp_channel_mode = %s, default_country_code = %s WHERE id = %s",
+        (language, channel_mode, default_country_code.strip(), user_id),
+    )

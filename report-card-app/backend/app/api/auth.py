@@ -1,5 +1,6 @@
 import io
 import re
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
@@ -18,6 +19,7 @@ from app.db.users import (
     set_default_school_name,
     set_school_address,
     set_school_photo,
+    set_whatsapp_settings,
 )
 
 # A hero banner photo doesn't need to be huge — downsized to this max
@@ -82,6 +84,20 @@ class SchoolAddressRequest(BaseModel):
     school_address: str
 
 
+class WhatsappSettingsRequest(BaseModel):
+    whatsapp_language: Literal["te", "en_US"]
+    whatsapp_channel_mode: Literal["whatsapp_then_sms", "whatsapp_only", "sms_only"]
+    default_country_code: str
+
+    @field_validator("default_country_code")
+    @classmethod
+    def valid_country_code(cls, v: str) -> str:
+        v = v.strip()
+        if not v.isdigit() or not (1 <= len(v) <= 3):
+            raise ValueError("Country code must be 1-3 digits, e.g. 91")
+        return v
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -95,6 +111,9 @@ def _user_out(user) -> dict:
         "default_school_name": user["default_school_name"],
         "school_address": user["school_address"],
         "has_school_photo": user["school_photo"] is not None,
+        "whatsapp_language": user["whatsapp_language"],
+        "whatsapp_channel_mode": user["whatsapp_channel_mode"],
+        "default_country_code": user["default_country_code"],
     }
 
 
@@ -140,6 +159,18 @@ def update_school_address(req: SchoolAddressRequest, current_user=Depends(get_cu
     simply omits that line otherwise."""
     with session() as conn:
         set_school_address(conn, current_user["id"], req.school_address)
+        return _user_out(get_user_by_id(conn, current_user["id"]))
+
+
+@router.put("/whatsapp-settings")
+def update_whatsapp_settings(req: WhatsappSettingsRequest, current_user=Depends(get_current_user)):
+    """The WhatsApp Business phone number/token/template name are shared
+    platform-wide (env vars, see app/core/config.py) — this is the part
+    each school controls itself: which approved template language to send
+    in, whether to fall back to SMS at all, and which country code to
+    assume for a bare 10-digit number from their own sheet."""
+    with session() as conn:
+        set_whatsapp_settings(conn, current_user["id"], req.whatsapp_language, req.whatsapp_channel_mode, req.default_country_code)
         return _user_out(get_user_by_id(conn, current_user["id"]))
 
 

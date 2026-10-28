@@ -136,6 +136,21 @@ def _migrate_school_photo(conn: psycopg.Connection) -> None:
     conn.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS school_photo_mime TEXT")
 
 
+def _migrate_whatsapp_settings(conn: psycopg.Connection) -> None:
+    """Adds per-school messaging settings to the pre-existing `app_user`
+    table (see schema.sql) — this app's WhatsApp Business API account/
+    phone number stays one shared platform-level credential (set via env
+    vars, see app/core/config.py), but which approved template *language*
+    to send in, whether to fall back to SMS at all, and which country code
+    to assume for a bare 10-digit number are each school's own choice.
+    whatsapp_channel_mode is 'whatsapp_then_sms' (today's existing
+    behavior), 'whatsapp_only', or 'sms_only' — enforced at the Pydantic
+    layer (app/api/auth.py), not here."""
+    conn.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS whatsapp_language TEXT NOT NULL DEFAULT 'te'")
+    conn.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS whatsapp_channel_mode TEXT NOT NULL DEFAULT 'whatsapp_then_sms'")
+    conn.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS default_country_code TEXT NOT NULL DEFAULT '91'")
+
+
 def _migrate_subject_exam_info_pk(conn: psycopg.Connection) -> None:
     """subject_exam_info originally keyed on PRIMARY KEY (class_level,
     subject) — fine while every row was global, but it only allows one row
@@ -181,6 +196,7 @@ def init_db() -> None:
         _migrate_subject_exam_info_pk(conn)
         _migrate_syllabus_account_scope(conn)
         _migrate_school_photo(conn)
+        _migrate_whatsapp_settings(conn)
         seed_syllabus(conn)
         seed_subject_blueprint(conn)
         conn.commit()

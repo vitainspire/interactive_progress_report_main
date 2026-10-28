@@ -1,3 +1,6 @@
+export type WhatsappLanguage = "te" | "en_US";
+export type WhatsappChannelMode = "whatsapp_then_sms" | "whatsapp_only" | "sms_only";
+
 export interface AuthUser {
   id: number;
   email: string;
@@ -5,6 +8,9 @@ export interface AuthUser {
   default_school_name: string;
   school_address: string;
   has_school_photo: boolean;
+  whatsapp_language: WhatsappLanguage;
+  whatsapp_channel_mode: WhatsappChannelMode;
+  default_country_code: string;
 }
 
 export interface BatchSummary {

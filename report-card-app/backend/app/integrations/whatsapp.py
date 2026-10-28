@@ -44,7 +44,13 @@ def is_configured() -> bool:
     return bool(WHATSAPP_CLOUD_API_TOKEN and WHATSAPP_PHONE_NUMBER_ID)
 
 
-def send_report_whatsapp(to_phone_e164: str, student_name: str, share_token: str) -> None:
+def send_report_whatsapp(to_phone_e164: str, student_name: str, share_token: str, language: str | None = None) -> None:
+    """`language` is each school's own choice (app_user.whatsapp_language,
+    see app/api/auth.py's PUT /auth/whatsapp-settings) — the template NAME
+    stays one shared platform-level credential, but Meta lets one template
+    name have several independently-approved language variants, which is
+    how one shared WhatsApp Business account still sends each school's
+    parents a message in their own school's language."""
     if not is_configured():
         raise WhatsAppNotConfigured("WhatsApp isn't configured on this server (missing WHATSAPP_CLOUD_API_TOKEN/WHATSAPP_PHONE_NUMBER_ID).")
 
@@ -55,7 +61,7 @@ def send_report_whatsapp(to_phone_e164: str, student_name: str, share_token: str
         "type": "template",
         "template": {
             "name": WHATSAPP_TEMPLATE_NAME,
-            "language": {"code": WHATSAPP_TEMPLATE_LANG},
+            "language": {"code": language or WHATSAPP_TEMPLATE_LANG},
             "components": [
                 {"type": "body", "parameters": [{"type": "text", "text": student_name}]},
                 {
