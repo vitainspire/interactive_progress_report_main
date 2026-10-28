@@ -27,7 +27,9 @@ from app.integrations.phone import InvalidPhoneNumber, normalize_phone
 from app.integrations.sharing import get_or_create_share_token, public_report_url
 from app.integrations.syllabus_extraction import ExtractionError, ExtractionNotConfigured, extract_document
 from app.parsing.sheet_parser import SheetParseError, parse_uploaded_file, parse_workbook_file
+from app.reports import study_plan
 from app.reports.card_render import render_report_page
+from app.reports.chat_canned import answer_canned_question, build_advice_items
 from app.reports.class_stats import compute_class_stats
 from app.reports.student_analytics import build_student_analytics
 from app.reports.subject_analysis import discover_subjects, render_subject_analysis
@@ -515,14 +517,49 @@ def get_student_analytics(batch_id: int, student_id: int, current_user=Depends(g
         if not student:
             raise HTTPException(404, "Student not found in this batch")
         settings = repo.settings_from_row(row)
-        analytics = build_student_analytics(student, all_students, json.loads(row["exam_order"]), settings)
+        exam_defs = json.loads(row["exam_order"])
+        analytics = build_student_analytics(student, all_students, exam_defs, settings)
+        # Same rule-based text a parent sees on this student's own report's
+        # "Teacher's Advice" panel (app/reports/parent_report.py) — no LLM
+        # call, so it's safe to compute inline here rather than lazily.
+        advice_cards = build_advice_items(student, all_students, exam_defs, settings)
         return {
             "id": student["id"],
             "name": student["name"],
             "section": student.get("section") or "",
             "roll_no": student.get("roll") or "",
+            "advice_cards": advice_cards,
             **analytics,
         }
+
+
+@router.get("/{batch_id}/students/{student_id}/study-plan")
+def get_student_study_plan_teacher(batch_id: int, student_id: int, current_user=Depends(get_current_user)):
+    """Same syllabus-aware study plan a parent sees lazily-loaded on their
+    own report (app/api/public.py's GET /report/{token}/study-plan) — kept
+    as its own route here too rather than folded into /analytics, since
+    this one makes a real LLM call (and a cache write) that the rest of
+    that page's data doesn't need to wait on."""
+    with session() as conn:
+        row = repo.get_batch(conn, current_user["id"], batch_id)
+        if not row:
+            raise HTTPException(404, "Batch not found")
+        all_students = repo.load_batch_students(conn, batch_id)
+        student = next((s for s in all_students if s["id"] == student_id), None)
+        if not student:
+            raise HTTPException(404, "Student not found in this batch")
+        settings = repo.settings_from_row(row)
+        exam_defs = json.loads(row["exam_order"])
+
+        subject = study_plan.weakest_subject(student, exam_defs)
+        if not subject:
+            return {"available": False}
+
+        weak_summary = answer_canned_question("ఏ సబ్జెక్టులు మెరుగుపడాలి?", student, all_students, exam_defs, settings) or ""
+        plan = study_plan.generate_study_plan(conn, current_user["id"], row["class_level"], subject, weak_summary)
+        if not plan:
+            return {"available": False}
+        return {"available": True, "subject": subject, "plan": plan}
 
 
 class SettingsUpdate(BaseModel):

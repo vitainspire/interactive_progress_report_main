@@ -28,7 +28,7 @@ import math
 import re
 
 from app.reports.analysis import build_analysis
-from app.reports.chat_canned import answer_canned_question
+from app.reports.chat_canned import answer_canned_question, build_advice_items
 from app.reports.numfmt import fmt_num
 from app.reports.parent_subject import (
     build_conclusion_voice_telugu,
@@ -811,32 +811,20 @@ _DEFAULT_CHAT_QUESTIONS = [
 ]
 
 
-# Icon + card title for each of the five canned answers, in the same order
-# as _DEFAULT_CHAT_QUESTIONS, reused to build the "Teacher's Advice" panel
-# below from the exact same text the chat would give for that question.
-_ADVICE_META = [
-    ("\U0001f4aa", "బలాలు"),
-    ("\U0001f4da", "మెరుగుపడాల్సిన సబ్జెక్టులు"),
-    ("\U0001f3c5", "ర్యాంకు"),
-    ("\U0001f4c5", "హాజరు"),
-    ("\U0001f4a1", "చదువు చిట్కాలు"),
-]
-
-
 def _build_advice_cards(student: dict, all_students: list[dict], exam_defs: list[dict], settings) -> list[str]:
     """One card per canned chat answer that actually has something to say
     for this student — shared by the Know About Student banner/modal and
     the inline Teacher's Advice section on the single-scroll View Report
-    page, so both always show the exact same text."""
+    page, so both always show the exact same text. The underlying items
+    (chat_canned.build_advice_items) are also what the teacher-facing
+    Student Analytics page shows (app/api/batches.py), so a parent and
+    that student's teacher always see identical wording."""
     cards = []
-    for (icon, title), question in zip(_ADVICE_META, _DEFAULT_CHAT_QUESTIONS):
-        answer = answer_canned_question(question, student, all_students, exam_defs, settings)
-        if not answer:
-            continue
+    for item in build_advice_items(student, all_students, exam_defs, settings):
         cards.append(
             f'<div class="advice-card"><span class="advice-num">{len(cards) + 1}</span>'
-            f'<div class="advice-body"><div class="advice-title">{icon} {_esc(title)}</div>'
-            f'<div class="advice-text">{_esc(answer)}</div></div></div>'
+            f'<div class="advice-body"><div class="advice-title">{item["icon"]} {_esc(item["title"])}</div>'
+            f'<div class="advice-text">{_esc(item["text"])}</div></div></div>'
         )
     return cards
 

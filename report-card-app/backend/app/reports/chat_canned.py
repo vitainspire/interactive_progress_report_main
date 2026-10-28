@@ -149,3 +149,29 @@ def answer_canned_question(question: str, student: dict, all_students: list[dict
         return "ఇంకా పరీక్షల మార్కులు నమోదు కాలేదు."
     class_strength = settings.class_strength_override or len(all_students)
     return handler(student, exam_defs, settings, ks, class_strength)
+
+
+# (question, icon, title) for each of the five preset questions above, in
+# display order — the single source of truth for the parent report's
+# "Teacher's Advice" panel (app/reports/parent_report.py) AND the
+# teacher-facing Student Analytics page (app/api/batches.py), so both ever
+# show the exact same underlying text instead of two copies drifting apart.
+ADVICE_META = [
+    ("మొత్తం ప్రగతి ఎలా ఉంది?", "\U0001f4aa", "బలాలు"),
+    ("ఏ సబ్జెక్టులు మెరుగుపడాలి?", "\U0001f4da", "మెరుగుపడాల్సిన సబ్జెక్టులు"),
+    ("ర్యాంకు గురించి చెప్పండి", "\U0001f3c5", "ర్యాంకు"),
+    ("హాజరు ఎలా ఉంది?", "\U0001f4c5", "హాజరు"),
+    ("ఇంకా బాగా చదవాలంటే ఏం చేయాలి?", "\U0001f4a1", "చదువు చిట్కాలు"),
+]
+
+
+def build_advice_items(student: dict, all_students: list[dict], exam_defs: list[dict], settings) -> list[dict]:
+    """One {"icon","title","text"} dict per preset question that actually
+    has something to say for this student — same filtering/order as
+    answer_canned_question, just all five at once."""
+    items = []
+    for question, icon, title in ADVICE_META:
+        answer = answer_canned_question(question, student, all_students, exam_defs, settings)
+        if answer:
+            items.append({"icon": icon, "title": title, "text": answer})
+    return items

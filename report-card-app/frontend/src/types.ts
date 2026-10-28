@@ -152,6 +152,18 @@ export interface StudentAttendanceMonthPoint {
   working_days: number;
 }
 
+export interface AdviceCard {
+  icon: string;
+  title: string;
+  text: string;
+}
+
+export interface StudentStudyPlan {
+  available: boolean;
+  subject?: string;
+  plan?: string;
+}
+
 export interface StudentAnalytics {
   id: number;
   name: string;
@@ -165,6 +177,7 @@ export interface StudentAnalytics {
   strengths: string[];
   weak_subjects: string[];
   failing_subjects: string[];
+  advice_cards: AdviceCard[];
 }
 
 export interface BatchDetail extends BatchSummary {

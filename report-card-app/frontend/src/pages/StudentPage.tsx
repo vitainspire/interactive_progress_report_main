@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ExternalLinkIcon } from "../components/Icons";
-import type { StudentAnalytics } from "../types";
+import type { StudentAnalytics, StudentStudyPlan } from "../types";
 
 const GRADE_COLORS: Record<string, string> = {
   A1: "var(--status-good)",
@@ -77,12 +77,24 @@ export function StudentPage() {
 
   const [data, setData] = useState<StudentAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [studyPlan, setStudyPlan] = useState<StudentStudyPlan | null>(null);
 
   useEffect(() => {
     api
       .get<StudentAnalytics>(`/batches/${batchId}/students/${studentIdNum}/analytics`)
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load this student's analytics"));
+  }, [batchId, studentIdNum]);
+
+  // Fetched separately, after the rest of the page has already rendered —
+  // this one makes a real LLM call (and a cache write) that the rest of
+  // this page's data doesn't need to wait on, same reasoning as the
+  // parent report's own lazily-loaded study plan card.
+  useEffect(() => {
+    api
+      .get<StudentStudyPlan>(`/batches/${batchId}/students/${studentIdNum}/study-plan`)
+      .then(setStudyPlan)
+      .catch(() => setStudyPlan({ available: false }));
   }, [batchId, studentIdNum]);
 
   if (error) return <p style={{ color: "var(--accent-mark)" }}>{error}</p>;
@@ -131,6 +143,50 @@ export function StudentPage() {
           <SubjectTagList label="Strong in" names={data.strengths} color="var(--status-good)" />
           <SubjectTagList label="Needs attention" names={data.weak_subjects} color="#d97706" />
           <SubjectTagList label="Failing" names={data.failing_subjects} color="var(--accent-mark)" />
+        </div>
+      )}
+
+      {(data.advice_cards.length > 0 || studyPlan?.available) && (
+        <div className="soft-card p-5">
+          <SectionLabel>Teacher's advice — same wording this student's parent sees</SectionLabel>
+          <div className="mt-3 space-y-3">
+            {data.advice_cards.map((card, i) => (
+              <div key={card.title} className="flex gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: "var(--border)" }}>
+                <span
+                  className="flex h-6 w-6 flex-none items-center justify-center rounded-full text-xs font-bold"
+                  style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+                >
+                  {i + 1}
+                </span>
+                <div>
+                  <div className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                    {card.icon} {card.title}
+                  </div>
+                  <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
+                    {card.text}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {studyPlan?.available && (
+              <div className="flex gap-3 border-t pt-3" style={{ borderColor: "var(--border)" }}>
+                <span
+                  className="flex h-6 w-6 flex-none items-center justify-center rounded-full text-xs font-bold"
+                  style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+                >
+                  {data.advice_cards.length + 1}
+                </span>
+                <div>
+                  <div className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                    📘 Syllabus-based plan — {studyPlan.subject}
+                  </div>
+                  <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
+                    {studyPlan.plan}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
