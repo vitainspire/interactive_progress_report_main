@@ -51,7 +51,7 @@ DEFAULT_PHONE_COUNTRY_CODE = os.environ.get("REPORTCARD_APP_DEFAULT_COUNTRY_CODE
 # token) — see app/integrations/whatsapp.py for the exact payload shape.
 WHATSAPP_CLOUD_API_TOKEN = os.environ.get("WHATSAPP_CLOUD_API_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
-WHATSAPP_TEMPLATE_NAME = os.environ.get("WHATSAPP_TEMPLATE_NAME", "report_card_ready")
+WHATSAPP_TEMPLATE_NAME = os.environ.get("WHATSAPP_TEMPLATE_NAME", "student_progress_report")
 WHATSAPP_TEMPLATE_LANG = os.environ.get("WHATSAPP_TEMPLATE_LANG", "en_US")
 
 # SMS fallback via Twilio — used only when WhatsApp isn't configured, or a
