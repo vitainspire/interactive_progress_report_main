@@ -19,4 +19,25 @@ from app.main import app
 # lifetime ends here.
 init_db()
 
-handler = Mangum(app, lifespan="off")
+_mangum_handler = Mangum(app, lifespan="off")
+
+
+def handler(event, context):
+    """Wraps Mangum's own handler to flush LangSmith's trace queue before
+    returning. LangSmith's @traceable (see app/integrations/chat.py,
+    app/integrations/syllabus_extraction.py) submits traces from a
+    background thread by default — fine on a normal long-running server,
+    but on Lambda the execution environment can freeze the instant this
+    function returns, before that background thread ever gets to actually
+    send the queued trace. A short, best-effort flush here closes that
+    gap; wrapped in try/except and capped with a timeout so a LangSmith
+    outage (or it simply not being configured at all) never breaks or
+    measurably slows down a real response."""
+    response = _mangum_handler(event, context)
+    try:
+        from langsmith.run_trees import get_cached_client
+
+        get_cached_client().flush(timeout=5)
+    except Exception:
+        pass
+    return response
