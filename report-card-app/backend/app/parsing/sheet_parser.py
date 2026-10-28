@@ -163,6 +163,16 @@ def parse_grid(rows: list[list]) -> dict:
                 block["result_col"] = j
             elif re.search(r"rank", t, re.I):
                 block["rank_col"] = j
+            elif re.fullmatch(r"grade", t, re.I):
+                # Some schools' sheets label the grade column next to each
+                # subject's marks column with the literal word "Grade"
+                # (instead of leaving it blank, which is what this parser
+                # otherwise expects there). It's already read as col+1 of
+                # the subject right before it (see "grade": _gr(cell(r, j
+                # + 1)) below) — without this, it was wrongly read as its
+                # own subject named "GRADE", with that subject's own
+                # neighboring column misread as its marks/grade.
+                continue
             elif t:
                 block["subjects"].append({"name": t, "col": j})
         if block["subjects"]:
