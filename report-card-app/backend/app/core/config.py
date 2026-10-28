@@ -79,4 +79,9 @@ OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "qwen/qwen3.8-flash")
 # blueprint PDF or image (see app/integrations/syllabus_extraction.py) —
 # kept separate from OPENROUTER_MODEL since that one's text-only and a
 # document-capable model is typically a different (often pricier) one.
-OPENROUTER_DOCUMENT_MODEL = os.environ.get("OPENROUTER_DOCUMENT_MODEL", "google/gemini-2.5-flash")
+# flash-lite over plain flash: ~3x cheaper input / ~6x cheaper output on
+# OpenRouter, and side-by-side testing against real syllabus/blueprint
+# documents from this app's actual schools came back identical — a
+# reasonable tradeoff here regardless, since every extraction already
+# lands as a pending row a teacher reviews before it's ever trusted.
+OPENROUTER_DOCUMENT_MODEL = os.environ.get("OPENROUTER_DOCUMENT_MODEL", "google/gemini-2.5-flash-lite")
