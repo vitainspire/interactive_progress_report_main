@@ -206,6 +206,7 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 .advice-banner .ab-chev{flex:none;color:var(--muted);font-size:.85em}
 .advice-greeting{font-size:.95em;font-weight:700;color:var(--ink);margin:0 0 1em}
 .advice-card{display:flex;gap:.8em;border:1px solid var(--line);border-radius:14px;padding:.9em 1em;margin-bottom:.7em;background:#fff}
+.advice-card[hidden]{display:none}
 .advice-card:last-child{margin-bottom:0}
 .advice-num{flex:none;width:1.8em;height:1.8em;border-radius:50%;background:#173823;color:#fff;font-weight:700;font-size:.82em;display:flex;align-items:center;justify-content:center}
 .advice-body{flex:1;min-width:0}
