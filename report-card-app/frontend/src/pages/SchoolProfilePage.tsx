@@ -162,52 +162,62 @@ export function SchoolProfilePage() {
           you upload one, parents see a generic placeholder photo instead of your school.
         </p>
 
-        <div className="mt-3 flex flex-wrap items-center gap-4">
-          <div
-            className="flex h-24 w-40 items-center justify-center overflow-hidden rounded-lg border"
+        <div className="mt-3 flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={photoBusy}
+            className="group relative mx-auto flex aspect-[16/9] w-full max-w-sm items-center justify-center overflow-hidden rounded-xl border disabled:opacity-60"
             style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
           >
             {user?.has_school_photo ? (
-              <img
-                key={photoVersion}
-                src={`${api.schoolPhotoPreviewUrl()}&v=${photoVersion}`}
-                alt="Your school"
-                className="h-full w-full object-cover"
-              />
+              <>
+                <img
+                  key={photoVersion}
+                  src={`${api.schoolPhotoPreviewUrl()}&v=${photoVersion}`}
+                  alt="Your school"
+                  className="h-full w-full object-cover"
+                />
+                <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-sm font-semibold text-white opacity-0 transition-opacity duration-150 group-hover:bg-black/35 group-hover:opacity-100">
+                  {photoBusy ? "Uploading…" : "Change photo"}
+                </span>
+              </>
             ) : (
-              <SchoolIcon size={22} className="opacity-40" />
+              <span className="flex flex-col items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
+                <SchoolIcon size={26} className="opacity-50" />
+                <span className="text-xs font-semibold">{photoBusy ? "Uploading…" : "Tap to upload a photo"}</span>
+              </span>
             )}
-          </div>
+          </button>
 
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={onPickPhoto} className="hidden" />
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={photoBusy}
+              className="accent-fill rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {photoBusy ? "Uploading…" : user?.has_school_photo ? "Change photo" : "Upload photo"}
+            </button>
+            {user?.has_school_photo && (
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={onRemovePhoto}
                 disabled={photoBusy}
-                className="accent-fill rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                className="rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
               >
-                {photoBusy ? "Uploading…" : user?.has_school_photo ? "Change photo" : "Upload photo"}
+                Remove
               </button>
-              {user?.has_school_photo && (
-                <button
-                  type="button"
-                  onClick={onRemovePhoto}
-                  disabled={photoBusy}
-                  className="rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-60"
-                  style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={onPickPhoto} className="hidden" />
-            {photoError && (
-              <p role="alert" className="text-xs" style={{ color: "var(--accent-mark)" }}>
-                {photoError}
-              </p>
             )}
           </div>
+          {photoError && (
+            <p role="alert" className="text-xs" style={{ color: "var(--accent-mark)" }}>
+              {photoError}
+            </p>
+          )}
         </div>
       </div>
     </section>
