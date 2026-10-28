@@ -411,3 +411,31 @@ export interface TtSchoolConfig {
   end_time: string;
   breaks: TtBreak[];
 }
+
+export interface TtImportClass {
+  label: string;
+  grade: string;
+  section: string;
+}
+
+export interface TtImportGridCell {
+  subject_code: string;
+  teacher_code: string;
+}
+
+// class label -> day -> period (as a string key, since it round-trips
+// through JSON) -> the cell found there.
+export type TtImportGrid = Record<string, Record<string, Record<string, TtImportGridCell>>>;
+
+export interface TtImportPreview {
+  classes: TtImportClass[];
+  subject_codes: string[];
+  teacher_codes: string[];
+  grid: TtImportGrid;
+}
+
+export interface TtImportConfirmResult {
+  ok: boolean;
+  classes_imported: number;
+  periods_imported: number;
+}

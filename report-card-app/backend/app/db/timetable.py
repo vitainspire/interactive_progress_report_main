@@ -170,6 +170,97 @@ def delete_class_subject(conn: psycopg.Connection, class_id: int, subject_id: in
     return cur.rowcount > 0
 
 
+def bulk_upsert_class_subjects(conn: psycopg.Connection, entries: list[tuple[int, int, int | None, int]]) -> None:
+    """entries: (class_id, subject_id, teacher_id, periods_per_week) — same
+    upsert as upsert_class_subject, but every row in one round trip. Used
+    by the timetable import flow (app/api/timetable.py), which can have a
+    few dozen (class, subject) pairs to resolve at once."""
+    if not entries:
+        return
+    placeholders = ", ".join(["(%s, %s, %s, %s)"] * len(entries))
+    params = [v for e in entries for v in e]
+    conn.execute(
+        f"""INSERT INTO tt_class_subject (class_id, subject_id, teacher_id, periods_per_week)
+           VALUES {placeholders}
+           ON CONFLICT (class_id, subject_id)
+           DO UPDATE SET teacher_id = EXCLUDED.teacher_id, periods_per_week = EXCLUDED.periods_per_week""",
+        params,
+    )
+
+
+# ---- Bulk resolve-or-create, for importing an already-built timetable
+# (app/parsing/timetable_parser.py) in one go, instead of create_class/
+# create_subject/create_teacher's one-row-per-round-trip shape, which at a
+# few dozen subjects/teachers/classes made that import take 30-40+ seconds
+# against Supabase (every create_* call does its own _next_sort_order
+# SELECT too, on top of the insert) — each of these does at most one SELECT
+# plus one multi-row INSERT total, regardless of how many items. ----
+
+
+def get_or_create_classes(conn: psycopg.Connection, user_id: int, grade_sections: list[tuple[str, str]]) -> dict[tuple[str, str], int]:
+    existing = {(r["grade"], r["section"]): r["id"] for r in list_classes(conn, user_id)}
+    missing = [gs for gs in dict.fromkeys(grade_sections) if gs not in existing]
+    if missing:
+        start = _next_sort_order(conn, "tt_class", user_id)
+        placeholders = ", ".join(["(%s, %s, %s, %s)"] * len(missing))
+        params = [v for i, (g, s) in enumerate(missing) for v in (user_id, g, s, start + i)]
+        rows = conn.execute(
+            f"INSERT INTO tt_class (user_id, grade, section, sort_order) VALUES {placeholders} RETURNING id, grade, section",
+            params,
+        ).fetchall()
+        for r in rows:
+            existing[(r["grade"], r["section"])] = r["id"]
+    return existing
+
+
+def get_or_create_subjects(conn: psycopg.Connection, user_id: int, name_code_pairs: list[tuple[str, str]]) -> dict[str, int]:
+    """Resolved/created by NAME (two different codes naming the same real
+    subject, e.g. a sheet using both "GAME" and "Games", should end up as
+    one subject, not two)."""
+    existing = {r["name"]: r["id"] for r in list_subjects(conn, user_id)}
+    to_create: dict[str, str] = {}
+    for name, code in name_code_pairs:
+        if name not in existing:
+            to_create.setdefault(name, code)
+    if to_create:
+        start = _next_sort_order(conn, "tt_subject", user_id)
+        items = list(to_create.items())
+        placeholders = ", ".join(["(%s, %s, %s, %s)"] * len(items))
+        params = [v for i, (name, code) in enumerate(items) for v in (user_id, name, code, start + i)]
+        rows = conn.execute(
+            f"INSERT INTO tt_subject (user_id, name, code, sort_order) VALUES {placeholders} RETURNING id, name",
+            params,
+        ).fetchall()
+        for r in rows:
+            existing[r["name"]] = r["id"]
+    return existing
+
+
+def get_or_create_teachers(conn: psycopg.Connection, user_id: int, entries: list[tuple[str, str, str]]) -> dict[str, int]:
+    """entries: (code, name, phone), resolved/created by CODE — unlike
+    subjects, two teachers legitimately can share a display name, but the
+    uploaded timetable's grid keys everything by code."""
+    existing = {r["code"]: r["id"] for r in list_teachers(conn, user_id) if r["code"]}
+    to_create: dict[str, tuple[str, str]] = {}
+    for code, name, phone in entries:
+        if code not in existing:
+            to_create.setdefault(code, (name, phone))
+    if to_create:
+        start = _next_sort_order(conn, "tt_teacher", user_id)
+        items = list(to_create.items())
+        placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s)"] * len(items))
+        params = []
+        for i, (code, (name, phone)) in enumerate(items):
+            params.extend([user_id, name, code, phone, None, start + i])
+        rows = conn.execute(
+            f"INSERT INTO tt_teacher (user_id, name, code, phone, max_periods_per_day, sort_order) VALUES {placeholders} RETURNING id, code",
+            params,
+        ).fetchall()
+        for r in rows:
+            existing[r["code"]] = r["id"]
+    return existing
+
+
 # ---- School weekly structure ----
 
 _DEFAULT_WORKING_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT"]

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { CheckIcon, PlusIcon, PrinterIcon, TrashIcon } from "../components/Icons";
+import { TimetableImportPanel } from "../components/TimetableImportPanel";
 import type {
   TtBreak,
   TtClass,
@@ -2676,7 +2677,15 @@ export function TimetablePage() {
         )}
         {loaded && tab === "assignments" && <AssignmentsTab classes={classes} subjects={subjects} teachers={teachers} />}
         {loaded && tab === "timetable" && (
-          <GeneratedTimetableTab classes={classes} teachers={teachers} config={config} onGenerate={runGenerate} />
+          <>
+            {/* A full reload after a successful import is deliberate — the
+             * import can create new classes/subjects/teachers that every
+             * tab on this page already holds its own copy of, and this is
+             * a one-time onboarding action, not something worth threading
+             * a refresh callback through every one of those tabs for. */}
+            <TimetableImportPanel onImported={() => window.location.reload()} />
+            <GeneratedTimetableTab classes={classes} teachers={teachers} config={config} onGenerate={runGenerate} />
+          </>
         )}
         {loaded && tab === "schedule" && <ScheduleTab config={config} onSave={saveConfig} />}
         {loaded && tab === "leave" && (

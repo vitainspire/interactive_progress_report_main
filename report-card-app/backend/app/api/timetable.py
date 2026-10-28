@@ -1,9 +1,10 @@
+import io
 import json
 import re
 from datetime import date as date_cls
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -12,6 +13,7 @@ from app.db import timetable as repo
 from app.db.database import session
 from app.integrations import sms
 from app.integrations.phone import InvalidPhoneNumber, normalize_phone
+from app.parsing.timetable_parser import TimetableParseError, class_label_to_grade_section, extract_codes, parse_timetable_file
 from app.reports.substitution_sheet import render_substitution_sheet
 from app.reports.timetable_print import render_class_timetable_print
 from app.timetable.generator import ClassSpec, SubjectRequirement, generate_timetable
@@ -445,6 +447,117 @@ def generate(current_user=Depends(get_current_user)):
             "total_periods_placed": len(entries),
             "issues": [{"class_name": i.class_name, "subject_name": i.subject_name, "reason": i.reason} for i in issues],
         }
+
+
+@router.post("/import")
+async def import_timetable_preview(file: UploadFile = File(...), current_user=Depends(get_current_user)):
+    """Parses an uploaded .xlsx master timetable grid (the format many
+    schools already maintain) and returns a preview — nothing is written
+    yet. The short subject/teacher codes it finds (e.g. "PS", "KSVL") need
+    a teacher to say what they actually mean before anything becomes real
+    (POST /import/confirm) — same extract-then-confirm shape as the Drive-
+    folder syllabus import, and for the same reason: guessing a teacher's
+    real name/phone from a code is a real safety issue (a substitute alert
+    texting the wrong person), not something to leave to a guess."""
+    raw = await file.read()
+    try:
+        result = parse_timetable_file(io.BytesIO(raw))
+    except TimetableParseError as exc:
+        raise HTTPException(422, str(exc))
+    subject_codes, teacher_codes = extract_codes(result["classes"])
+    classes_out = []
+    for label in result["classes"]:
+        try:
+            grade, section = class_label_to_grade_section(label)
+        except TimetableParseError:
+            continue
+        classes_out.append({"label": label, "grade": grade, "section": section})
+    if not classes_out:
+        raise HTTPException(422, "Found a timetable grid, but none of the row labels looked like a class (e.g. '10A').")
+    return {"classes": classes_out, "subject_codes": subject_codes, "teacher_codes": teacher_codes, "grid": result["classes"]}
+
+
+class TimetableImportConfirmRequest(BaseModel):
+    grid: dict[str, dict]  # class label -> {day: {period_str: {"subject_code","teacher_code"}}}, as returned by POST /import
+    subjects: dict[str, str]  # subject_code -> the real subject name a teacher typed in
+    teachers: dict[str, dict]  # teacher_code -> {"name": str, "phone": str}
+
+
+@router.post("/import/confirm")
+def import_timetable_confirm(req: TimetableImportConfirmRequest, current_user=Depends(get_current_user)):
+    """Writes a reviewed import into the live tt_class/tt_subject/
+    tt_teacher/tt_class_subject/tt_timetable_entry tables — skips the usual
+    generation algorithm entirely, since what got uploaded is already a
+    finished schedule, not just periods-per-week requirements to solve
+    for. periods_per_week for tt_class_subject is simply how many times
+    that (class, subject, teacher) combination actually appears in the
+    uploaded grid, so Assignments shows accurate numbers afterward."""
+    for code, name in req.subjects.items():
+        if not name.strip():
+            raise HTTPException(422, f"Subject code '{code}' needs a name before confirming.")
+    for code, info in req.teachers.items():
+        if not (info.get("name") or "").strip():
+            raise HTTPException(422, f"Teacher code '{code}' needs a name before confirming.")
+
+    grade_sections: dict[str, tuple[str, str]] = {}
+    for label in req.grid:
+        try:
+            grade_sections[label] = class_label_to_grade_section(label)
+        except TimetableParseError:
+            raise HTTPException(422, f"'{label}' doesn't look like a class label.")
+
+    with session() as conn:
+        subject_id_by_name = repo.get_or_create_subjects(
+            conn, current_user["id"], [(name.strip(), code) for code, name in req.subjects.items()]
+        )
+        subject_id_by_code = {code: subject_id_by_name[name.strip()] for code, name in req.subjects.items()}
+
+        teacher_id_by_code = repo.get_or_create_teachers(
+            conn,
+            current_user["id"],
+            [(code, info["name"].strip(), (info.get("phone") or "").strip()) for code, info in req.teachers.items()],
+        )
+
+        class_id_by_gs = repo.get_or_create_classes(conn, current_user["id"], list(grade_sections.values()))
+
+        # tt_class_subject allows only one teacher per (class, subject) —
+        # but a real uploaded sheet occasionally has the same subject under
+        # two different teacher codes for the same class on different days
+        # (e.g. a typo'd code). The actual per-day grid (timetable_rows)
+        # stays fully accurate regardless of who taught it which day; this
+        # summary row just needs one representative teacher, so whichever
+        # code appears most often for that (class, subject) wins.
+        periods_count: dict[tuple[int, int], int] = {}
+        teacher_votes: dict[tuple[int, int], dict[int | None, int]] = {}
+        timetable_rows: list[tuple[int, str, int, int, int | None]] = []
+        class_ids: dict[str, int] = {}
+        for label, grid in req.grid.items():
+            class_id = class_id_by_gs[grade_sections[label]]
+            class_ids[label] = class_id
+            for day, periods in grid.items():
+                for period_str, cell in periods.items():
+                    subject_code = cell.get("subject_code")
+                    if not subject_code or subject_code not in subject_id_by_code:
+                        continue
+                    teacher_code = cell.get("teacher_code")
+                    teacher_id = teacher_id_by_code.get(teacher_code) if teacher_code else None
+                    subject_id = subject_id_by_code[subject_code]
+                    timetable_rows.append((class_id, day, int(period_str), subject_id, teacher_id))
+                    key = (class_id, subject_id)
+                    periods_count[key] = periods_count.get(key, 0) + 1
+                    votes = teacher_votes.setdefault(key, {})
+                    votes[teacher_id] = votes.get(teacher_id, 0) + 1
+
+        if not timetable_rows:
+            raise HTTPException(422, "Nothing to import — every subject code needs a name first.")
+
+        class_subject_rows = [
+            (class_id, subject_id, max(teacher_votes[(class_id, subject_id)].items(), key=lambda kv: kv[1])[0], count)
+            for (class_id, subject_id), count in periods_count.items()
+        ]
+        repo.bulk_upsert_class_subjects(conn, class_subject_rows)
+        repo.replace_timetable_entries(conn, current_user["id"], timetable_rows)
+        return {"ok": True, "classes_imported": len(class_ids), "periods_imported": len(timetable_rows)}
 
 
 @router.get("/classes/{class_id}/timetable")
