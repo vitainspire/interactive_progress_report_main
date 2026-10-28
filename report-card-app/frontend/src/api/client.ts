@@ -82,6 +82,10 @@ export const api = {
     return `${API_BASE}/timetable/substitutions/sheet?${params.toString()}`;
   },
   uploadTemplateUrl: () => `${API_BASE}/batches/upload-template`,
+  schoolPhotoPreviewUrl: () => {
+    const params = new URLSearchParams({ token: getToken() ?? "" });
+    return `${API_BASE}/auth/school-photo?${params.toString()}`;
+  },
 };
 
 export { UnauthorizedError };

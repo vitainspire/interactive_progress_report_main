@@ -14,6 +14,8 @@ interface AuthContextValue {
   signup: (email: string, password: string, displayName: string, schoolName: string) => Promise<void>;
   setSchoolName: (schoolName: string) => Promise<void>;
   setSchoolAddress: (schoolAddress: string) => Promise<void>;
+  setSchoolPhoto: (file: File) => Promise<void>;
+  removeSchoolPhoto: () => Promise<void>;
   logout: () => void;
 }
 
@@ -62,13 +64,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(await api.put<AuthUser>("/auth/school-address", { school_address: schoolAddress }));
   }, []);
 
+  const setSchoolPhoto = useCallback(async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    setUser(await api.upload<AuthUser>("/auth/school-photo", form));
+  }, []);
+
+  const removeSchoolPhoto = useCallback(async () => {
+    setUser(await api.del<AuthUser>("/auth/school-photo"));
+  }, []);
+
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, setSchoolName, setSchoolAddress, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider
+      value={{ user, loading, login, signup, setSchoolName, setSchoolAddress, setSchoolPhoto, removeSchoolPhoto, logout }}
+    >
+      {children}
+    </AuthContext.Provider>
   );
 }
 

@@ -125,6 +125,17 @@ def _migrate_school_address(conn: psycopg.Connection) -> None:
     conn.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS school_address TEXT NOT NULL DEFAULT ''")
 
 
+def _migrate_school_photo(conn: psycopg.Connection) -> None:
+    """Adds an optional `school_photo`/`school_photo_mime` to the
+    pre-existing `app_user` table (see schema.sql) — the parent report's
+    hero banner photo (app/reports/parent_report.py), uploaded once per
+    account instead of every school sharing the same generic photo. NULL
+    until a school uploads one, in which case the public report falls back
+    to the shared default photo rather than a broken image."""
+    conn.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS school_photo BYTEA")
+    conn.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS school_photo_mime TEXT")
+
+
 def _migrate_subject_exam_info_pk(conn: psycopg.Connection) -> None:
     """subject_exam_info originally keyed on PRIMARY KEY (class_level,
     subject) — fine while every row was global, but it only allows one row
@@ -169,6 +180,7 @@ def init_db() -> None:
         _migrate_school_address(conn)
         _migrate_subject_exam_info_pk(conn)
         _migrate_syllabus_account_scope(conn)
+        _migrate_school_photo(conn)
         seed_syllabus(conn)
         seed_subject_blueprint(conn)
         conn.commit()

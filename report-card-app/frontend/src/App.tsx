@@ -5,6 +5,7 @@ import { BatchPage } from "./pages/BatchPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { LoginPage } from "./pages/LoginPage";
+import { SchoolProfilePage } from "./pages/SchoolProfilePage";
 import { SchoolSetupPage } from "./pages/SchoolSetupPage";
 import { SignupPage } from "./pages/SignupPage";
 import { StudentPage } from "./pages/StudentPage";
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="batches/:id" element={<BatchPage />} />
         <Route path="batches/:id/students/:studentId" element={<StudentPage />} />
         <Route path="integrations" element={<IntegrationsPage />} />
+        <Route path="school-profile" element={<SchoolProfilePage />} />
       </Route>
     </Routes>
   );

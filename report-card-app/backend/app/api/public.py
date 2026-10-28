@@ -1,5 +1,6 @@
 import json
 import time
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -7,6 +8,7 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from app.db import batches as repo
+from app.db import users as user_repo
 from app.db.database import session
 from app.integrations import bhashini, chat, tts_audio
 from app.integrations.sharing import get_student_id_for_token
@@ -19,6 +21,12 @@ from app.reports.parent_report import (
     render_report_about_page,
     render_report_landing_page,
 )
+
+# The shared fallback hero photo (see get_report_school_photo below) — read
+# once at import rather than from disk on every unauthenticated request,
+# since it's the same handful of KB for every school that hasn't uploaded
+# their own.
+_DEFAULT_SCHOOL_PHOTO = (Path(__file__).resolve().parent.parent / "static" / "landing" / "school.jpg").read_bytes()
 
 
 class ChatTurn(BaseModel):
@@ -94,6 +102,22 @@ def get_public_report_landing(token: str):
         student, _all_students, batch_row = _resolve_report_context(conn, token)
         html = render_report_landing_page(student["name"], batch_row["school_name"], token)
         return HTMLResponse(content=html)
+
+
+@router.get("/report/{token}/school-photo")
+def get_report_school_photo(token: str):
+    """The hero banner photo for this report's landing page (see
+    render_report_landing_page) — that school's own uploaded photo if
+    they've set one (app/api/auth.py's PUT /auth/school-photo), otherwise
+    the shared generic default, so the <img> never 404s whether or not
+    this particular school has uploaded their own yet."""
+    with session() as conn:
+        _student, _all_students, batch_row = _resolve_report_context(conn, token)
+        photo = user_repo.get_school_photo(conn, batch_row["user_id"])
+    if photo is None:
+        return Response(content=_DEFAULT_SCHOOL_PHOTO, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+    photo_bytes, mime = photo
+    return Response(content=photo_bytes, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/report/{token}/view", response_class=HTMLResponse)

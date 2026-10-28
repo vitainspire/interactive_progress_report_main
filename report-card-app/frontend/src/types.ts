@@ -4,6 +4,7 @@ export interface AuthUser {
   display_name: string;
   default_school_name: string;
   school_address: string;
+  has_school_photo: boolean;
 }
 
 export interface BatchSummary {

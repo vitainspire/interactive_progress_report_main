@@ -53,6 +53,14 @@ export function Layout() {
                 </div>
                 <div className="my-1 h-px" style={{ background: "var(--border)" }} />
                 <Link
+                  to="/school-profile"
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  <SchoolIcon size={15} />
+                  School profile
+                </Link>
+                <Link
                   to="/integrations"
                   className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
                   style={{ color: "var(--text-primary)" }}

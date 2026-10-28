@@ -27,3 +27,18 @@ def set_default_school_name(conn: psycopg.Connection, user_id: int, school_name:
 
 def set_school_address(conn: psycopg.Connection, user_id: int, address: str) -> None:
     conn.execute("UPDATE app_user SET school_address = %s WHERE id = %s", (address.strip(), user_id))
+
+
+def set_school_photo(conn: psycopg.Connection, user_id: int, photo_bytes: bytes, mime: str) -> None:
+    conn.execute("UPDATE app_user SET school_photo = %s, school_photo_mime = %s WHERE id = %s", (photo_bytes, mime, user_id))
+
+
+def clear_school_photo(conn: psycopg.Connection, user_id: int) -> None:
+    conn.execute("UPDATE app_user SET school_photo = NULL, school_photo_mime = NULL WHERE id = %s", (user_id,))
+
+
+def get_school_photo(conn: psycopg.Connection, user_id: int) -> tuple[bytes, str] | None:
+    row = conn.execute("SELECT school_photo, school_photo_mime FROM app_user WHERE id = %s", (user_id,)).fetchone()
+    if not row or row["school_photo"] is None:
+        return None
+    return bytes(row["school_photo"]), row["school_photo_mime"] or "image/jpeg"

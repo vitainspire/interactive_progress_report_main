@@ -1,12 +1,31 @@
+import io
 import re
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, field_validator
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_current_user_from_header_or_query
 from app.core.security import create_access_token, verify_password
 from app.db.database import session
-from app.db.users import create_user, get_user_by_email, get_user_by_id, set_default_school_name, set_school_address
+from app.db.users import (
+    clear_school_photo,
+    create_user,
+    get_school_photo,
+    get_user_by_email,
+    get_user_by_id,
+    set_default_school_name,
+    set_school_address,
+    set_school_photo,
+)
+
+# A hero banner photo doesn't need to be huge — downsized to this max
+# dimension and re-encoded to JPEG on upload (see update_school_photo)
+# regardless of what format/size was uploaded, so this stays one small
+# row per account rather than whatever a phone camera produced.
+_SCHOOL_PHOTO_MAX_DIMENSION = 1600
+_SCHOOL_PHOTO_MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -75,6 +94,7 @@ def _user_out(user) -> dict:
         "display_name": user["display_name"],
         "default_school_name": user["default_school_name"],
         "school_address": user["school_address"],
+        "has_school_photo": user["school_photo"] is not None,
     }
 
 
@@ -121,3 +141,49 @@ def update_school_address(req: SchoolAddressRequest, current_user=Depends(get_cu
     with session() as conn:
         set_school_address(conn, current_user["id"], req.school_address)
         return _user_out(get_user_by_id(conn, current_user["id"]))
+
+
+@router.post("/school-photo")
+async def update_school_photo(file: UploadFile = File(...), current_user=Depends(get_current_user)):
+    """The school's own photo for the parent report's hero banner (see
+    app/reports/parent_report.py and GET /public/report/{token}/school-
+    photo) — re-encoded to JPEG and downsized here regardless of what was
+    uploaded, so storage stays small and predictable on Supabase's free
+    tier no matter what a phone camera produces."""
+    raw = await file.read()
+    if len(raw) > _SCHOOL_PHOTO_MAX_UPLOAD_BYTES:
+        raise HTTPException(422, "That image is too large (max 15 MB).")
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img.load()
+    except UnidentifiedImageError:
+        raise HTTPException(422, "That doesn't look like a valid image file.")
+    img = img.convert("RGB")
+    img.thumbnail((_SCHOOL_PHOTO_MAX_DIMENSION, _SCHOOL_PHOTO_MAX_DIMENSION))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=82)
+    with session() as conn:
+        set_school_photo(conn, current_user["id"], buf.getvalue(), "image/jpeg")
+        return _user_out(get_user_by_id(conn, current_user["id"]))
+
+
+@router.delete("/school-photo")
+def remove_school_photo(current_user=Depends(get_current_user)):
+    with session() as conn:
+        clear_school_photo(conn, current_user["id"])
+        return _user_out(get_user_by_id(conn, current_user["id"]))
+
+
+@router.get("/school-photo")
+def preview_school_photo(current_user=Depends(get_current_user_from_header_or_query)):
+    """For the settings screen to show what's currently on file — a plain
+    <img> tag (unlike the rest of this router) so it needs the token-as-
+    query-param auth path, same as the report/timetable print views. 404
+    when nothing's been uploaded yet, rather than silently serving the
+    shared default, so the teacher isn't misled into thinking it's theirs."""
+    with session() as conn:
+        photo = get_school_photo(conn, current_user["id"])
+    if photo is None:
+        raise HTTPException(404, "No school photo uploaded yet.")
+    photo_bytes, mime = photo
+    return Response(content=photo_bytes, media_type=mime)
