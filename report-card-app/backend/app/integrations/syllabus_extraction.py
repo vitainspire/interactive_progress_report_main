@@ -20,6 +20,7 @@ import base64
 import json
 
 import httpx
+from langsmith import traceable
 
 from app.core.config import OPENROUTER_API_KEY, OPENROUTER_DOCUMENT_MODEL
 
@@ -72,6 +73,15 @@ def _content_part(file_bytes: bytes, mime_type: str, file_name: str) -> dict:
     return {"type": "file", "file": {"filename": file_name, "file_data": data_url}}
 
 
+def _trace_inputs(inputs: dict) -> dict:
+    # Never ship the raw PDF/image bytes to LangSmith — just how big it
+    # was. The document itself isn't a child's personal data (it's a
+    # syllabus/blueprint, not a student record), but there's no reason to
+    # pay to store a multi-MB binary blob in every trace either.
+    return {**inputs, "file_bytes": f"<{len(inputs.get('file_bytes', b''))} bytes>"}
+
+
+@traceable(run_type="llm", name="syllabus_extraction", process_inputs=_trace_inputs)
 def extract_document(file_bytes: bytes, mime_type: str, file_name: str) -> dict:
     """Returns the parsed JSON dict described in EXTRACTION_SYSTEM_PROMPT.
     Raises ExtractionError on anything that isn't a clean, parseable JSON

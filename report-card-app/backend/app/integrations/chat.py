@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 
 import httpx
+from langsmith import traceable
 
 from app.core.config import OPENROUTER_API_KEY, OPENROUTER_MODEL
 
@@ -71,6 +72,7 @@ def _post(messages: list[dict]) -> httpx.Response:
     )
 
 
+@traceable(run_type="llm", name="openrouter_completion")
 def _complete(messages: list[dict]) -> str:
     if not is_configured():
         raise ChatNotConfigured("Chat isn't configured on this server (missing OPENROUTER_API_KEY).")
@@ -98,6 +100,7 @@ def _complete(messages: list[dict]) -> str:
     return content.strip()
 
 
+@traceable(name="student_chat")
 def ask_about_student(context: str, history: list[dict], question: str) -> str:
     """`history` is the prior turns of this conversation as already-sent
     [{"role": "user"|"assistant", "content": str}, ...] (the client resends
@@ -110,6 +113,7 @@ def ask_about_student(context: str, history: list[dict], question: str) -> str:
     return _complete(messages)
 
 
+@traceable(name="study_plan")
 def generate_text(system_prompt: str, user_prompt: str) -> str:
     """A one-off completion with no conversation history — used by the
     syllabus-aware study plan (app/reports/study_plan.py), which needs a

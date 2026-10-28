@@ -205,7 +205,9 @@ async def _ingest_reference_documents(account_id: int, folder_url_or_id: str) ->
 
         status, extracted_json, error = "pending", None, None
         try:
-            extracted = await run_in_threadpool(extract_document, raw, f["mime_type"], f["name"])
+            extracted = await run_in_threadpool(
+                extract_document, raw, f["mime_type"], f["name"], langsmith_extra={"metadata": {"account_id": account_id}}
+            )
             extracted_json = json.dumps(extracted)
         except (ExtractionNotConfigured, ExtractionError) as exc:
             status, error = "failed", str(exc)

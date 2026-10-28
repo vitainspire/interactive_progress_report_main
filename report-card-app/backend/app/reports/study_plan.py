@@ -136,7 +136,7 @@ def generate_study_plan(conn: psycopg.Connection, account_id: int, class_level: 
         f"Real syllabus chapters for {subject}:\n{_format_chapters(chapters)}"
     )
     try:
-        plan = chat.generate_text(_SYSTEM_PROMPT, user_prompt)
+        plan = chat.generate_text(_SYSTEM_PROMPT, user_prompt, langsmith_extra={"metadata": {"account_id": account_id}})
     except (chat.ChatNotConfigured, chat.ChatSendError) as exc:
         print(f"[study_plan] generate_study_plan failed: {exc}")
         return None

@@ -93,6 +93,29 @@ trailing slash — this gets baked into parent WhatsApp/SMS report links),
 `TWILIO_SMS_FROM`, `BHASHINI_USER_ID`, `BHASHINI_ULCA_API_KEY`,
 `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_DOCUMENT_MODEL`.
 
+Optional — LLM call tracing via LangSmith (see "LangSmith tracing" below):
+`LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`. Safe to
+leave unset entirely; every traced call just runs normally with no
+tracing overhead when they're absent.
+
+## LangSmith tracing
+
+Every LLM call this app makes goes through exactly two functions, both
+decorated with `@traceable` (`langsmith` package):
+`app/integrations/chat.py` (powers both the "Know About Student" chat and
+the syllabus-aware study plan) and `app/integrations/syllabus_extraction.py`
+(reads an uploaded syllabus/blueprint document). Each call is also tagged
+with `account_id` in its trace metadata, so LangSmith's dashboard can be
+filtered per school, not just one undifferentiated stream across every
+tenant.
+
+To turn tracing on: get an API key at smith.langchain.com, then set
+`LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY=<key>`,
+`LANGSMITH_PROJECT=report-card-app` (or whatever project name you want
+traces grouped under) on the Lambda function. No code change needed to
+enable/disable it — `@traceable` is a safe no-op whenever these env vars
+are absent, which is also why local dev never needs them set.
+
 ## Measured performance (ap-southeast-2, 1024 MB)
 
 - Cold start (first request after an idle gap): ~9.5s.

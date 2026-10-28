@@ -178,9 +178,12 @@ def post_report_ask(token: str, req: AskRequest):
             return {"answer": canned}
 
         context = build_student_context(student, all_students, exam_defs, settings, batch_row["school_name"])
+        account_id = batch_row["user_id"]
     try:
         history = [turn.model_dump() for turn in req.history]
-        answer = chat.ask_about_student(context, history, question)
+        answer = chat.ask_about_student(
+            context, history, question, langsmith_extra={"metadata": {"account_id": account_id}}
+        )
     except chat.ChatNotConfigured as exc:
         raise HTTPException(503, str(exc))
     except chat.ChatSendError as exc:
