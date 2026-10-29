@@ -76,7 +76,6 @@ def build_student_context(
     # ever this account's own confirmed data (or the shared default);
     # silently skips a subject with nothing confirmed for it.
     if exams_present:
-        latest_exam_key = exams_present[-1]
         subject_names: list[str] = []
         for key in exams_present:
             for x in student["exams"][key]["subjects"]:
@@ -86,12 +85,12 @@ def build_student_context(
         for name in subject_names:
             chapters = study_plan.get_chapters(conn, account_id, class_level, name)
             topics = get_blueprint(conn, account_id, class_level, name)
-            focus = exam_focus.build_exam_focus(chapters, topics, exam_defs, latest_exam_key)
+            focus = exam_focus.build_exam_focus(chapters, topics, exams_present)
             if not focus:
                 continue
             focus_lines.append(f"{name}:")
             if focus["covered_chapters"]:
-                focus_lines.append(f"  - Chapters likely covered in {latest_exam_key}: {', '.join(focus['covered_chapters'])}")
+                focus_lines.append(f"  - Chapters likely covered in the upcoming {focus['exam']} exam: {', '.join(focus['covered_chapters'])}")
             topic_bits = ", ".join(
                 f"{t['name']} ({t['marks']}{'+' + str(t['choice_marks']) if t['choice_marks'] else ''} marks)"
                 for t in focus["top_topics"]

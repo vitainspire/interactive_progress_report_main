@@ -235,7 +235,7 @@ def get_public_study_plan(token: str):
 def get_public_exam_focus(token: str):
     """Deterministic (no LLM — see app/reports/exam_focus.py) exam-prep
     guidance for this student's single weakest subject: which syllabus
-    chapters their most recent exam likely covered, plus the highest-marks
+    chapters their NEXT upcoming exam likely covers, plus the highest-marks
     topics from that subject's confirmed exam blueprint. Same
     "available: false, caller shows nothing" shape as /study-plan, and
     fetched the same lazy way, but costs nothing per-call since it's pure
@@ -255,7 +255,7 @@ def get_public_exam_focus(token: str):
 
         chapters = study_plan.get_chapters(conn, account_id, class_level, subject)
         topics = get_blueprint(conn, account_id, class_level, subject)
-        result = exam_focus.build_exam_focus(chapters, topics, exam_defs, exam_keys[-1])
+        result = exam_focus.build_exam_focus(chapters, topics, exam_keys)
         if not result:
             return {"available": False}
         return {"available": True, "subject": subject, "text": exam_focus.format_exam_focus_text(result, subject)}
