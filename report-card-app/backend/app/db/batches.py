@@ -10,6 +10,8 @@ from app.core.config import (
     DEFAULT_FA_TOTAL,
     DEFAULT_SA_MARKS_PER_SUBJECT,
     DEFAULT_SA_TOTAL,
+    DEFAULT_TOTAL_FA_EXAMS,
+    DEFAULT_TOTAL_SA_EXAMS,
 )
 
 # Rows are inserted in chunks of this size rather than one row per round
@@ -26,6 +28,8 @@ class BatchSettings:
     fa_marks_per_subject: float
     sa_marks_per_subject: float
     class_strength_override: int | None
+    total_fa_exams: int
+    total_sa_exams: int
 
 
 def settings_from_row(row: dict) -> BatchSettings:
@@ -35,6 +39,8 @@ def settings_from_row(row: dict) -> BatchSettings:
         fa_marks_per_subject=row["fa_marks_per_subject"],
         sa_marks_per_subject=row["sa_marks_per_subject"],
         class_strength_override=row["class_strength_override"],
+        total_fa_exams=row["total_fa_exams"],
+        total_sa_exams=row["total_sa_exams"],
     )
 
 
@@ -126,6 +132,8 @@ def create_batch(
     source_ref: str | None = None,
     source_mime_type: str | None = None,
     source_folder_id: str | None = None,
+    total_fa_exams: int = DEFAULT_TOTAL_FA_EXAMS,
+    total_sa_exams: int = DEFAULT_TOTAL_SA_EXAMS,
 ) -> int:
     """Persists a freshly-parsed sheet (see sheet_parser.parse_worksheet)
     as a new batch, normalized across student/exam_subject_result/
@@ -136,14 +144,18 @@ def create_batch(
     defaults to "10" since that's the only syllabus seeded so far.
     `source_type`/`source_ref` record where this came from (a pasted Sheets
     link, or one file in an imported Drive folder) so "Sync now" later
-    knows how to re-fetch it — see resync_batch."""
+    knows how to re-fetch it — see resync_batch. `total_fa_exams`/
+    `total_sa_exams` default to the AP/Telangana 4+2 pattern but can be set
+    per batch for a school that runs a different exam calendar — see
+    app/reports/exam_focus.py."""
     exam_order = [e["key"] for e in parsed["exams"]]
     row = conn.execute(
         """INSERT INTO batch
            (user_id, name, school_name, fa_total, sa_total, fa_marks_per_subject, sa_marks_per_subject,
             class_strength_override, class_level, source_filename, exam_order, created_at,
-            source_type, source_ref, source_mime_type, source_folder_id, last_synced_at)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            source_type, source_ref, source_mime_type, source_folder_id, last_synced_at,
+            total_fa_exams, total_sa_exams)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
         (
             user_id,
             name,
@@ -161,6 +173,8 @@ def create_batch(
             source_mime_type,
             source_folder_id,
             datetime.now(timezone.utc).isoformat() if source_ref else None,
+            total_fa_exams,
+            total_sa_exams,
         ),
     ).fetchone()
     batch_id = row["id"]
@@ -310,7 +324,10 @@ def get_batch(conn: psycopg.Connection, user_id: int, batch_id: int) -> dict | N
 def update_batch_settings(conn: psycopg.Connection, batch_id: int, fields: dict) -> None:
     cols = []
     values = []
-    for key in ("name", "school_name", "fa_total", "sa_total", "fa_marks_per_subject", "sa_marks_per_subject", "class_strength_override", "class_level"):
+    for key in (
+        "name", "school_name", "fa_total", "sa_total", "fa_marks_per_subject", "sa_marks_per_subject",
+        "class_strength_override", "class_level", "total_fa_exams", "total_sa_exams",
+    ):
         if key in fields:
             cols.append(f"{key} = %s")
             values.append(fields[key])

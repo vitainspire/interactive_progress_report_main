@@ -25,18 +25,7 @@ import psycopg
 
 from app.integrations import chat
 from app.reports.chat_canned import _exam_keys, _subject_buckets
-from app.reports.subject_analysis import classify_subject
-
-
-def _normalize_subject(name: str) -> str:
-    """Same canonical form subject_analysis.classify_subject() already uses
-    for the blueprint lookup (handles short sheet codes like "PS"/"BS" via
-    regex, not just exact aliases) — kept as one shared classifier so a
-    subject that resolves for the blueprint half of Exam Focus always
-    resolves for the chapters half too. Falls back to a plain upper-cased
-    pass-through for a subject classify_subject doesn't recognize at all,
-    same as before."""
-    return classify_subject(name) or (name or "").strip().upper()
+from app.reports.subject_analysis import normalize_subject_key as _normalize_subject
 
 
 def weakest_subject(student: dict, exam_defs: list[dict]) -> str | None:

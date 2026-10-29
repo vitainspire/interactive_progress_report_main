@@ -179,6 +179,16 @@ def _migrate_syllabus_account_scope(conn: psycopg.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_subject_exam_info_account ON subject_exam_info(account_id, class_level, subject)")
 
 
+def _migrate_exam_counts(conn: psycopg.Connection) -> None:
+    """Adds the per-batch total FA/SA exam counts (see schema.sql) that
+    app/reports/exam_focus.py uses to generate this school's own upcoming-
+    exam sequence instead of assuming every school runs the AP/Telangana
+    4+2 pattern. Defaults preserve exactly that pattern for every batch
+    created before this column existed."""
+    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS total_fa_exams INTEGER NOT NULL DEFAULT 4")
+    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS total_sa_exams INTEGER NOT NULL DEFAULT 2")
+
+
 def init_db() -> None:
     with get_connection() as conn:
         schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
@@ -197,6 +207,7 @@ def init_db() -> None:
         _migrate_syllabus_account_scope(conn)
         _migrate_school_photo(conn)
         _migrate_whatsapp_settings(conn)
+        _migrate_exam_counts(conn)
         seed_syllabus(conn)
         seed_subject_blueprint(conn)
         conn.commit()

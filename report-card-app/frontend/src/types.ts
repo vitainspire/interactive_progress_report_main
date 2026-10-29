@@ -22,6 +22,8 @@ export interface BatchSummary {
   fa_marks_per_subject: number;
   sa_marks_per_subject: number;
   class_strength_override: number | null;
+  total_fa_exams: number;
+  total_sa_exams: number;
   class_level: string;
   source_filename: string | null;
   source_type: "file" | "sheet_link" | "drive_folder_item";

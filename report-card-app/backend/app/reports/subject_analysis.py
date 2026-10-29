@@ -86,6 +86,16 @@ def classify_subject(name: str) -> str | None:
     return None
 
 
+def normalize_subject_key(name: str) -> str:
+    """The canonical storage/lookup key for a subject — one of the 7 built-in
+    AP/Telangana SSC subjects when recognized, otherwise the raw name
+    trimmed and uppercased. This is what lets a school teaching something
+    outside that fixed list (Sanskrit, Computer Science, a differently-named
+    subject) still have its own syllabus/blueprint confirmed and looked up
+    consistently, instead of being rejected outright."""
+    return classify_subject(name) or (name or "").strip().upper()
+
+
 def subject_sort_key(name: str) -> int:
     for i, pat in enumerate(_SUBJECT_SORT):
         if pat.search((name or "").strip()):
@@ -108,11 +118,19 @@ def discover_subjects(all_students: list[dict]) -> list[str]:
     return seen
 
 
+# Fallback colors for a subject outside the 7 built-in ones (e.g. Sanskrit,
+# Computer Science) — picked deterministically by name so the same subject
+# always gets the same color, and two different unlisted subjects on one
+# report don't collide on the single old fixed color.
+_FALLBACK_COLORS = ["#3b4a7a", "#7a3b63", "#3b7a5e", "#7a6a3b", "#5e3b7a", "#7a3b3b"]
+
+
 def _display_info(subject_name: str) -> tuple[str, str, str]:
     canon = classify_subject(subject_name)
     if canon and canon in _DISPLAY:
         return _DISPLAY[canon]
-    return (subject_name, subject_name, "#3b4a7a")
+    color = _FALLBACK_COLORS[sum(normalize_subject_key(subject_name).encode()) % len(_FALLBACK_COLORS)]
+    return (subject_name, subject_name, color)
 
 
 def compute_exam_stats(all_students: list[dict], exam_defs: list[dict], settings, subject_name: str) -> list[dict]:
@@ -160,7 +178,7 @@ def compute_exam_stats(all_students: list[dict], exam_defs: list[dict], settings
 def get_blueprint(conn: psycopg.Connection, account_id: int, class_level: str, subject_name: str) -> list[dict]:
     """A school's own confirmed blueprint (see app/db/reference_documents.py)
     takes priority over the shared account_id IS NULL default."""
-    canon = classify_subject(subject_name)
+    canon = normalize_subject_key(subject_name)
     if not canon:
         return []
     own = conn.execute(
@@ -178,7 +196,7 @@ def get_blueprint(conn: psycopg.Connection, account_id: int, class_level: str, s
 
 
 def get_exam_info(conn: psycopg.Connection, account_id: int, class_level: str, subject_name: str) -> tuple[str, list[str]]:
-    canon = classify_subject(subject_name)
+    canon = normalize_subject_key(subject_name)
     if not canon:
         return "", []
     row = conn.execute(

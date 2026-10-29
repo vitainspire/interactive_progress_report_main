@@ -21,6 +21,9 @@ export function UploadPage() {
   const [name, setName] = useState("");
   const [schoolName, setSchoolName] = useState(user?.default_school_name ?? "");
   const [classLevel, setClassLevel] = useState("10");
+  const [showExamPattern, setShowExamPattern] = useState(false);
+  const [totalFaExams, setTotalFaExams] = useState(4);
+  const [totalSaExams, setTotalSaExams] = useState(2);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -76,6 +79,8 @@ export function UploadPage() {
           folder_url: folderUrl.trim(),
           school_name: schoolName.trim() || undefined,
           class_level: classLevel,
+          total_fa_exams: totalFaExams,
+          total_sa_exams: totalSaExams,
         });
         setFolderResults(result);
         if (result.reference_documents.length) refreshPendingReferenceDocs();
@@ -87,6 +92,8 @@ export function UploadPage() {
       if (name.trim()) form.append("name", name.trim());
       if (schoolName.trim()) form.append("school_name", schoolName.trim());
       form.append("class_level", classLevel);
+      form.append("total_fa_exams", String(totalFaExams));
+      form.append("total_sa_exams", String(totalSaExams));
       const batch = await api.upload<BatchSummary>("/batches/upload", form);
       navigate(`/batches/${batch.id}`);
     } catch (err) {
@@ -182,6 +189,47 @@ export function UploadPage() {
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
             Picks which class's real syllabus the AI study plan uses for this batch's students.
           </p>
+        </div>
+
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowExamPattern((v) => !v)}
+            className="text-xs font-semibold"
+            style={{ color: "var(--accent)" }}
+          >
+            {showExamPattern ? "▾" : "▸"} This school's exam pattern is different from FA×4 + SA×2
+          </button>
+          {showExamPattern && (
+            <div className="mt-2 flex flex-wrap gap-3">
+              <div className="w-36">
+                <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  FA exams per year
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={totalFaExams}
+                  onChange={(e) => setTotalFaExams(Math.max(0, Number(e.target.value)))}
+                />
+              </div>
+              <div className="w-36">
+                <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  SA exams per year
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={totalSaExams}
+                  onChange={(e) => setTotalSaExams(Math.max(0, Number(e.target.value)))}
+                />
+              </div>
+              <p className="w-full text-xs" style={{ color: "var(--text-muted)" }}>
+                Used only to predict which syllabus chapters a student's next exam is likely to cover — leave as 4
+                and 2 unless this school runs a different number of exams.
+              </p>
+            </div>
+          )}
         </div>
 
         {mode === "file" && (

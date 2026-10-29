@@ -587,7 +587,7 @@ def _render_subject_card(
     chapters = study_plan.get_chapters(conn, account_id, class_level, subject_name)
     topics = get_blueprint(conn, account_id, class_level, subject_name)
     completed_keys = [e.exam_key for e in facts.history]
-    focus = exam_focus.build_exam_focus(chapters, topics, completed_keys)
+    focus = exam_focus.build_exam_focus(chapters, topics, completed_keys, settings.total_fa_exams, settings.total_sa_exams)
     if focus:
         h += f'<div class="exam-focus-note">\U0001f3af {_esc(exam_focus.format_exam_focus_text(focus, subject_name))}</div>'
 

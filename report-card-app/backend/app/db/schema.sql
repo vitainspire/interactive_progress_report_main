@@ -20,6 +20,14 @@ CREATE TABLE IF NOT EXISTS batch (
     fa_marks_per_subject REAL NOT NULL DEFAULT 50,
     sa_marks_per_subject REAL NOT NULL DEFAULT 100,
     class_strength_override INTEGER,
+    -- How many FA/SA exams this school's year has in total — drives the
+    -- "upcoming exam" sequence in app/reports/exam_focus.py (FA-1, FA-2,
+    -- SA-1, FA-3, FA-4, SA-2 for the common 4+2 default). exam_order above
+    -- only ever holds exams already graded, so this is the one piece of
+    -- "the rest of this school's year" that has to come from the school
+    -- itself rather than from data already uploaded.
+    total_fa_exams INTEGER NOT NULL DEFAULT 4,
+    total_sa_exams INTEGER NOT NULL DEFAULT 2,
     -- Which class's syllabus applies to this batch (see syllabus_chapter) —
     -- defaults to '10' since every syllabus seeded so far is SSC/10th.
     -- A teacher uploading another class's marks sets this explicitly.

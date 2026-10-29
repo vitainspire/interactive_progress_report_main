@@ -255,7 +255,9 @@ def get_public_exam_focus(token: str):
 
         chapters = study_plan.get_chapters(conn, account_id, class_level, subject)
         topics = get_blueprint(conn, account_id, class_level, subject)
-        result = exam_focus.build_exam_focus(chapters, topics, exam_keys)
+        result = exam_focus.build_exam_focus(
+            chapters, topics, exam_keys, batch_row["total_fa_exams"], batch_row["total_sa_exams"]
+        )
         if not result:
             return {"available": False}
         return {"available": True, "subject": subject, "text": exam_focus.format_exam_focus_text(result, subject)}

@@ -8,6 +8,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
+from app.core.config import DEFAULT_TOTAL_FA_EXAMS, DEFAULT_TOTAL_SA_EXAMS
 from app.core.deps import get_current_user, get_current_user_from_header_or_query
 from app.db import batches as repo
 from app.db.database import session
@@ -94,6 +95,8 @@ def _batch_out(row, student_count: int | None = None) -> dict:
         "fa_marks_per_subject": row["fa_marks_per_subject"],
         "sa_marks_per_subject": row["sa_marks_per_subject"],
         "class_strength_override": row["class_strength_override"],
+        "total_fa_exams": row["total_fa_exams"],
+        "total_sa_exams": row["total_sa_exams"],
         "class_level": row["class_level"],
         "source_filename": row["source_filename"],
         "source_type": row["source_type"],
@@ -112,6 +115,8 @@ async def upload_batch(
     name: str | None = Form(None),
     school_name: str | None = Form(None),
     class_level: str | None = Form(None),
+    total_fa_exams: int | None = Form(None),
+    total_sa_exams: int | None = Form(None),
     current_user=Depends(get_current_user),
 ):
     has_file = file is not None and bool(file.filename)
@@ -164,6 +169,8 @@ async def upload_batch(
             _normalize_class_level(class_level),
             source_type="sheet_link" if has_link else "file",
             source_ref=sheet_url.strip() if has_link else None,
+            total_fa_exams=total_fa_exams if total_fa_exams and total_fa_exams > 0 else DEFAULT_TOTAL_FA_EXAMS,
+            total_sa_exams=total_sa_exams if total_sa_exams and total_sa_exams > 0 else DEFAULT_TOTAL_SA_EXAMS,
         )
         row = repo.get_batch(conn, current_user["id"], batch_id)
         return _batch_out(row, student_count=len(parsed["students"]))
@@ -172,6 +179,8 @@ async def upload_batch(
 class ImportFolderRequest(BaseModel):
     folder_url: str
     school_name: str | None = None
+    total_fa_exams: int | None = None
+    total_sa_exams: int | None = None
     class_level: str | None = None
 
 
@@ -255,6 +264,8 @@ async def import_drive_folder(req: ImportFolderRequest, current_user=Depends(get
     folder_id = extract_folder_id(req.folder_url)
     effective_school_name = (req.school_name or "").strip() or current_user["default_school_name"] or ""
     fallback_class_level = _normalize_class_level(req.class_level)
+    total_fa_exams = req.total_fa_exams if req.total_fa_exams and req.total_fa_exams > 0 else DEFAULT_TOTAL_FA_EXAMS
+    total_sa_exams = req.total_sa_exams if req.total_sa_exams and req.total_sa_exams > 0 else DEFAULT_TOTAL_SA_EXAMS
 
     if req.school_name and req.school_name.strip():
         with session() as conn:
@@ -293,6 +304,8 @@ async def import_drive_folder(req: ImportFolderRequest, current_user=Depends(get
                 source_ref=f["id"],
                 source_mime_type=f["mime_type"],
                 source_folder_id=folder_id,
+                total_fa_exams=total_fa_exams,
+                total_sa_exams=total_sa_exams,
             )
         results.append({"file_name": f["name"], "status": "created", "batch_id": batch_id, "student_count": len(parsed["students"])})
 
@@ -362,6 +375,8 @@ async def sync_drive_folder(req: SyncFolderRequest, current_user=Depends(get_cur
                 source_ref=f["id"],
                 source_mime_type=f["mime_type"],
                 source_folder_id=req.folder_id,
+                total_fa_exams=existing_batches[0]["total_fa_exams"],
+                total_sa_exams=existing_batches[0]["total_sa_exams"],
             )
         results.append({"file_name": f["name"], "status": "created", "batch_id": batch_id})
 
@@ -574,6 +589,8 @@ class SettingsUpdate(BaseModel):
     class_strength_override: int | None = None
     clear_class_strength_override: bool = False
     class_level: str | None = None
+    total_fa_exams: int | None = None
+    total_sa_exams: int | None = None
 
 
 @router.put("/{batch_id}/settings")

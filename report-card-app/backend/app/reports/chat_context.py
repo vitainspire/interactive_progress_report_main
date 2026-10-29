@@ -85,7 +85,7 @@ def build_student_context(
         for name in subject_names:
             chapters = study_plan.get_chapters(conn, account_id, class_level, name)
             topics = get_blueprint(conn, account_id, class_level, name)
-            focus = exam_focus.build_exam_focus(chapters, topics, exams_present)
+            focus = exam_focus.build_exam_focus(chapters, topics, exams_present, settings.total_fa_exams, settings.total_sa_exams)
             if not focus:
                 continue
             focus_lines.append(f"{name}:")

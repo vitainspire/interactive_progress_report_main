@@ -31,6 +31,11 @@ DEFAULT_FA_TOTAL = 350
 DEFAULT_SA_TOTAL = 600
 DEFAULT_FA_MARKS_PER_SUBJECT = 50
 DEFAULT_SA_MARKS_PER_SUBJECT = 100
+# How many FA/SA exams a school's year has, used to generate the "upcoming
+# exam" sequence in app/reports/exam_focus.py — the common AP/Telangana
+# SSC pattern, overridable per batch at upload time.
+DEFAULT_TOTAL_FA_EXAMS = 4
+DEFAULT_TOTAL_SA_EXAMS = 2
 
 # The base URL this server itself is reachable at — used to build the
 # parent-facing report links sent over WhatsApp/SMS. For those links to

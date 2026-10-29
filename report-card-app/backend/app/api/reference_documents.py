@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from app.core.deps import get_current_user
 from app.db import reference_documents as repo
 from app.db.database import session
-from app.reports.subject_analysis import classify_subject
+from app.reports.subject_analysis import normalize_subject_key
 
 router = APIRouter(prefix="/reference-documents", tags=["reference-documents"])
 
@@ -105,18 +105,17 @@ def confirm_reference_document(doc_id: int, force: bool = False, current_user=De
         if not raw_subject or not class_level:
             raise HTTPException(422, "Set the subject and class level (via PUT) before confirming — they couldn't be read from the document.")
 
-        # Canonicalize to the exact uppercase subject key the lookup
-        # functions (get_chapters/get_blueprint/get_exam_info) query by —
-        # storing the raw free-form guess here would silently make this
-        # data unreachable later, since those always query the canonical form.
-        subject = classify_subject(raw_subject)
+        # Canonicalize to the exact subject key the lookup functions
+        # (get_chapters/get_blueprint/get_exam_info) query by — storing the
+        # raw free-form guess here would silently make this data unreachable
+        # later, since those always query the canonical form. One of the 7
+        # built-in AP/Telangana SSC subjects maps to its fixed canonical
+        # name; anything else (Sanskrit, Computer Science, a school-specific
+        # name) falls back to its own trimmed/uppercased form instead of
+        # being rejected, so any school's own subjects work end to end.
+        subject = normalize_subject_key(raw_subject)
         if not subject:
-            raise HTTPException(
-                422,
-                f"Couldn't recognize '{raw_subject}' as one of this app's known subjects "
-                "(Telugu/Hindi/English/Maths/Physical Science/Biology/Social) — edit the subject (via PUT) "
-                "to one of those before confirming.",
-            )
+            raise HTTPException(422, "Set the subject (via PUT) before confirming — it couldn't be read from the document.")
 
         if document_type == "syllabus":
             chapters = extracted.get("chapters") or []
