@@ -54,6 +54,10 @@ h1, h2, h3, .font-display {
   font-family: var(--font-display);
 }
 
+.font-serif {
+  font-family: var(--font-serif);
+}
+
 .soft-card {
   background: var(--surface-1);
   border-radius: var(--radius-card);
@@ -134,6 +138,13 @@ input[type="time"]:focus {
    canvas) — drawn from --border so it tracks the current theme. */
 .dot-grid-plane {
   background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Same texture, legible on a dark fill — the school-name band uses the
+   product's navy, where the default dot color (near-black) disappears. */
+.dot-grid-plane-dark {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1px);
   background-size: 22px 22px;
 }
 

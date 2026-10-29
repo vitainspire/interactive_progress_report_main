@@ -54,11 +54,14 @@ function BatchCard({ batch, onDelete }: { batch: BatchSummary; onDelete: (id: nu
 
   return (
     <article
-      className="soft-card reveal group relative flex flex-col p-5 transition-all duration-200 hover:shadow-lg"
-      style={{ borderColor: "var(--border)" }}
+      className="soft-card reveal group relative flex flex-col p-5 transition-transform duration-200 hover:-translate-y-0.5"
+      style={{ borderTop: "3px solid var(--accent)" }}
     >
       <Link to={`/batches/${batch.id}`} className="flex items-start gap-3 focus:outline-none">
-        <span className="icon-chip shrink-0">
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+          style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+        >
           <SheetIcon size={16} />
         </span>
         <div className="min-w-0 flex-1">
@@ -265,12 +268,13 @@ export function DashboardPage() {
         </Link>{" "}
         / Report Card Generator
       </nav>
-      <header className="mt-1 flex flex-wrap items-center justify-between gap-4">
+      <header
+        className="dot-grid-plane-dark relative mt-2 flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-2xl px-6 py-6 sm:px-8 sm:py-7"
+        style={{ background: "var(--accent-strong)" }}
+      >
         <div>
-          <h1 className="text-2xl font-extrabold" style={{ color: "var(--text-primary)" }}>
-            Your uploads
-          </h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+          <h1 className="font-serif text-2xl font-medium text-white sm:text-3xl">Your uploads</h1>
+          <p className="mt-1.5 max-w-md text-sm" style={{ color: "rgba(255,255,255,0.75)" }}>
             Every sheet you've uploaded — open one to pick students and print report cards.
           </p>
         </div>
@@ -280,8 +284,8 @@ export function DashboardPage() {
               type="button"
               onClick={syncDriveFolder}
               disabled={syncing}
-              className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)] disabled:opacity-60"
-              style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+              className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-white/10 disabled:opacity-60"
+              style={{ borderColor: "rgba(255,255,255,0.35)" }}
             >
               <FolderIcon size={15} />
               {syncing ? "Syncing…" : "Sync Drive folder"}
@@ -289,7 +293,8 @@ export function DashboardPage() {
           )}
           <Link
             to="/upload"
-            className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-200 active:scale-[0.99]"
+            className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold shadow-sm transition-all duration-200 active:scale-[0.99]"
+            style={{ background: "var(--lp-gold)", color: "var(--accent-strong)" }}
           >
             <PlusIcon size={15} />
             New upload
@@ -359,9 +364,12 @@ export function DashboardPage() {
       )}
 
       {batches && batches.length === 0 && (
-        <div className="soft-card mt-5 flex flex-col items-center p-10 text-center">
-          <span className="icon-chip" style={{ width: "3rem", height: "3rem" }}>
-            <FolderIcon size={22} />
+        <div className="soft-card mt-5 flex flex-col items-center p-10 text-center" style={{ borderTop: "3px solid var(--accent)" }}>
+          <span
+            className="flex h-14 w-14 items-center justify-center rounded-2xl"
+            style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+          >
+            <FolderIcon size={24} />
           </span>
           <p className="mt-3 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
             Set up your Drive folder
