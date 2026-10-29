@@ -25,20 +25,18 @@ import psycopg
 
 from app.integrations import chat
 from app.reports.chat_canned import _exam_keys, _subject_buckets
-
-# Alternate spellings a teacher's own sheet might use for a subject already
-# seeded under a different canonical name (see app/db/syllabus_seed.py).
-_SUBJECT_ALIASES = {
-    "MATHEMATICS": "MATHS",
-    "SOCIAL STUDIES": "SOCIAL",
-    "PHYSICS": "PHYSICAL SCIENCE",
-    "SCIENCE": "PHYSICAL SCIENCE",
-}
+from app.reports.subject_analysis import classify_subject
 
 
 def _normalize_subject(name: str) -> str:
-    n = (name or "").strip().upper()
-    return _SUBJECT_ALIASES.get(n, n)
+    """Same canonical form subject_analysis.classify_subject() already uses
+    for the blueprint lookup (handles short sheet codes like "PS"/"BS" via
+    regex, not just exact aliases) — kept as one shared classifier so a
+    subject that resolves for the blueprint half of Exam Focus always
+    resolves for the chapters half too. Falls back to a plain upper-cased
+    pass-through for a subject classify_subject doesn't recognize at all,
+    same as before."""
+    return classify_subject(name) or (name or "").strip().upper()
 
 
 def weakest_subject(student: dict, exam_defs: list[dict]) -> str | None:
