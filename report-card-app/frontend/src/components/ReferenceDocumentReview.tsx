@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../api/client";
+import { ApiError, api } from "../api/client";
 import type { BlueprintTopicDraft, ReferenceDocument, ReferenceDocumentExtraction, SyllabusChapterDraft } from "../types";
 
 function emptyExtraction(): ReferenceDocumentExtraction {
@@ -24,14 +24,20 @@ export function ReferenceDocumentReview({ doc, onChanged }: { doc: ReferenceDocu
     }
   }
 
-  async function confirm() {
+  async function confirm(force = false) {
     setConfirming(true);
     setError(null);
     try {
       await saveDraft();
-      await api.post(`/reference-documents/${doc.id}/confirm`, undefined);
+      await api.post(`/reference-documents/${doc.id}/confirm${force ? "?force=true" : ""}`, undefined);
       onChanged();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        if (window.confirm(`${err.message}\n\nReplace it?`)) {
+          return confirm(true);
+        }
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not confirm this document");
     } finally {
       setConfirming(false);

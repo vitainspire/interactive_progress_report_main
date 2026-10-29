@@ -80,6 +80,22 @@ def set_reference_document_status(conn: psycopg.Connection, account_id: int, doc
     return cur.rowcount > 0
 
 
+def count_syllabus_chapters_for_account(conn: psycopg.Connection, account_id: int, class_level: str, subject: str) -> int:
+    row = conn.execute(
+        "SELECT count(*) AS n FROM syllabus_chapter WHERE account_id = %s AND class_level = %s AND subject = %s",
+        (account_id, class_level, subject),
+    ).fetchone()
+    return row["n"]
+
+
+def count_subject_blueprint_for_account(conn: psycopg.Connection, account_id: int, class_level: str, subject: str) -> int:
+    row = conn.execute(
+        "SELECT count(*) AS n FROM subject_blueprint WHERE account_id = %s AND class_level = %s AND subject = %s",
+        (account_id, class_level, subject),
+    ).fetchone()
+    return row["n"]
+
+
 def replace_syllabus_chapters_for_account(
     conn: psycopg.Connection, account_id: int, class_level: str, subject: str, chapters: list[dict]
 ) -> None:

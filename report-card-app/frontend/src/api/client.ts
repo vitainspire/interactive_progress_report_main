@@ -12,6 +12,14 @@ export function setToken(token: string | null): void {
 
 class UnauthorizedError extends Error {}
 
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 // A free-tier backend host spins down after a period of inactivity, so the
 // first request after a while can time out before the cold instance wakes —
 // the browser surfaces that as a bare "Failed to fetch" with no indication
@@ -50,7 +58,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(body.detail || `Request failed: ${res.status}`);
+    throw new ApiError(body.detail || `Request failed: ${res.status}`, res.status);
   }
   return res.json() as Promise<T>;
 }

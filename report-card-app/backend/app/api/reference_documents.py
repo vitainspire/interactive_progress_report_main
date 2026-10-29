@@ -80,11 +80,15 @@ def update_reference_document(doc_id: int, req: ReferenceDocumentUpdate, current
 
 
 @router.post("/{doc_id}/confirm")
-def confirm_reference_document(doc_id: int, current_user=Depends(get_current_user)):
+def confirm_reference_document(doc_id: int, force: bool = False, current_user=Depends(get_current_user)):
     """Writes the (possibly teacher-edited) extraction into the live
     syllabus_chapter/subject_blueprint/subject_exam_info tables, scoped to
     this account — the only place in the app that writes to those tables
-    from an API route rather than a startup seed script."""
+    from an API route rather than a startup seed script. Confirming replaces
+    whatever this account already confirmed for the same (class, subject) —
+    e.g. two photos of the same syllabus chart — so without `force=true` a
+    pre-existing confirmed set blocks with a 409 instead of silently
+    disappearing."""
     with session() as conn:
         row = repo.get_reference_document(conn, current_user["id"], doc_id)
         if not row:
@@ -118,11 +122,35 @@ def confirm_reference_document(doc_id: int, current_user=Depends(get_current_use
             chapters = extracted.get("chapters") or []
             if not chapters:
                 raise HTTPException(422, "No chapters to confirm — edit this document's chapters first.")
+            for i, ch in enumerate(chapters, start=1):
+                if ch.get("chapter_no") in (None, ""):
+                    raise HTTPException(422, f"Chapter {i} ('{ch.get('chapter_name') or 'untitled'}') is missing a chapter number — fill it in before confirming.")
+                if not (ch.get("chapter_name") or "").strip():
+                    raise HTTPException(422, f"Chapter {i} (no. {ch.get('chapter_no')}) is missing a name — fill it in before confirming.")
+            existing = repo.count_syllabus_chapters_for_account(conn, current_user["id"], class_level, subject)
+            if existing and not force:
+                raise HTTPException(
+                    409,
+                    f"Class {class_level} {subject} already has {existing} confirmed chapter(s) from an earlier document. "
+                    "Confirming this one will replace them entirely, not merge. If that's what you want, confirm again to proceed.",
+                )
             repo.replace_syllabus_chapters_for_account(conn, current_user["id"], class_level, subject, chapters)
         elif document_type == "blueprint":
             topics = extracted.get("topics") or []
             if not topics:
                 raise HTTPException(422, "No topics to confirm — edit this document's topics first.")
+            for i, t in enumerate(topics, start=1):
+                if not (t.get("topic_name") or "").strip():
+                    raise HTTPException(422, f"Topic {i} is missing a name — fill it in before confirming.")
+                if t.get("marks") in (None, ""):
+                    raise HTTPException(422, f"Topic {i} ('{t.get('topic_name')}') is missing marks — fill it in before confirming (use 0 if the blueprint really shows none).")
+            existing = repo.count_subject_blueprint_for_account(conn, current_user["id"], class_level, subject)
+            if existing and not force:
+                raise HTTPException(
+                    409,
+                    f"Class {class_level} {subject} already has a confirmed blueprint ({existing} topic(s)) from an earlier document. "
+                    "Confirming this one will replace it entirely, not merge. If that's what you want, confirm again to proceed.",
+                )
             repo.replace_subject_blueprint_for_account(conn, current_user["id"], class_level, subject, topics)
             repo.replace_subject_exam_info_for_account(
                 conn, current_user["id"], class_level, subject, extracted.get("exam_format"), extracted.get("tips") or []
