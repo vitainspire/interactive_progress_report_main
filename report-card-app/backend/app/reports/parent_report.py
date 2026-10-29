@@ -27,6 +27,9 @@ import html
 import math
 import re
 
+import psycopg
+
+from app.reports import exam_focus, study_plan
 from app.reports.analysis import build_analysis
 from app.reports.chat_canned import answer_canned_question, build_advice_items
 from app.reports.numfmt import fmt_num
@@ -36,6 +39,7 @@ from app.reports.parent_subject import (
     compute_subject_facts,
     subject_commentary_telugu,
 )
+from app.reports.subject_analysis import get_blueprint
 from app.reports.voice_script import _compute_facts
 
 
@@ -271,6 +275,7 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 .subject-card .commentary{margin-top:.8em;padding-left:1.2em}
 .subject-card .commentary::before{font-size:2.4em}
 .subject-card .commentary .ctext{font-size:.92em}
+.exam-focus-note{margin-top:.7em;padding:.7em .8em;border-radius:10px;background:#f4f1fb;font-size:.85em;line-height:1.55;color:var(--ink)}
 
 .attendance-card{border:1px solid var(--line);border-radius:14px;background:#fff;padding:1.1em}
 .attendance-total{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9em}
@@ -520,7 +525,10 @@ def _render_listen_section(student: dict, all_students: list[dict], exam_defs: l
     )
 
 
-def _render_subject_card(student: dict, all_students: list[dict], exam_defs: list[dict], settings, subject_name: str) -> str:
+def _render_subject_card(
+    student: dict, all_students: list[dict], exam_defs: list[dict], settings, subject_name: str,
+    conn: psycopg.Connection, account_id: int, class_level: str,
+) -> str:
     is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
 
     def max_marks(key: str) -> float:
@@ -569,13 +577,34 @@ def _render_subject_card(student: dict, all_students: list[dict], exam_defs: lis
         f'<div class="ctext">{_esc(subject_commentary_telugu(facts))}</div>'
         "</div>"
     )
+
+    # Deterministic (no LLM) exam-prep context for THIS subject specifically
+    # — same engine as the Teacher's Advice section's Exam Focus card (see
+    # app/reports/exam_focus.py), just run per-subject here instead of only
+    # for the student's single weakest one, since every subject already has
+    # its own card in this section. Silently adds nothing when this account
+    # hasn't confirmed a blueprint for the subject.
+    chapters = study_plan.get_chapters(conn, account_id, class_level, subject_name)
+    topics = get_blueprint(conn, account_id, class_level, subject_name)
+    focus = exam_focus.build_exam_focus(chapters, topics, exam_defs, latest.exam_key)
+    if focus:
+        h += f'<div class="exam-focus-note">\U0001f3af {_esc(exam_focus.format_exam_focus_text(focus, subject_name))}</div>'
+
     h += "</div>"
     return h
 
 
-def _render_subjects_section(student: dict, all_students: list[dict], exam_defs: list[dict], settings) -> str:
+def _render_subjects_section(
+    student: dict, all_students: list[dict], exam_defs: list[dict], settings,
+    conn: psycopg.Connection, account_id: int, class_level: str,
+) -> str:
     subjects = _discover_subjects(student, exam_defs)
-    cards = [c for c in (_render_subject_card(student, all_students, exam_defs, settings, name) for name in subjects) if c]
+    cards = [
+        c for c in (
+            _render_subject_card(student, all_students, exam_defs, settings, name, conn, account_id, class_level)
+            for name in subjects
+        ) if c
+    ]
     if not cards:
         return ""
     return (
@@ -717,7 +746,9 @@ VIEW_REPORT_SCRIPT = """
 
 
 def render_parent_report_page(
-    student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str, title: str = "Report Card", token: str = ""
+    student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str,
+    conn: psycopg.Connection, account_id: int, class_level: str,
+    title: str = "Report Card", token: str = "",
 ) -> str:
     """`student` is the single student this link belongs to (parent links
     always resolve to exactly one student — see api/public.py). A single
@@ -733,7 +764,7 @@ def render_parent_report_page(
     content = f'<div class="view-shell" id="viewShell" data-token="{_esc(token)}">'
     content += _render_summary_card(student, all_students, exam_defs, settings, facts)
     content += _render_listen_section(student, all_students, exam_defs, settings)
-    content += _render_subjects_section(student, all_students, exam_defs, settings)
+    content += _render_subjects_section(student, all_students, exam_defs, settings, conn, account_id, class_level)
     content += _render_attendance_section(student)
     content += _render_advice_section_inline(student, all_students, exam_defs, settings, student["name"])
     content += _render_view_footer(school_name, student["name"], token)

@@ -131,7 +131,10 @@ def get_public_report(token: str):
     with session() as conn:
         student, all_students, batch_row = _resolve_report_context(conn, token)
         settings = repo.settings_from_row(batch_row)
-        html = render_parent_report_page(student, all_students, json.loads(batch_row["exam_order"]), settings, batch_row["school_name"], title=batch_row["name"], token=token)
+        html = render_parent_report_page(
+            student, all_students, json.loads(batch_row["exam_order"]), settings, batch_row["school_name"],
+            conn, batch_row["user_id"], batch_row["class_level"], title=batch_row["name"], token=token,
+        )
         return HTMLResponse(content=html)
 
 
