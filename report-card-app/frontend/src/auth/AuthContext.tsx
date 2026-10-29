@@ -12,6 +12,8 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, displayName: string, schoolName: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  resetPassword: (token: string, newPassword: string) => Promise<void>;
   setSchoolName: (schoolName: string) => Promise<void>;
   setSchoolAddress: (schoolAddress: string) => Promise<void>;
   setSchoolPhoto: (file: File) => Promise<void>;
@@ -61,6 +63,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [applyAuth],
   );
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    await api.post<{ ok: true }>("/auth/forgot-password", { email });
+  }, []);
+
+  const resetPassword = useCallback(async (token: string, newPassword: string) => {
+    await api.post<{ ok: true }>("/auth/reset-password", { token, new_password: newPassword });
+  }, []);
+
   const setSchoolName = useCallback(async (schoolName: string) => {
     setUser(await api.put<AuthUser>("/auth/school-name", { school_name: schoolName }));
   }, []);
@@ -98,6 +108,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login,
         signup,
+        requestPasswordReset,
+        resetPassword,
         setSchoolName,
         setSchoolAddress,
         setSchoolPhoto,

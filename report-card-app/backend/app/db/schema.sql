@@ -7,6 +7,21 @@ CREATE TABLE IF NOT EXISTS app_user (
     created_at TEXT NOT NULL
 );
 
+-- A single-use, short-lived token for the "forgot password" flow (see
+-- app/api/auth.py, app/db/password_reset.py) — deliberately separate from
+-- the long-lived login JWT. token_hash stores sha256(raw token), never the
+-- raw token itself, same reasoning as hashing a password: a DB leak alone
+-- shouldn't hand out working reset links.
+CREATE TABLE IF NOT EXISTS password_reset_token (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_token_hash ON password_reset_token(token_hash);
+
 -- One upload = one batch: a class/section's sheet at a point in time, with
 -- its own editable display settings (totals / marks-per-subject / class
 -- strength), matching the original tool's "Settings" panel.

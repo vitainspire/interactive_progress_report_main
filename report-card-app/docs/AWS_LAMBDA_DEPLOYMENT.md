@@ -91,7 +91,14 @@ trailing slash — this gets baked into parent WhatsApp/SMS report links),
 `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE_NAME`,
 `WHATSAPP_TEMPLATE_LANG`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
 `TWILIO_SMS_FROM`, `BHASHINI_USER_ID`, `BHASHINI_ULCA_API_KEY`,
-`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_DOCUMENT_MODEL`.
+`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_DOCUMENT_MODEL`,
+`REPORTCARD_APP_JWT_SECRET` (a long random value — signs every login
+token; if this isn't set it silently falls back to an insecure value
+hardcoded in security.py), `REPORTCARD_APP_FRONTEND_BASE_URL` (the Vercel
+app's own URL, e.g. `https://your-app.vercel.app` — used to build the
+password-reset link), `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (an address at
+a domain verified in Resend — see app/integrations/email.py; forgot-
+password silently can't send email until these are set).
 
 Optional — LLM call tracing via LangSmith (see "LangSmith tracing" below):
 `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`. Safe to

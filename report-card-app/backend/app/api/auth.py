@@ -7,8 +7,10 @@ from fastapi.responses import Response
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, field_validator
 
+from app.core.config import FRONTEND_BASE_URL
 from app.core.deps import get_current_user, get_current_user_from_header_or_query
 from app.core.security import create_access_token, verify_password
+from app.db import password_reset
 from app.db.database import session
 from app.db.users import (
     clear_school_photo,
@@ -20,7 +22,9 @@ from app.db.users import (
     set_school_address,
     set_school_photo,
     set_whatsapp_settings,
+    update_password,
 )
+from app.integrations import email as email_integration
 
 # A hero banner photo doesn't need to be huge — downsized to this max
 # dimension and re-encoded to JPEG on upload (see update_school_photo)
@@ -103,6 +107,22 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def valid_new_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
 def _user_out(user) -> dict:
     return {
         "id": user["id"],
@@ -135,6 +155,38 @@ def login(req: LoginRequest):
             raise HTTPException(401, "Incorrect email or password")
         token = create_access_token(user["id"])
         return {"token": token, "user": _user_out(user)}
+
+
+@router.post("/forgot-password")
+def forgot_password(req: ForgotPasswordRequest):
+    """Always responds the same way whether or not this email has an
+    account — otherwise the endpoint could be used to check which emails
+    are registered. The reset link points at the React app's own
+    /reset-password route (FRONTEND_BASE_URL), not this backend."""
+    with session() as conn:
+        user = get_user_by_email(conn, req.email)
+        if user:
+            raw_token = password_reset.create_reset_token(conn, user["id"])
+            reset_url = f"{FRONTEND_BASE_URL}/reset-password?token={raw_token}"
+            try:
+                email_integration.send_password_reset_email(user["email"], user["display_name"], reset_url)
+            except (email_integration.EmailNotConfigured, email_integration.EmailSendError) as exc:
+                # Never surfaced to the caller (see docstring) — logged
+                # server-side (CloudWatch on Lambda) so a delivery problem
+                # is still diagnosable.
+                print(f"[forgot-password] could not send reset email to {user['email']}: {exc}")
+    return {"ok": True}
+
+
+@router.post("/reset-password")
+def reset_password(req: ResetPasswordRequest):
+    with session() as conn:
+        token_row = password_reset.get_valid_reset_token(conn, req.token)
+        if not token_row:
+            raise HTTPException(422, "This reset link is invalid or has expired. Request a new one.")
+        update_password(conn, token_row["user_id"], req.new_password)
+        password_reset.mark_reset_token_used(conn, token_row["id"])
+    return {"ok": True}
 
 
 @router.get("/me")

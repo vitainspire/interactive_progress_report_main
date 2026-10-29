@@ -43,6 +43,12 @@ DEFAULT_TOTAL_SA_EXAMS = 2
 # localhost) once the app is deployed somewhere.
 PUBLIC_APP_BASE_URL = os.environ.get("REPORTCARD_APP_PUBLIC_BASE_URL", "http://localhost:8010").rstrip("/")
 
+# The teacher-facing React app's own URL (the Vercel deployment) — distinct
+# from PUBLIC_APP_BASE_URL above, which is this backend's own URL used for
+# server-rendered parent report pages. Needed to build a password-reset
+# link that opens the frontend's /reset-password route.
+FRONTEND_BASE_URL = os.environ.get("REPORTCARD_APP_FRONTEND_BASE_URL", "http://localhost:5175").rstrip("/")
+
 # Phone numbers from the sheet may just be a plain 10-digit number with no
 # country code — this is prefixed on when normalizing to E.164 for
 # WhatsApp/SMS. Change via env if most of your schools aren't in India.
@@ -79,6 +85,14 @@ BHASHINI_ULCA_API_KEY = os.environ.get("BHASHINI_ULCA_API_KEY", "")
 # app/reports/chat_context.py). Get a key at openrouter.ai/keys.
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "qwen/qwen3.8-flash")
+
+# Resend — sends the password-reset email (see app/integrations/email.py).
+# Get a key at resend.com/api-keys. RESEND_FROM_EMAIL must be an address at
+# a domain verified in Resend (or their shared test sender while testing
+# without your own domain, which can only send to the account's own signup
+# address until a domain is verified).
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "")
 
 # A vision/document-capable model for reading an uploaded syllabus/exam-
 # blueprint PDF or image (see app/integrations/syllabus_extraction.py) —

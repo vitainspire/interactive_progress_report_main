@@ -11,7 +11,6 @@ export function LoginPage() {
   const [email, setEmail] = useState(() => localStorage.getItem(REMEMBERED_EMAIL_KEY) ?? "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [showForgotHint, setShowForgotHint] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -95,19 +94,13 @@ export function LoginPage() {
           </div>
 
           <div className="mt-3">
-            <button
-              type="button"
-              onClick={() => setShowForgotHint((v) => !v)}
+            <Link
+              to="/forgot-password"
               className="text-sm font-medium transition-colors duration-200 hover:text-[var(--text-primary)]"
               style={{ color: "var(--text-secondary)" }}
             >
               Forgot Password?
-            </button>
-            {showForgotHint && (
-              <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
-                Ask your school admin to reset it, or create a new account below.
-              </p>
-            )}
+            </Link>
           </div>
 
           {error && (

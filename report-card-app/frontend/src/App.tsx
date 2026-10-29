@@ -3,8 +3,10 @@ import { Layout } from "./components/Layout";
 import { useAuth } from "./auth/AuthContext";
 import { BatchPage } from "./pages/BatchPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { LoginPage } from "./pages/LoginPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { SchoolProfilePage } from "./pages/SchoolProfilePage";
 import { SchoolSetupPage } from "./pages/SchoolSetupPage";
 import { SignupPage } from "./pages/SignupPage";
@@ -34,6 +36,8 @@ export default function App() {
       <Route path="/" element={<Root />} />
       <Route path="login" element={<LoginPage />} />
       <Route path="signup" element={<SignupPage />} />
+      <Route path="forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="reset-password" element={<ResetPasswordPage />} />
       <Route path="school-setup" element={<SchoolSetupPage />} />
       <Route
         element={
