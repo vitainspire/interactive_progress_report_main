@@ -115,12 +115,16 @@ export function StudentPage() {
           </Link>{" "}
           / {data.name}
         </nav>
-        <div className="mt-1 flex flex-wrap items-start justify-between gap-4">
+        <div
+          className="dot-grid-plane-dark relative mt-2 flex flex-wrap items-start justify-between gap-4 overflow-hidden rounded-2xl px-6 py-6 sm:px-8 sm:py-7"
+          style={{ background: "var(--accent-strong)" }}
+        >
           <div>
-            <h1 className="text-2xl font-extrabold" style={{ color: "var(--text-primary)" }}>
-              {data.name}
-            </h1>
-            <span className="pill mt-2 inline-flex">
+            <h1 className="font-serif text-2xl font-medium text-white sm:text-3xl">{data.name}</h1>
+            <span
+              className="mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold"
+              style={{ borderColor: "rgba(255,255,255,0.35)", color: "rgba(255,255,255,0.85)" }}
+            >
               Section {data.section || "—"} · Roll {data.roll_no || "—"}
             </span>
           </div>
@@ -128,8 +132,8 @@ export function StudentPage() {
             href={reportUrl}
             target="_blank"
             rel="noopener"
-            className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--accent-soft)]"
-            style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
+            className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold transition-colors duration-200"
+            style={{ background: "var(--lp-gold)", color: "var(--accent-strong)" }}
           >
             <ExternalLinkIcon size={14} />
             View report card
@@ -138,7 +142,7 @@ export function StudentPage() {
       </div>
 
       {(data.strengths.length > 0 || data.weak_subjects.length > 0 || data.failing_subjects.length > 0) && (
-        <div className="soft-card space-y-2 p-5">
+        <div className="soft-card space-y-2 p-5" style={{ borderTop: "3px solid var(--status-good)" }}>
           <SectionLabel>At a glance</SectionLabel>
           <SubjectTagList label="Strong in" names={data.strengths} color="var(--status-good)" />
           <SubjectTagList label="Needs attention" names={data.weak_subjects} color="#d97706" />
@@ -147,7 +151,7 @@ export function StudentPage() {
       )}
 
       {(data.advice_cards.length > 0 || studyPlan?.available) && (
-        <div className="soft-card p-5">
+        <div className="soft-card p-5" style={{ borderTop: "3px solid var(--accent)" }}>
           <SectionLabel>Teacher's advice — same wording this student's parent sees</SectionLabel>
           <div className="mt-3 space-y-3">
             {data.advice_cards.map((card, i) => (
