@@ -649,6 +649,16 @@ VIEW_REPORT_SCRIPT = """
       }
     }).catch(function(){});
   }
+  var examFocusCard = document.getElementById('examFocusCard');
+  if(shell && examFocusCard){
+    var token2 = shell.dataset.token;
+    fetch('/api/public/report/' + token2 + '/exam-focus').then(function(r){ return r.json(); }).then(function(data){
+      if(data && data.available){
+        document.getElementById('examFocusText').textContent = data.text;
+        examFocusCard.hidden = false;
+      }
+    }).catch(function(){});
+  }
 })();
 (function(){
   var btn = document.getElementById('viewListenBtn');
@@ -844,11 +854,27 @@ def _study_plan_placeholder_card(next_num: int) -> str:
     )
 
 
+def _exam_focus_placeholder_card(next_num: int) -> str:
+    """A hidden card, filled in (and un-hidden) by client-side JS that
+    fetches /report/{token}/exam-focus after the page has rendered — see
+    that route and app/reports/exam_focus.py. Unlike the study plan card
+    above this costs nothing per-call (no LLM, just arithmetic over
+    already-confirmed syllabus/blueprint data), but it's still fetched
+    lazily and still stays hidden on empty, for the same reason: keep this
+    card and the study plan card visually consistent with each other."""
+    return (
+        f'<div class="advice-card" id="examFocusCard" hidden><span class="advice-num">{next_num}</span>'
+        '<div class="advice-body"><div class="advice-title">\U0001f3af పరీక్ష ఫోకస్ / Exam Focus</div>'
+        '<div class="advice-text" id="examFocusText">లోడ్ అవుతోంది…</div></div></div>'
+    )
+
+
 def _render_advice_section(student: dict, all_students: list[dict], exam_defs: list[dict], settings, student_name: str) -> str:
     cards = _build_advice_cards(student, all_students, exam_defs, settings)
     if not cards:
         return ""
     cards.append(_study_plan_placeholder_card(len(cards) + 1))
+    cards.append(_exam_focus_placeholder_card(len(cards) + 1))
     return (
         '<button type="button" class="advice-banner" id="adviceToggle">'
         '<span class="ab-icon">\U0001f469‍\U0001f3eb</span>'
@@ -877,6 +903,7 @@ def _render_advice_section_inline(student: dict, all_students: list[dict], exam_
     if not cards:
         return ""
     cards.append(_study_plan_placeholder_card(len(cards) + 1))
+    cards.append(_exam_focus_placeholder_card(len(cards) + 1))
     return (
         '<div class="view-advice-card">'
         '<div class="section-heading">\U0001f469‍\U0001f3eb ఉపాధ్యాయుల సలహాలు / Teacher’s Advice</div>'
@@ -946,6 +973,15 @@ def render_report_about_page(student: dict, all_students: list[dict], exam_defs:
         "if(data&&data.available){"
         "document.getElementById('studyPlanText').textContent=data.plan;"
         "studyPlanCard.hidden=false;"
+        "}"
+        "}).catch(function(){});"
+        "}"
+        "var examFocusCard=document.getElementById('examFocusCard');"
+        "if(examFocusCard){"
+        "fetch('/api/public/report/'+token+'/exam-focus').then(function(r){return r.json();}).then(function(data){"
+        "if(data&&data.available){"
+        "document.getElementById('examFocusText').textContent=data.text;"
+        "examFocusCard.hidden=false;"
         "}"
         "}).catch(function(){});"
         "}"

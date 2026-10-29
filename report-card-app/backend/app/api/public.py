@@ -12,8 +12,8 @@ from app.db import users as user_repo
 from app.db.database import session
 from app.integrations import bhashini, chat, tts_audio
 from app.integrations.sharing import get_student_id_for_token
-from app.reports import card_render, study_plan
-from app.reports.chat_canned import answer_canned_question
+from app.reports import card_render, exam_focus, study_plan
+from app.reports.chat_canned import _exam_keys, answer_canned_question
 from app.reports.chat_context import build_student_context
 from app.reports.parent_report import (
     get_speech_text,
@@ -21,6 +21,7 @@ from app.reports.parent_report import (
     render_report_about_page,
     render_report_landing_page,
 )
+from app.reports.subject_analysis import get_blueprint
 
 # The shared fallback hero photo (see get_report_school_photo below) — read
 # once at import rather than from disk on every unauthenticated request,
@@ -222,6 +223,36 @@ def get_public_study_plan(token: str):
         if not plan:
             return {"available": False}
         return {"available": True, "subject": subject, "plan": plan}
+
+
+@router.get("/report/{token}/exam-focus")
+def get_public_exam_focus(token: str):
+    """Deterministic (no LLM — see app/reports/exam_focus.py) exam-prep
+    guidance for this student's single weakest subject: which syllabus
+    chapters their most recent exam likely covered, plus the highest-marks
+    topics from that subject's confirmed exam blueprint. Same
+    "available: false, caller shows nothing" shape as /study-plan, and
+    fetched the same lazy way, but costs nothing per-call since it's pure
+    arithmetic over already-confirmed reference data."""
+    with session() as conn:
+        student, all_students, batch_row = _resolve_report_context(conn, token)
+        exam_defs = json.loads(batch_row["exam_order"])
+        account_id, class_level = batch_row["user_id"], batch_row["class_level"]
+
+        subject = study_plan.weakest_subject(student, exam_defs)
+        if not subject:
+            return {"available": False}
+
+        exam_keys = _exam_keys(student, [e["key"] for e in exam_defs])
+        if not exam_keys:
+            return {"available": False}
+
+        chapters = study_plan.get_chapters(conn, account_id, class_level, subject)
+        topics = get_blueprint(conn, account_id, class_level, subject)
+        result = exam_focus.build_exam_focus(chapters, topics, exam_defs, exam_keys[-1])
+        if not result:
+            return {"available": False}
+        return {"available": True, "subject": subject, "text": exam_focus.format_exam_focus_text(result, subject)}
 
 
 @router.get("/report/{token}/full", response_class=HTMLResponse)
