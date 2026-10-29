@@ -181,8 +181,11 @@ def post_report_ask(token: str, req: AskRequest):
         if canned is not None:
             return {"answer": canned}
 
-        context = build_student_context(student, all_students, exam_defs, settings, batch_row["school_name"])
         account_id = batch_row["user_id"]
+        context = build_student_context(
+            student, all_students, exam_defs, settings, batch_row["school_name"],
+            conn, account_id, batch_row["class_level"],
+        )
     try:
         history = [turn.model_dump() for turn in req.history]
         answer = chat.ask_about_student(

@@ -7,15 +7,22 @@ by card_render.py and analysis.py, just rendered as text instead of HTML.
 """
 from __future__ import annotations
 
+import psycopg
+
+from app.reports import exam_focus, study_plan
 from app.reports.analysis import build_analysis
 from app.reports.numfmt import fmt_num
+from app.reports.subject_analysis import get_blueprint
 
 
 def _fmt(v) -> str:
     return fmt_num(v) if isinstance(v, (int, float)) else str(v)
 
 
-def build_student_context(student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str) -> str:
+def build_student_context(
+    student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str,
+    conn: psycopg.Connection, account_id: int, class_level: str,
+) -> str:
     """`student`/`all_students`/`exam_defs`/`settings` match card_render.render_card's
     params exactly. Returns one text block meant to go in the chat's system
     prompt — every exam's marks/grades, class rank, attendance, and the
@@ -60,5 +67,39 @@ def build_student_context(student: dict, all_students: list[dict], exam_defs: li
         lines.append(analysis["intro"])
         for point in analysis["points"]:
             lines.append(f"  - {point}")
+
+    # Same deterministic engine as the report's per-subject "Exam Focus"
+    # notes (see app/reports/exam_focus.py) — gives the LLM real chapter and
+    # topic names to answer with instead of only marks/grades, so a question
+    # like "which chapters should he focus on?" can get a real answer
+    # instead of the model either refusing or inventing chapter names. Only
+    # ever this account's own confirmed data (or the shared default);
+    # silently skips a subject with nothing confirmed for it.
+    if exams_present:
+        latest_exam_key = exams_present[-1]
+        subject_names: list[str] = []
+        for key in exams_present:
+            for x in student["exams"][key]["subjects"]:
+                if x["name"] not in subject_names:
+                    subject_names.append(x["name"])
+        focus_lines = []
+        for name in subject_names:
+            chapters = study_plan.get_chapters(conn, account_id, class_level, name)
+            topics = get_blueprint(conn, account_id, class_level, name)
+            focus = exam_focus.build_exam_focus(chapters, topics, exam_defs, latest_exam_key)
+            if not focus:
+                continue
+            focus_lines.append(f"{name}:")
+            if focus["covered_chapters"]:
+                focus_lines.append(f"  - Chapters likely covered in {latest_exam_key}: {', '.join(focus['covered_chapters'])}")
+            topic_bits = ", ".join(
+                f"{t['name']} ({t['marks']}{'+' + str(t['choice_marks']) if t['choice_marks'] else ''} marks)"
+                for t in focus["top_topics"]
+            )
+            focus_lines.append(f"  - Highest-weightage topics in the exam blueprint: {topic_bits}")
+        if focus_lines:
+            lines.append("")
+            lines.append("Syllabus and exam blueprint (real data, for answering questions about specific chapters/topics):")
+            lines.extend(focus_lines)
 
     return "\n".join(lines)
