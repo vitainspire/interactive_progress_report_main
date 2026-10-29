@@ -172,6 +172,7 @@ export function DashboardPage() {
   const [folderUrl, setFolderUrl] = useState("");
   const [settingUp, setSettingUp] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
+  const [showFolderGuide, setShowFolderGuide] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [syncDuplicates, setSyncDuplicates] = useState<DriveImportFileResult[]>([]);
@@ -376,8 +377,34 @@ export function DashboardPage() {
             <a href={api.uploadTemplateUrl()} className="font-semibold hover:underline" style={{ color: "var(--accent)" }}>
               Download a template
             </a>
-            .
+            . Not sure how to set up the folder itself?{" "}
+            <button
+              type="button"
+              onClick={() => setShowFolderGuide((v) => !v)}
+              className="font-semibold hover:underline"
+              style={{ color: "var(--accent)" }}
+            >
+              {showFolderGuide ? "Hide folder guide" : "How to set up your folder"}
+            </button>
           </p>
+
+          {showFolderGuide && (
+            <div
+              className="mx-auto mt-3 max-w-sm rounded-lg p-4 text-left text-sm"
+              style={{ background: "var(--accent-soft)", color: "var(--text-primary)" }}
+            >
+              <p className="font-semibold">Inside that one Drive folder:</p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-4" style={{ color: "var(--text-secondary)" }}>
+                <li>One mark-sheet file per class — e.g. "Class 10.xlsx", "Class 9.xlsx".</li>
+                <li>
+                  You can also drop in each subject's syllabus or exam-blueprint document (a PDF or a clear photo) —
+                  name it something like "10 Maths Syllabus" or "10 Science Blueprint" so it's easy to tell apart.
+                </li>
+                <li>No sub-folders needed — everything goes loose in this one folder, and the app sorts it out.</li>
+              </ul>
+            </div>
+          )}
+
           <form onSubmit={setUpDriveFolder} className="mt-4 flex w-full max-w-sm flex-col gap-2">
             <input
               type="text"
