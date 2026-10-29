@@ -54,7 +54,7 @@ function MessageSettingsCard({ onSaved }: { onSaved: () => void }) {
   }
 
   return (
-    <div className="soft-card space-y-4 p-5">
+    <div className="soft-card space-y-4 p-5" style={{ borderTop: "3px solid var(--status-good)" }}>
       <div>
         <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
           Message settings
@@ -191,21 +191,17 @@ export function IntegrationsPage() {
 
   return (
     <div className="mx-auto max-w-xl space-y-5">
-      <div>
-        <h1 className="text-2xl font-extrabold" style={{ color: "var(--text-primary)" }}>
-          WhatsApp / SMS setup
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          The WhatsApp number and access token are set up on the server itself, shared across every school using this
-          app — this page shows their status and lets you fire a real test message. The language, channel, and
-          country code below are your own school's settings.
-        </p>
-      </div>
+      <header
+        className="dot-grid-plane-dark relative overflow-hidden rounded-2xl px-6 py-6 sm:px-8 sm:py-7"
+        style={{ background: "var(--accent-strong)" }}
+      >
+        <h1 className="font-serif text-2xl font-medium text-white sm:text-3xl">WhatsApp / SMS setup</h1>
+      </header>
 
       {error && <p className="text-sm" style={{ color: "var(--accent-mark)" }}>{error}</p>}
 
       {status && (
-        <div className="soft-card space-y-3 p-5">
+        <div className="soft-card space-y-3 p-5" style={{ borderTop: "3px solid var(--accent)" }}>
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>WhatsApp Cloud API</div>
@@ -224,7 +220,7 @@ export function IntegrationsPage() {
 
       <MessageSettingsCard onSaved={loadStatus} />
 
-      <form onSubmit={sendTest} className="soft-card space-y-3 p-5">
+      <form onSubmit={sendTest} className="soft-card space-y-3 p-5" style={{ borderTop: "3px solid var(--lp-gold)" }}>
         <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
           Send a test message
         </h2>
@@ -255,7 +251,7 @@ export function IntegrationsPage() {
         <button
           type="submit"
           disabled={sending || !phone.trim()}
-          className="gradient-fill rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
+          className="accent-fill rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
           {sending ? "Sending…" : "Send test message"}
         </button>
