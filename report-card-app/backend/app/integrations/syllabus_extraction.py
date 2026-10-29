@@ -28,6 +28,16 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 _IMAGE_MIME_PREFIXES = ("image/",)
 
+# The file is sent as base64, which inflates it by ~4/3 — Google AI Studio
+# (the provider behind OPENROUTER_DOCUMENT_MODEL) rejects any request body
+# over 20,000,000 bytes. A real 17 MB scanned PDF hit this in production as
+# an opaque 413 from deep inside the provider stack; checking the raw file
+# size up front lets us fail with a message a teacher can actually act on,
+# well before spending the time on an API call that was always going to be
+# rejected. 14 MB of raw bytes leaves comfortable room for that inflation
+# plus the prompt/JSON overhead.
+MAX_DOCUMENT_BYTES = 14_000_000
+
 EXTRACTION_SYSTEM_PROMPT = """You read one page (or a few pages) of an Indian school document — either a textbook's syllabus/table-of-contents, or an official exam blueprint/model-paper that lists how many marks each topic is worth. You turn it into strict JSON, nothing else: no markdown, no commentary, no code fences.
 
 Output exactly this shape:
@@ -91,6 +101,14 @@ def extract_document(file_bytes: bytes, mime_type: str, file_name: str) -> dict:
     in that same import loop."""
     if not is_configured():
         raise ExtractionNotConfigured("Syllabus extraction isn't configured on this server (missing OPENROUTER_API_KEY).")
+
+    if len(file_bytes) > MAX_DOCUMENT_BYTES:
+        size_mb = len(file_bytes) / 1_000_000
+        raise ExtractionError(
+            f"This file is too large to read automatically ({size_mb:.1f} MB). "
+            "Please upload a version under about 14 MB — try a lower-resolution scan, "
+            "or split a multi-page PDF into smaller files."
+        )
 
     messages = [
         {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
