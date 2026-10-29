@@ -2574,15 +2574,11 @@ export function TimetablePage() {
         </Link>{" "}
         / Dynamic Timetable
       </nav>
-      <header className="mt-1">
-        <h1 className="text-2xl font-extrabold" style={{ color: "var(--text-primary)" }}>
-          Dynamic Timetable
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm" style={{ color: "var(--text-secondary)" }}>
-          {hasTimetable
-            ? "Your weekly timetable and substitute coverage, at a glance. Need to add a class or teacher? Open Setup below."
-            : "Set up your schedule, classes, subjects, and teachers here, then generate the weekly timetable. Once it's in place, substitute-teacher assignment builds on exactly this data."}
-        </p>
+      <header
+        className="dot-grid-plane-dark relative mt-2 overflow-hidden rounded-2xl px-6 py-6 sm:px-8 sm:py-7"
+        style={{ background: "var(--accent-strong)" }}
+      >
+        <h1 className="font-serif text-2xl font-medium text-white sm:text-3xl">Dynamic Timetable</h1>
       </header>
 
       {error && <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>{error}</p>}
