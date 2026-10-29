@@ -101,7 +101,9 @@ export function SchoolProfilePage() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <SchoolIcon size={32} style={{ color: "var(--accent)" }} className="opacity-50" />
+              <span style={{ color: "var(--accent)" }}>
+                <SchoolIcon size={32} className="opacity-50" />
+              </span>
             )}
           </button>
           <span
