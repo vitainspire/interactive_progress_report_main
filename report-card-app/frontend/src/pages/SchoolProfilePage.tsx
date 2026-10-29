@@ -77,14 +77,21 @@ export function SchoolProfilePage() {
 
   return (
     <section>
-      <div className="flex flex-col items-center gap-2 text-center">
+      <header
+        className="dot-grid-plane-dark relative overflow-hidden rounded-2xl px-6 pb-16 pt-6 sm:px-8 sm:pb-20 sm:pt-7"
+        style={{ background: "var(--accent-strong)" }}
+      >
+        <h1 className="font-serif text-2xl font-medium text-white sm:text-3xl">School profile</h1>
+      </header>
+
+      <div className="-mt-12 flex flex-col items-center gap-2 px-4 text-center sm:-mt-14">
         <div className="relative">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={photoBusy}
-            className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border disabled:opacity-60"
-            style={{ borderColor: "var(--border)", background: "var(--surface-2)", boxShadow: "var(--shadow-pop)" }}
+            className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 disabled:opacity-60 sm:h-28 sm:w-28"
+            style={{ borderColor: "var(--page-plane)", background: "var(--surface-1)", boxShadow: "var(--shadow-pop)" }}
           >
             {user?.has_school_photo ? (
               <img
@@ -94,12 +101,12 @@ export function SchoolProfilePage() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <SchoolIcon size={32} className="opacity-40" />
+              <SchoolIcon size={32} style={{ color: "var(--accent)" }} className="opacity-50" />
             )}
           </button>
           <span
             className="pointer-events-none absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2"
-            style={{ background: "var(--accent)", borderColor: "var(--surface-1)", color: "#fff" }}
+            style={{ background: "var(--lp-gold)", borderColor: "var(--page-plane)", color: "var(--accent-strong)" }}
           >
             <CameraIcon size={14} />
           </span>
@@ -125,16 +132,7 @@ export function SchoolProfilePage() {
         )}
       </div>
 
-      <header className="mt-6">
-        <h1 className="text-2xl font-extrabold" style={{ color: "var(--text-primary)" }}>
-          School profile
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          Shown on every parent report link, timetable, and printed substitution sheet you generate.
-        </p>
-      </header>
-
-      <div className="soft-card mt-6 p-6">
+      <div className="soft-card mt-6 p-6" style={{ borderTop: "3px solid var(--accent)" }}>
         <label htmlFor="profile-school-name" className="text-xs" style={{ color: "var(--text-secondary)" }}>
           School name
         </label>
@@ -166,7 +164,7 @@ export function SchoolProfilePage() {
         )}
       </div>
 
-      <div className="soft-card mt-5 p-6">
+      <div className="soft-card mt-5 p-6" style={{ borderTop: "3px solid var(--status-good)" }}>
         <label htmlFor="profile-school-address" className="text-xs" style={{ color: "var(--text-secondary)" }}>
           School address (optional)
         </label>
