@@ -84,9 +84,6 @@ export function ToolsHubPage() {
         style={{ background: "var(--accent-strong)" }}
       >
         <p className="font-serif text-2xl font-medium leading-tight text-white sm:text-3xl">{schoolName}</p>
-        <p className="mt-2 max-w-md text-sm" style={{ color: "rgba(255,255,255,0.75)" }}>
-          Everything your school runs on, kept in one place. Pick a tool below to get started.
-        </p>
       </header>
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -272,12 +272,7 @@ export function DashboardPage() {
         className="dot-grid-plane-dark relative mt-2 flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-2xl px-6 py-6 sm:px-8 sm:py-7"
         style={{ background: "var(--accent-strong)" }}
       >
-        <div>
-          <h1 className="font-serif text-2xl font-medium text-white sm:text-3xl">Your uploads</h1>
-          <p className="mt-1.5 max-w-md text-sm" style={{ color: "rgba(255,255,255,0.75)" }}>
-            Every sheet you've uploaded — open one to pick students and print report cards.
-          </p>
-        </div>
+        <h1 className="font-serif text-2xl font-medium text-white sm:text-3xl">Your uploads</h1>
         <div className="flex items-center gap-2">
           {linkedFolderId && (
             <button
