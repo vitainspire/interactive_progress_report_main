@@ -32,22 +32,30 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10" style={{ background: "var(--page-plane)" }}>
+    <main className="dot-grid-plane flex min-h-screen items-center justify-center px-4 py-10" style={{ background: "var(--page-plane)" }}>
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center text-center">
-          <span className="icon-chip" style={{ width: "3rem", height: "3rem" }}>
-            <SchoolIcon size={26} />
+          <span
+            className="flex h-12 w-12 items-center justify-center rounded-2xl"
+            style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+          >
+            <SchoolIcon size={24} />
           </span>
           <div className="font-display mt-3 text-xl font-bold" style={{ color: "var(--text-primary)" }}>
             School Admin Tools
           </div>
         </div>
-        <form onSubmit={onSubmit} aria-label="Teacher login" className="soft-card p-8" style={{ boxShadow: "var(--shadow-pop)" }}>
-          <h1 className="text-[1.65rem] font-extrabold leading-tight" style={{ color: "var(--text-primary)" }}>
-            Login
+        <form
+          onSubmit={onSubmit}
+          aria-label="Teacher login"
+          className="soft-card p-8"
+          style={{ boxShadow: "var(--shadow-pop)", borderTop: "3px solid var(--accent)" }}
+        >
+          <h1 className="font-serif text-2xl font-medium leading-tight" style={{ color: "var(--text-primary)" }}>
+            Welcome back
           </h1>
-          <p className="text-[1.65rem] font-medium leading-tight" style={{ color: "var(--text-primary)" }}>
-            to get started
+          <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+            Log in to continue
           </p>
 
           <div className="mt-6">
