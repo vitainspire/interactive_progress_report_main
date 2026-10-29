@@ -116,13 +116,13 @@ export function StudentPage() {
           / {data.name}
         </nav>
         <div
-          className="dot-grid-plane-dark relative mt-2 flex flex-wrap items-start justify-between gap-4 overflow-hidden rounded-2xl px-6 py-6 sm:px-8 sm:py-7"
+          className="dot-grid-plane-dark relative mt-2 flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-2xl px-5 py-4 sm:px-8 sm:py-7"
           style={{ background: "var(--accent-strong)" }}
         >
-          <div>
-            <h1 className="font-serif text-2xl font-medium text-white sm:text-3xl">{data.name}</h1>
+          <div className="min-w-0">
+            <h1 className="font-serif text-lg font-medium leading-tight text-white sm:text-3xl">{data.name}</h1>
             <span
-              className="mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold"
+              className="mt-1.5 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold sm:mt-2 sm:px-2.5 sm:py-1 sm:text-xs"
               style={{ borderColor: "rgba(255,255,255,0.35)", color: "rgba(255,255,255,0.85)" }}
             >
               Section {data.section || "—"} · Roll {data.roll_no || "—"}
@@ -132,7 +132,7 @@ export function StudentPage() {
             href={reportUrl}
             target="_blank"
             rel="noopener"
-            className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold transition-colors duration-200"
+            className="flex flex-none items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-200 sm:px-4 sm:py-2 sm:text-sm"
             style={{ background: "var(--lp-gold)", color: "var(--accent-strong)" }}
           >
             <ExternalLinkIcon size={14} />
