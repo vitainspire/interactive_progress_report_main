@@ -176,21 +176,15 @@ def compute_exam_stats(all_students: list[dict], exam_defs: list[dict], settings
 
 
 def get_blueprint(conn: psycopg.Connection, account_id: int, class_level: str, subject_name: str) -> list[dict]:
-    """A school's own confirmed blueprint (see app/db/reference_documents.py)
-    takes priority over the shared account_id IS NULL default."""
+    """Only ever this account's own confirmed blueprint (see
+    app/db/reference_documents.py) — never another school's data."""
     canon = normalize_subject_key(subject_name)
     if not canon:
         return []
-    own = conn.execute(
-        "SELECT topic_name, marks, choice_marks FROM subject_blueprint WHERE account_id = %s AND class_level = %s AND subject = %s ORDER BY marks DESC",
-        (account_id, class_level, canon),
-    ).fetchall()
-    if own:
-        return list(own)
     return list(
         conn.execute(
-            "SELECT topic_name, marks, choice_marks FROM subject_blueprint WHERE account_id IS NULL AND class_level = %s AND subject = %s ORDER BY marks DESC",
-            (class_level, canon),
+            "SELECT topic_name, marks, choice_marks FROM subject_blueprint WHERE account_id = %s AND class_level = %s AND subject = %s ORDER BY marks DESC",
+            (account_id, class_level, canon),
         ).fetchall()
     )
 
@@ -203,11 +197,6 @@ def get_exam_info(conn: psycopg.Connection, account_id: int, class_level: str, s
         "SELECT exam_format, tips FROM subject_exam_info WHERE account_id = %s AND class_level = %s AND subject = %s",
         (account_id, class_level, canon),
     ).fetchone()
-    if not row:
-        row = conn.execute(
-            "SELECT exam_format, tips FROM subject_exam_info WHERE account_id IS NULL AND class_level = %s AND subject = %s",
-            (class_level, canon),
-        ).fetchone()
     if not row:
         return "", []
     return row["exam_format"] or "", json.loads(row["tips"] or "[]")

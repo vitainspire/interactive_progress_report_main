@@ -44,24 +44,17 @@ def weakest_subject(student: dict, exam_defs: list[dict]) -> str | None:
 
 
 def get_chapters(conn: psycopg.Connection, account_id: int, class_level: str, subject: str) -> list[dict]:
-    """A school's own confirmed syllabus (see app/db/reference_documents.py)
-    takes priority over the shared account_id IS NULL default — checked as
-    two separate queries rather than one ORDER BY, since "this account has
-    nothing yet" must fall through to the default, not return an empty mix."""
+    """Only ever this account's own confirmed syllabus (see
+    app/db/reference_documents.py) — never another school's data, so an
+    account that hasn't uploaded and confirmed its own syllabus simply gets
+    nothing here (callers already treat that as "show nothing")."""
     class_level = (class_level or "").strip()
     normalized_subject = _normalize_subject(subject)
-    own = conn.execute(
-        "SELECT chapter_no, chapter_name, genre, theme, month, periods FROM syllabus_chapter "
-        "WHERE account_id = %s AND class_level = %s AND subject = %s ORDER BY chapter_no",
-        (account_id, class_level, normalized_subject),
-    ).fetchall()
-    if own:
-        return list(own)
     return list(
         conn.execute(
             "SELECT chapter_no, chapter_name, genre, theme, month, periods FROM syllabus_chapter "
-            "WHERE account_id IS NULL AND class_level = %s AND subject = %s ORDER BY chapter_no",
-            (class_level, normalized_subject),
+            "WHERE account_id = %s AND class_level = %s AND subject = %s ORDER BY chapter_no",
+            (account_id, class_level, normalized_subject),
         ).fetchall()
     )
 

@@ -118,29 +118,24 @@ body{background:#f6f7f9;font:16px/1.5 'Noto Sans','Noto Sans Telugu',system-ui,s
    next to an afterthought — which is what reads as "designed" rather
    than a default template stack. ---- */
 html.scroll-html,body.scroll-body-root{height:auto;overflow:visible;background:#fff}
-html.landing-html,body.landing-body-root{height:auto;overflow:visible;background:#16271c}
+html.landing-html,body.landing-body-root{height:auto;overflow:visible;background:#fff}
 .landing-hero{position:relative;overflow:hidden;min-height:6em;z-index:0}
 .landing-hero img{width:100%;height:auto;display:block}
 .landing-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(14,27,77,.1) 0%,rgba(14,27,77,.85) 100%)}
 .landing-hero-caption{position:absolute;left:0;right:0;bottom:.9em;z-index:1;text-align:center;padding:0 1.2em}
 .landing-hero-caption .eyebrow{font-size:.68em;font-weight:700;letter-spacing:1.6px;color:var(--gold-soft);text-transform:uppercase}
 .landing-hero-caption .name{margin-top:.25em;font-size:1.15em;font-weight:700;color:#fff}
-/* A chalkboard backdrop for the choice screen (classroom-themed, like a
-   school noticeboard) — the radial gradient gives it depth instead of a
-   flat fill, and the faint repeating diagonal lines read as chalk dust
-   without needing an image asset (keeps this page light to load on a
-   parent's mobile data). Pulled up over the photo as a rounded "sheet"
-   (negative margin + radius) instead of a hard color seam. */
-.landing-body{position:relative;z-index:1;flex:1;background:radial-gradient(ellipse at 50% -10%,#2b4a37 0%,#1c3226 55%,#16271c 100%);padding:2em 1.3em 1.6em;max-width:30em;margin:-1.1em auto 0;width:100%;overflow:hidden;border-radius:22px 22px 0 0;box-shadow:0 -6px 18px rgba(0,0,0,.2)}
-.landing-body::before{content:"";position:absolute;inset:0;opacity:.05;background-image:repeating-linear-gradient(135deg,#fff 0 1px,transparent 1px 16px);pointer-events:none}
-.landing-body::after{content:"";position:absolute;top:.55em;left:50%;transform:translateX(-50%);width:2.6em;height:4px;border-radius:99px;background:rgba(255,255,255,.22)}
+/* Pulled up over the photo as a rounded "sheet" (negative margin + radius)
+   instead of a hard color seam. */
+.landing-body{position:relative;z-index:1;flex:1;background:#fff;padding:2em 1.3em 1.6em;max-width:30em;margin:-1.1em auto 0;width:100%;overflow:hidden;border-radius:22px 22px 0 0;box-shadow:0 -6px 18px rgba(15,23,42,.12)}
+.landing-body::after{content:"";position:absolute;top:.55em;left:50%;transform:translateX(-50%);width:2.6em;height:4px;border-radius:99px;background:var(--line)}
 .landing-body>*{position:relative}
-.landing-badge{display:block;margin:0 auto 1em;width:fit-content;border:1.5px dashed var(--gold-soft);border-radius:8px;padding:.4em 1em;color:#fdfdf6;background:rgba(255,255,255,.04);box-shadow:0 0 22px -4px rgba(240,199,94,.35)}
-.landing-greeting{text-align:center;font-size:1em;font-weight:600;color:#fdfdf6;margin-bottom:.3em;line-height:1.55;text-shadow:0 1px 2px rgba(0,0,0,.3)}
-.landing-intro{text-align:center;font-size:.86em;color:rgba(255,255,255,.72);margin-bottom:1.3em;line-height:1.5}
-.landing-privacy{text-align:center;font-size:.76em;color:rgba(255,255,255,.55);margin-top:1.4em;padding-top:1em;border-top:1px dashed rgba(255,255,255,.14)}
+.landing-badge{display:block;margin:0 auto 1em;width:fit-content;border:1.5px dashed var(--gold-soft);border-radius:8px;padding:.4em 1em;color:var(--navy-deep);background:var(--ivory);box-shadow:0 0 22px -4px rgba(240,199,94,.2)}
+.landing-greeting{text-align:center;font-size:1em;font-weight:600;color:var(--ink);margin-bottom:.3em;line-height:1.55}
+.landing-intro{text-align:center;font-size:.86em;color:var(--muted);margin-bottom:1.3em;line-height:1.5}
+.landing-privacy{text-align:center;font-size:.76em;color:var(--muted);margin-top:1.4em;padding-top:1em;border-top:1px dashed var(--line)}
 .landing-options{display:grid;grid-template-columns:1fr 1fr;gap:.9em}
-.landing-card{display:flex;flex-direction:column;align-items:center;text-align:center;gap:.55em;text-decoration:none;border-radius:12px;padding:1.3em .9em 1.1em;border:1px solid rgba(0,0,0,.06);background:#fffdf7;box-shadow:0 6px 16px rgba(0,0,0,.28);transition:transform .12s ease,box-shadow .15s ease}
+.landing-card{display:flex;flex-direction:column;align-items:center;text-align:center;gap:.55em;text-decoration:none;border-radius:12px;padding:1.3em .9em 1.1em;border:1px solid var(--line);background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.08);transition:transform .12s ease,box-shadow .15s ease}
 .landing-card:nth-child(1){transform:rotate(-1deg)}
 .landing-card:nth-child(2){transform:rotate(1deg)}
 .landing-card:active{transform:scale(.97)}
@@ -148,7 +143,7 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 .landing-card .lc-icon svg{width:1.5em;height:1.5em}
 .landing-card .lc-title{font-size:.86em;font-weight:700;color:var(--ink);line-height:1.3}
 .landing-card .lc-sub{font-size:.72em;color:var(--muted);line-height:1.4}
-.landing-card.primary{box-shadow:0 4px 16px rgba(233,164,0,.25),0 4px 14px rgba(0,0,0,.25)}
+.landing-card.primary{box-shadow:0 4px 16px rgba(233,164,0,.18),0 4px 14px rgba(15,23,42,.08)}
 .landing-card.primary .lc-icon{background:var(--gold);color:#fff}
 .landing-card.soon{color:inherit}
 .landing-card.soon .lc-icon{background:#f1f2f4;color:var(--muted)}
