@@ -1,6 +1,5 @@
 import json
 import time
-from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -22,12 +21,6 @@ from app.reports.parent_report import (
     render_report_landing_page,
 )
 from app.reports.subject_analysis import get_blueprint
-
-# The shared fallback hero photo (see get_report_school_photo below) — read
-# once at import rather than from disk on every unauthenticated request,
-# since it's the same handful of KB for every school that hasn't uploaded
-# their own.
-_DEFAULT_SCHOOL_PHOTO = (Path(__file__).resolve().parent.parent / "static" / "landing" / "school.jpg").read_bytes()
 
 
 class ChatTurn(BaseModel):
@@ -101,22 +94,24 @@ def get_public_report_landing(token: str):
     straight into the swipeable report."""
     with session() as conn:
         student, _all_students, batch_row = _resolve_report_context(conn, token)
-        html = render_report_landing_page(student["name"], batch_row["school_name"], token)
+        has_photo = user_repo.get_school_photo(conn, batch_row["user_id"]) is not None
+        html = render_report_landing_page(student["name"], batch_row["school_name"], token, has_photo)
         return HTMLResponse(content=html)
 
 
 @router.get("/report/{token}/school-photo")
 def get_report_school_photo(token: str):
-    """The hero banner photo for this report's landing page (see
-    render_report_landing_page) — that school's own uploaded photo if
-    they've set one (app/api/auth.py's PUT /auth/school-photo), otherwise
-    the shared generic default, so the <img> never 404s whether or not
-    this particular school has uploaded their own yet."""
+    """The hero banner photo for this report's landing page — only ever
+    this school's own uploaded photo (app/api/auth.py's PUT
+    /auth/school-photo). render_report_landing_page only references this
+    URL when that school actually has one on file, so there's no generic
+    fallback here any more: showing a DIFFERENT real school's photo as a
+    stand-in would misrepresent whose campus a parent is looking at."""
     with session() as conn:
         _student, _all_students, batch_row = _resolve_report_context(conn, token)
         photo = user_repo.get_school_photo(conn, batch_row["user_id"])
     if photo is None:
-        return Response(content=_DEFAULT_SCHOOL_PHOTO, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+        raise HTTPException(404, "This school hasn't uploaded a photo yet.")
     photo_bytes, mime = photo
     return Response(content=photo_bytes, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
 
