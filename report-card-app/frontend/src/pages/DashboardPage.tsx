@@ -3,7 +3,15 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { DotsIcon, FolderIcon, PlusIcon, SearchIcon, SheetIcon, TrashIcon } from "../components/Icons";
 import { DriveDuplicateResolver } from "../components/DriveDuplicateResolver";
-import type { BatchSummary, DriveImportFileResult, DriveImportFolderResult, DriveSyncFolderResult, SendResult } from "../types";
+import { ReferenceDocumentReview } from "../components/ReferenceDocumentReview";
+import type {
+  BatchSummary,
+  DriveImportFileResult,
+  DriveImportFolderResult,
+  DriveSyncFolderResult,
+  ReferenceDocument,
+  SendResult,
+} from "../types";
 
 type SortOrder = "recent" | "alphabetical";
 
@@ -176,6 +184,7 @@ export function DashboardPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [syncDuplicates, setSyncDuplicates] = useState<DriveImportFileResult[]>([]);
+  const [pendingReferenceDocs, setPendingReferenceDocs] = useState<ReferenceDocument[] | null>(null);
 
   function refreshBatches() {
     return api
@@ -184,8 +193,16 @@ export function DashboardPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load your uploads"));
   }
 
+  function refreshPendingReferenceDocs() {
+    api
+      .get<ReferenceDocument[]>("/reference-documents?status=pending")
+      .then((docs) => setPendingReferenceDocs(docs.length ? docs : null))
+      .catch(() => {});
+  }
+
   useEffect(() => {
     refreshBatches();
+    refreshPendingReferenceDocs();
   }, []);
 
   async function handleDelete(id: number) {
@@ -211,7 +228,8 @@ export function DashboardPage() {
       const created = result.results.filter((r) => r.status === "created").length;
       const possibleDuplicates = result.results.filter((r) => r.status === "possible_duplicate");
       setSyncDuplicates(possibleDuplicates);
-      if (created === 0 && possibleDuplicates.length === 0) {
+      if (result.reference_documents.length) refreshPendingReferenceDocs();
+      if (created === 0 && possibleDuplicates.length === 0 && result.reference_documents.length === 0) {
         setSetupError("No class sheets were found directly inside that folder.");
       } else {
         await refreshBatches();
@@ -238,6 +256,10 @@ export function DashboardPage() {
       if (synced) bits.push(`${synced} updated`);
       if (failed) bits.push(`${failed} failed`);
       if (possibleDuplicates.length) bits.push(`${possibleDuplicates.length} need a decision below`);
+      if (result.reference_documents.length) {
+        bits.push(`${result.reference_documents.length} syllabus/blueprint document${result.reference_documents.length === 1 ? "" : "s"} to review`);
+        refreshPendingReferenceDocs();
+      }
       setSyncNote(bits.length ? bits.join(", ") : "Already up to date.");
       setSyncDuplicates(possibleDuplicates);
       await refreshBatches();
@@ -320,6 +342,17 @@ export function DashboardPage() {
       )}
 
       {error && <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>{error}</p>}
+
+      {pendingReferenceDocs && pendingReferenceDocs.length > 0 && (
+        <div className="mt-5 space-y-3">
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            Syllabus/blueprint documents waiting for review
+          </h2>
+          {pendingReferenceDocs.map((doc) => (
+            <ReferenceDocumentReview key={doc.id} doc={doc} onChanged={refreshPendingReferenceDocs} />
+          ))}
+        </div>
+      )}
 
       {batches && batches.length > 0 && (
         <>
