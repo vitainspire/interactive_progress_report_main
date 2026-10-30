@@ -72,6 +72,30 @@ def update_reference_document_review(conn: psycopg.Connection, account_id: int, 
     return cur.rowcount > 0
 
 
+def update_reference_document_result(
+    conn: psycopg.Connection,
+    account_id: int,
+    doc_id: int,
+    mime_type: str,
+    file_bytes: bytes,
+    status: str,
+    extracted_json: str | None,
+    error: str | None,
+) -> None:
+    """Re-processing a document that previously failed (e.g. a transient
+    rate-limit, or a fixed version re-uploaded under the same Drive file id)
+    updates its existing row in place, rather than inserting a duplicate —
+    a retry would otherwise pile up a fresh failed row for the same file on
+    every sync, since sync-folder gets called repeatedly until nothing's
+    left to process (see continueReferenceDocumentSync on the frontend)."""
+    conn.execute(
+        """UPDATE subject_reference_document
+               SET mime_type = %s, file_bytes = %s, status = %s, extracted_json = %s, error = %s
+           WHERE id = %s AND account_id = %s""",
+        (mime_type, file_bytes, status, extracted_json, error, doc_id, account_id),
+    )
+
+
 def set_reference_document_status(conn: psycopg.Connection, account_id: int, doc_id: int, status: str) -> bool:
     cur = conn.execute(
         "UPDATE subject_reference_document SET status = %s WHERE id = %s AND account_id = %s",

@@ -246,9 +246,13 @@ async def _ingest_reference_documents(account_id: int, folder_url_or_id: str, re
             status, error = "failed", str(exc)
 
         with session() as conn:
-            doc_id = refdocs_repo.create_reference_document(
-                conn, account_id, f["name"], f["mime_type"], raw, f["id"], status, extracted_json, error
-            )
+            if already:
+                refdocs_repo.update_reference_document_result(conn, account_id, already["id"], f["mime_type"], raw, status, extracted_json, error)
+                doc_id = already["id"]
+            else:
+                doc_id = refdocs_repo.create_reference_document(
+                    conn, account_id, f["name"], f["mime_type"], raw, f["id"], status, extracted_json, error
+                )
         results.append({"file_name": f["name"], "status": status, "reference_document_id": doc_id})
 
     remaining = len(files) - stopped_at if stopped_at is not None else 0
