@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api/client";
+import { api, continueReferenceDocumentSync } from "../api/client";
 import { DotsIcon, FolderIcon, PlusIcon, SearchIcon, SheetIcon, TrashIcon } from "../components/Icons";
 import { DriveDuplicateResolver } from "../components/DriveDuplicateResolver";
 import { ReferenceDocumentReview } from "../components/ReferenceDocumentReview";
@@ -185,6 +185,7 @@ export function DashboardPage() {
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [syncDuplicates, setSyncDuplicates] = useState<DriveImportFileResult[]>([]);
   const [pendingReferenceDocs, setPendingReferenceDocs] = useState<ReferenceDocument[] | null>(null);
+  const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
 
   function refreshBatches() {
     return api
@@ -194,9 +195,14 @@ export function DashboardPage() {
   }
 
   function refreshPendingReferenceDocs() {
-    api
-      .get<ReferenceDocument[]>("/reference-documents?status=pending")
-      .then((docs) => setPendingReferenceDocs(docs.length ? docs : null))
+    Promise.all([
+      api.get<ReferenceDocument[]>("/reference-documents?status=pending"),
+      api.get<ReferenceDocument[]>("/reference-documents?status=failed"),
+    ])
+      .then(([pending, failed]) => {
+        const combined = [...pending, ...failed];
+        setPendingReferenceDocs(combined.length ? combined : null);
+      })
       .catch(() => {});
   }
 
@@ -223,13 +229,22 @@ export function DashboardPage() {
     if (!folderUrl.trim()) return;
     setSettingUp(true);
     setSetupError(null);
+    setImportStatusMessage("Reading your folder — this can take a few minutes for folders with many files. Please don't close this tab.");
     try {
       const result = await api.post<DriveImportFolderResult>("/batches/import-folder", { folder_url: folderUrl.trim() });
       const created = result.results.filter((r) => r.status === "created").length;
       const possibleDuplicates = result.results.filter((r) => r.status === "possible_duplicate");
       setSyncDuplicates(possibleDuplicates);
-      if (result.reference_documents.length) refreshPendingReferenceDocs();
-      if (created === 0 && possibleDuplicates.length === 0 && result.reference_documents.length === 0) {
+      let refDocCount = result.reference_documents.length;
+      if (refDocCount) refreshPendingReferenceDocs();
+      if (result.reference_documents_remaining > 0) {
+        setImportStatusMessage(`Processed ${refDocCount} document${refDocCount === 1 ? "" : "s"} so far, still working — please don't close this tab.`);
+        refDocCount += await continueReferenceDocumentSync(result.folder_id, result.reference_documents_remaining, (processedSoFar) =>
+          setImportStatusMessage(`Processed ${refDocCount + processedSoFar} document${refDocCount + processedSoFar === 1 ? "" : "s"} so far, still working — please don't close this tab.`),
+        );
+        refreshPendingReferenceDocs();
+      }
+      if (created === 0 && possibleDuplicates.length === 0 && refDocCount === 0) {
         setSetupError("No class sheets were found directly inside that folder.");
       } else {
         await refreshBatches();
@@ -238,6 +253,7 @@ export function DashboardPage() {
       setSetupError(err instanceof Error ? err.message : "Could not read that Drive folder");
     } finally {
       setSettingUp(false);
+      setImportStatusMessage(null);
     }
   }
 
@@ -245,21 +261,28 @@ export function DashboardPage() {
     if (!linkedFolderId) return;
     setSyncing(true);
     setSyncNote(null);
+    setImportStatusMessage("Syncing your folder — this can take a few minutes for folders with many files. Please don't close this tab.");
     try {
       const result = await api.post<DriveSyncFolderResult>("/batches/sync-folder", { folder_id: linkedFolderId });
       const created = result.results.filter((r) => r.status === "created").length;
       const synced = result.results.filter((r) => r.status === "synced").length;
       const failed = result.results.filter((r) => r.status === "failed").length;
       const possibleDuplicates = result.results.filter((r) => r.status === "possible_duplicate");
+      let refDocCount = result.reference_documents.length;
+      if (refDocCount) refreshPendingReferenceDocs();
+      if (result.reference_documents_remaining > 0) {
+        setImportStatusMessage(`Processed ${refDocCount} document${refDocCount === 1 ? "" : "s"} so far, still working — please don't close this tab.`);
+        refDocCount += await continueReferenceDocumentSync(linkedFolderId, result.reference_documents_remaining, (processedSoFar) =>
+          setImportStatusMessage(`Processed ${refDocCount + processedSoFar} document${refDocCount + processedSoFar === 1 ? "" : "s"} so far, still working — please don't close this tab.`),
+        );
+        refreshPendingReferenceDocs();
+      }
       const bits = [];
       if (created) bits.push(`${created} new class${created === 1 ? "" : "es"}`);
       if (synced) bits.push(`${synced} updated`);
       if (failed) bits.push(`${failed} failed`);
       if (possibleDuplicates.length) bits.push(`${possibleDuplicates.length} need a decision below`);
-      if (result.reference_documents.length) {
-        bits.push(`${result.reference_documents.length} syllabus/blueprint document${result.reference_documents.length === 1 ? "" : "s"} to review`);
-        refreshPendingReferenceDocs();
-      }
+      if (refDocCount) bits.push(`${refDocCount} syllabus/blueprint document${refDocCount === 1 ? "" : "s"} to review`);
       setSyncNote(bits.length ? bits.join(", ") : "Already up to date.");
       setSyncDuplicates(possibleDuplicates);
       await refreshBatches();
@@ -267,6 +290,7 @@ export function DashboardPage() {
       setSyncNote(err instanceof Error ? err.message : "Could not sync the Drive folder");
     } finally {
       setSyncing(false);
+      setImportStatusMessage(null);
     }
   }
 
@@ -320,6 +344,12 @@ export function DashboardPage() {
         </div>
       </header>
 
+      {importStatusMessage && (
+        <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+          {importStatusMessage}
+        </p>
+      )}
+
       {syncNote && (
         <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
           {syncNote} — picks up any class added to the same folder since the last import.
@@ -346,7 +376,7 @@ export function DashboardPage() {
       {pendingReferenceDocs && pendingReferenceDocs.length > 0 && (
         <div className="mt-5 space-y-3">
           <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            Syllabus/blueprint documents waiting for review
+            Syllabus/blueprint documents
           </h2>
           {pendingReferenceDocs.map((doc) => (
             <ReferenceDocumentReview key={doc.id} doc={doc} onChanged={refreshPendingReferenceDocs} />

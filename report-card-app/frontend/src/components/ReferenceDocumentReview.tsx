@@ -84,12 +84,28 @@ export function ReferenceDocumentReview({ doc, onChanged }: { doc: ReferenceDocu
   if (doc.status === "failed") {
     return (
       <div className="soft-card p-3">
-        <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-          {doc.file_name}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            {doc.file_name}
+          </p>
+          <button
+            type="button"
+            onClick={reject}
+            disabled={confirming}
+            className="flex-none rounded-md border px-2.5 py-1 text-xs font-semibold disabled:opacity-60"
+            style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
+          >
+            {confirming ? "Working…" : "Dismiss"}
+          </button>
+        </div>
         <p className="mt-1 text-xs" style={{ color: "var(--accent-mark)" }}>
-          Couldn't read this document: {doc.error || "unknown error"}
+          Couldn't read this document: {doc.error || "unknown error"}. Try re-uploading it as a clearer scan or photo.
         </p>
+        {error && (
+          <p className="mt-1 text-xs" style={{ color: "var(--accent-mark)" }}>
+            {error}
+          </p>
+        )}
       </div>
     );
   }

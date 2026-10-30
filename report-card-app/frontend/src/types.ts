@@ -73,12 +73,14 @@ export interface DriveImportFolderResult {
   folder_id: string;
   results: DriveImportFileResult[];
   reference_documents: ReferenceDocumentImportResult[];
+  reference_documents_remaining: number;
 }
 
 export interface DriveSyncFolderResult {
   results: DriveImportFileResult[];
   missing_batches: { id: number; name: string }[];
   reference_documents: ReferenceDocumentImportResult[];
+  reference_documents_remaining: number;
 }
 
 export interface SyllabusChapterDraft {

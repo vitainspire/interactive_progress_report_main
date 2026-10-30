@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api } from "../api/client";
+import { api, continueReferenceDocumentSync } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { FolderIcon } from "../components/Icons";
 import { DriveDuplicateResolver } from "../components/DriveDuplicateResolver";
@@ -28,13 +28,19 @@ export function UploadPage() {
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   const [pendingReferenceDocs, setPendingReferenceDocs] = useState<ReferenceDocument[] | null>(null);
+  const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
 
   const driveEnabled = isGooglePickerConfigured();
 
   function refreshPendingReferenceDocs() {
-    api
-      .get<ReferenceDocument[]>("/reference-documents?status=pending")
-      .then((docs) => setPendingReferenceDocs(docs.length ? docs : null))
+    Promise.all([
+      api.get<ReferenceDocument[]>("/reference-documents?status=pending"),
+      api.get<ReferenceDocument[]>("/reference-documents?status=failed"),
+    ])
+      .then(([pending, failed]) => {
+        const combined = [...pending, ...failed];
+        setPendingReferenceDocs(combined.length ? combined : null);
+      })
       .catch(() => {});
   }
 
@@ -75,6 +81,7 @@ export function UploadPage() {
     setBusy(true);
     try {
       if (mode === "folder") {
+        setImportStatusMessage("Reading your folder — this can take a few minutes for folders with many files. Please don't close this tab.");
         const result = await api.post<DriveImportFolderResult>("/batches/import-folder", {
           folder_url: folderUrl.trim(),
           school_name: schoolName.trim() || undefined,
@@ -83,7 +90,15 @@ export function UploadPage() {
           total_sa_exams: totalSaExams,
         });
         setFolderResults(result);
-        if (result.reference_documents.length) refreshPendingReferenceDocs();
+        let refDocCount = result.reference_documents.length;
+        if (refDocCount) refreshPendingReferenceDocs();
+        if (result.reference_documents_remaining > 0) {
+          setImportStatusMessage(`Processed ${refDocCount} document${refDocCount === 1 ? "" : "s"} so far, still working — please don't close this tab.`);
+          await continueReferenceDocumentSync(result.folder_id, result.reference_documents_remaining, (processedSoFar) =>
+            setImportStatusMessage(`Processed ${refDocCount + processedSoFar} document${refDocCount + processedSoFar === 1 ? "" : "s"} so far, still working — please don't close this tab.`),
+          );
+          refreshPendingReferenceDocs();
+        }
         return;
       }
       const form = new FormData();
@@ -100,6 +115,7 @@ export function UploadPage() {
       setError(err instanceof Error ? err.message : "Could not read this sheet");
     } finally {
       setBusy(false);
+      setImportStatusMessage(null);
     }
   }
 
@@ -302,6 +318,12 @@ export function UploadPage() {
           </div>
         )}
 
+        {importStatusMessage && (
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            {importStatusMessage}
+          </p>
+        )}
+
         {error && (
           <p className="rounded-lg p-3 text-sm" style={{ background: "var(--accent-mark-soft)", color: "var(--accent-mark)" }}>
             {error}{" "}
@@ -358,7 +380,7 @@ export function UploadPage() {
       {pendingReferenceDocs && pendingReferenceDocs.length > 0 && (
         <div className="mt-4 space-y-3">
           <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            Syllabus/blueprint documents waiting for review
+            Syllabus/blueprint documents
           </h2>
           {pendingReferenceDocs.map((doc) => (
             <ReferenceDocumentReview key={doc.id} doc={doc} onChanged={refreshPendingReferenceDocs} />

@@ -137,8 +137,15 @@ def extract_document(file_bytes: bytes, mime_type: str, file_name: str) -> dict:
     except httpx.HTTPError as exc:
         raise ExtractionError(f"Could not reach the document-reading service: {exc}") from exc
 
+    if response.status_code == 429:
+        raise ExtractionError("The document-reading service is busy right now. Please try uploading this file again in a few minutes.")
     if response.status_code >= 400:
-        raise ExtractionError(f"Document-reading service error ({response.status_code}): {response.text}")
+        # The raw response body here is provider-internal JSON (error codes,
+        # internal hints, request ids) — fine for CloudWatch/LangSmith, but
+        # this message is shown verbatim to a teacher on the review screen
+        # (ReferenceDocumentReview.tsx), so it needs to stay in plain
+        # language rather than dumping that body at them.
+        raise ExtractionError(f"The document-reading service couldn't process this file (error {response.status_code}). Try re-uploading it, or try again later.")
 
     data = response.json()
     try:

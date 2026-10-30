@@ -1,3 +1,5 @@
+import type { DriveSyncFolderResult } from "../types";
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 const TOKEN_KEY = "reportcard_app_token";
 
@@ -95,5 +97,32 @@ export const api = {
     return `${API_BASE}/auth/school-photo?${params.toString()}`;
   },
 };
+
+/** A folder with many syllabus/blueprint documents can take longer to read
+ * than one request should — the backend stops early with time to spare and
+ * reports how many files it didn't get to yet (see
+ * REFERENCE_INGEST_TOTAL_TIME_BUDGET_SECONDS in batches.py), rather than
+ * risking the whole request getting cut off mid-flight. Resuming is just
+ * calling sync-folder again — already-processed files are skipped
+ * automatically — so the UI can keep going on its own instead of making a
+ * teacher click "Sync" repeatedly until it's done. */
+export async function continueReferenceDocumentSync(
+  folderId: string,
+  alreadyRemaining: number,
+  onProgress: (processedSoFar: number) => void,
+  maxAttempts = 12,
+): Promise<number> {
+  let remaining = alreadyRemaining;
+  let processedSoFar = 0;
+  let attempt = 0;
+  while (remaining > 0 && attempt < maxAttempts) {
+    attempt++;
+    const result = await api.post<DriveSyncFolderResult>("/batches/sync-folder", { folder_id: folderId });
+    processedSoFar += result.reference_documents.length;
+    remaining = result.reference_documents_remaining;
+    onProgress(processedSoFar);
+  }
+  return processedSoFar;
+}
 
 export { UnauthorizedError };

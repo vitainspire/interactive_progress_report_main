@@ -1,6 +1,7 @@
 import io
 import json
 import re
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -184,7 +185,19 @@ class ImportFolderRequest(BaseModel):
     class_level: str | None = None
 
 
-async def _ingest_reference_documents(account_id: int, folder_url_or_id: str) -> list[dict]:
+# A production folder with ~15-20 syllabus/blueprint files took long enough
+# (one LLM call per file, run sequentially) that the whole request risked
+# exceeding Lambda's 90s function timeout (docs/AWS_LAMBDA_DEPLOYMENT.md) —
+# which kills the request mid-flight with no response at all, looking to the
+# teacher like the app hung. Each file already commits to the database the
+# moment it's processed, so stopping early loses nothing; this budget makes
+# that early stop deliberate (with time to spare for the spreadsheet loop,
+# DB round trips and response serialization) instead of leaving it to chance,
+# and reports how many files are left so the caller can resume automatically.
+REFERENCE_INGEST_TOTAL_TIME_BUDGET_SECONDS = 65
+
+
+async def _ingest_reference_documents(account_id: int, folder_url_or_id: str, request_start: float) -> tuple[list[dict], int]:
     """Picks up any PDF/image reference document (syllabus or exam
     blueprint) sitting in the same Drive folder as the class mark sheets,
     runs it through the document-extraction LLM, and stores it as a
@@ -193,14 +206,25 @@ async def _ingest_reference_documents(account_id: int, folder_url_or_id: str) ->
     syllabus_chapter/subject_blueprint tables directly. A bad or
     unreadable document is recorded with status 'failed' rather than
     aborting the rest of the import, same error-isolation style as the
-    spreadsheet-file loop above."""
+    spreadsheet-file loop above.
+
+    Returns (results, remaining_count) — remaining_count is how many files in
+    this folder weren't even attempted yet because the time budget ran out;
+    a caller gets to that same folder again (e.g. the frontend auto-calling
+    /batches/sync-folder again), the `already` check below picks up exactly
+    where this call left off."""
     try:
         files = await run_in_threadpool(list_folder_reference_files, folder_url_or_id)
     except GoogleDriveFetchError:
-        return []  # optional step — a folder-access problem is already surfaced by the spreadsheet fetch above
+        return [], 0  # optional step — a folder-access problem is already surfaced by the spreadsheet fetch above
 
     results = []
-    for f in files:
+    stopped_at = None
+    for i, f in enumerate(files):
+        if time.monotonic() - request_start > REFERENCE_INGEST_TOTAL_TIME_BUDGET_SECONDS:
+            stopped_at = i
+            break
+
         with session() as conn:
             already = refdocs_repo.get_reference_document_by_drive_file_id(conn, account_id, f["id"])
         if already and already["status"] != "failed":
@@ -226,7 +250,9 @@ async def _ingest_reference_documents(account_id: int, folder_url_or_id: str) ->
                 conn, account_id, f["name"], f["mime_type"], raw, f["id"], status, extracted_json, error
             )
         results.append({"file_name": f["name"], "status": status, "reference_document_id": doc_id})
-    return results
+
+    remaining = len(files) - stopped_at if stopped_at is not None else 0
+    return results, remaining
 
 
 def _duplicate_out(f: dict, dup: dict, folder_id: str | None, new_student_count: int) -> dict:
@@ -256,6 +282,7 @@ async def import_drive_folder(req: ImportFolderRequest, current_user=Depends(get
     7.xlsx", etc. in one folder and imports all of them in one go. A
     failure on one file (bad layout, deleted mid-import) is reported per
     file rather than aborting the whole import."""
+    request_start = time.monotonic()
     try:
         files = await run_in_threadpool(list_folder_spreadsheet_files, req.folder_url.strip())
     except GoogleDriveFetchError as exc:
@@ -309,8 +336,13 @@ async def import_drive_folder(req: ImportFolderRequest, current_user=Depends(get
             )
         results.append({"file_name": f["name"], "status": "created", "batch_id": batch_id, "student_count": len(parsed["students"])})
 
-    reference_results = await _ingest_reference_documents(current_user["id"], req.folder_url.strip())
-    return {"folder_id": folder_id, "results": results, "reference_documents": reference_results}
+    reference_results, reference_remaining = await _ingest_reference_documents(current_user["id"], req.folder_url.strip(), request_start)
+    return {
+        "folder_id": folder_id,
+        "results": results,
+        "reference_documents": reference_results,
+        "reference_documents_remaining": reference_remaining,
+    }
 
 
 class SyncFolderRequest(BaseModel):
@@ -324,6 +356,7 @@ async def sync_drive_folder(req: SyncFolderRequest, current_user=Depends(get_cur
     import. A file removed from the folder isn't deleted automatically —
     its batch is left alone and listed under `missing_batches` so you can
     decide whether to remove it yourself."""
+    request_start = time.monotonic()
     with session() as conn:
         existing_batches = repo.list_batches_by_folder(conn, current_user["id"], req.folder_id)
     if not existing_batches:
@@ -381,11 +414,12 @@ async def sync_drive_folder(req: SyncFolderRequest, current_user=Depends(get_cur
         results.append({"file_name": f["name"], "status": "created", "batch_id": batch_id})
 
     missing = [b for b in existing_batches if b["source_ref"] not in seen_file_ids]
-    reference_results = await _ingest_reference_documents(current_user["id"], req.folder_id)
+    reference_results, reference_remaining = await _ingest_reference_documents(current_user["id"], req.folder_id, request_start)
     return {
         "results": results,
         "missing_batches": [{"id": b["id"], "name": b["name"]} for b in missing],
         "reference_documents": reference_results,
+        "reference_documents_remaining": reference_remaining,
     }
 
 
