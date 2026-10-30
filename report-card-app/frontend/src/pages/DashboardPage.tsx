@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, continueReferenceDocumentSync } from "../api/client";
-import { DotsIcon, FolderIcon, PlusIcon, SearchIcon, SheetIcon, TrashIcon } from "../components/Icons";
+import { useAuth } from "../auth/AuthContext";
+import { CameraIcon, DotsIcon, FolderIcon, PlusIcon, SearchIcon, SheetIcon, TrashIcon } from "../components/Icons";
 import { DriveDuplicateResolver } from "../components/DriveDuplicateResolver";
 import type { BatchSummary, DriveImportFileResult, DriveImportFolderResult, DriveSyncFolderResult, SendResult } from "../types";
 
@@ -165,6 +166,7 @@ function BatchCard({ batch, onDelete }: { batch: BatchSummary; onDelete: (id: nu
 }
 
 export function DashboardPage() {
+  const { user } = useAuth();
   const [batches, setBatches] = useState<BatchSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -321,6 +323,27 @@ export function DashboardPage() {
           </Link>
         </div>
       </header>
+
+      {user && !user.has_school_photo && (
+        <Link
+          to="/school-profile"
+          className="soft-card mt-3 flex items-center gap-3 p-3.5 transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+          style={{ borderLeft: "3px solid var(--accent)" }}
+        >
+          <span
+            className="flex h-9 w-9 flex-none items-center justify-center rounded-lg"
+            style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+          >
+            <CameraIcon size={16} />
+          </span>
+          <span className="min-w-0 flex-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            Please set your school's picture and name — parents see this when they open their child's report.
+          </span>
+          <span className="flex-none text-xs font-semibold" style={{ color: "var(--accent)" }}>
+            Set it up
+          </span>
+        </Link>
+      )}
 
       {importStatusMessage && (
         <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>

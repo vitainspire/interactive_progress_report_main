@@ -125,14 +125,17 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 .landing-hero-caption{position:absolute;left:0;right:0;bottom:.9em;z-index:1;text-align:center;padding:0 1.2em}
 .landing-hero-caption .eyebrow{font-size:.68em;font-weight:700;letter-spacing:1.6px;color:var(--gold-soft);text-transform:uppercase}
 .landing-hero-caption .name{margin-top:.25em;font-size:1.15em;font-weight:700;color:#fff}
-/* No real photo on file for this school yet — a plain navy banner with a
-   generic school icon instead of borrowing a different school's actual
-   photo as a stand-in (that would misrepresent whose campus this is). */
-.landing-hero-generic{min-height:0;padding:2.1em 1.2em 3.4em;display:flex;flex-direction:column;align-items:center;background:linear-gradient(165deg,#1e3a8a 0%,var(--navy-deep) 100%)}
-.landing-hero-generic::after{display:none}
-.landing-hero-generic .lh-icon{width:2.6em;height:2.6em;color:rgba(255,255,255,.55)}
-.landing-hero-generic .lh-icon svg{width:100%;height:100%}
-.landing-hero-caption-static{position:static;padding:0;margin-top:.7em}
+/* No real photo on file for this school yet — left blank (no banner at
+   all) rather than borrowing a different school's actual photo as a
+   stand-in, which would misrepresent whose campus this is. The school/
+   student names that would've sat on the photo move into the plain white
+   body instead, and the body no longer needs the "pulled up over a photo"
+   treatment since there's nothing above it to pull up from. */
+.landing-body-flat{margin-top:0;border-radius:0;box-shadow:none;padding-top:2.6em}
+.landing-body-flat::after{display:none}
+.landing-heading{text-align:center;margin-bottom:1.1em}
+.landing-heading .eyebrow{font-size:.68em;font-weight:700;letter-spacing:1.6px;color:var(--muted);text-transform:uppercase}
+.landing-heading .name{margin-top:.25em;font-size:1.15em;font-weight:700;color:var(--ink)}
 /* Pulled up over the photo as a rounded "sheet" (negative margin + radius)
    instead of a hard color seam. */
 .landing-body{position:relative;z-index:1;flex:1;background:#fff;padding:2em 1.3em 1.6em;max-width:30em;margin:-1.1em auto 0;width:100%;overflow:hidden;border-radius:22px 22px 0 0;box-shadow:0 -6px 18px rgba(15,23,42,.12)}
@@ -797,11 +800,6 @@ _ICON_STUDENT = (
     '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5"/>'
     "</svg>"
 )
-_ICON_SCHOOL = (
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
-    '<path d="M3 21h18M5 21V9.5L12 5l7 4.5V21M9 21v-6h6v6M12 3v2"/>'
-    "</svg>"
-)
 
 
 def render_report_landing_page(student_name: str, school_name: str, token: str, has_photo: bool) -> str:
@@ -810,9 +808,11 @@ def render_report_landing_page(student_name: str, school_name: str, token: str, 
     now served from /view) and a not-yet-built "know about student" page
     (/about, currently a placeholder). A real classroom photo stands in for
     the usual flat topbar here when this school has uploaded one (set on
-    their School Profile page) — but when they haven't, `has_photo` is
-    False, and we show a plain generic banner instead of some OTHER real
-    school's photo, which would misrepresent whose campus this actually is."""
+    their School Profile page). When they haven't, `has_photo` is False and
+    the banner is left out entirely (plain white top, school/student name
+    moved into the body below) rather than borrowing some OTHER real
+    school's photo, which would misrepresent whose campus this actually is
+    — the Dashboard separately nudges a school that hasn't set one yet."""
     if has_photo:
         header = (
             '<div class="landing-hero">'
@@ -822,17 +822,20 @@ def render_report_landing_page(student_name: str, school_name: str, token: str, 
             f'<div class="name">{_esc(student_name)}</div>'
             "</div></div>"
         )
+        body_heading = ""
+        body_class = "landing-body"
     else:
-        header = (
-            '<div class="landing-hero landing-hero-generic">'
-            f'<div class="lh-icon">{_ICON_SCHOOL}</div>'
-            '<div class="landing-hero-caption landing-hero-caption-static">'
+        header = ""
+        body_heading = (
+            '<div class="landing-heading">'
             f'<div class="eyebrow">{_esc(school_name or "School")}</div>'
             f'<div class="name">{_esc(student_name)}</div>'
-            "</div></div>"
+            "</div>"
         )
+        body_class = "landing-body landing-body-flat"
     content = (
-        '<div class="landing-body">'
+        f'<div class="{body_class}">'
+        f"{body_heading}"
         '<span class="pill landing-badge">📘 డిజిటల్ ప్రోగ్రెస్ కార్డు</span>'
         '<p class="landing-greeting">నమస్కారం! 🙏<br>మీ పిల్లల చదువు వివరాలు ఇక్కడ ఉన్నాయి.</p>'
         '<p class="landing-intro">మీరు ఏమి చూడాలనుకుంటున్నారో ఎంచుకోండి<br>Choose what you\'d like to see</p>'
