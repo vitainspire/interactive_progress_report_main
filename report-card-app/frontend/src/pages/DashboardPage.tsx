@@ -395,12 +395,14 @@ export function DashboardPage() {
             >
               <p className="font-semibold">Inside that one Drive folder:</p>
               <ul className="mt-2 list-disc space-y-1.5 pl-4" style={{ color: "var(--text-secondary)" }}>
-                <li>One mark-sheet file per class — e.g. "Class 10.xlsx", "Class 9.xlsx".</li>
+                <li>Required: one mark-sheet file per class — e.g. "Class 10.xlsx", "Class 9.xlsx".</li>
                 <li>
-                  You can also drop in each subject's syllabus or exam-blueprint document (a PDF or a clear photo) —
-                  name it something like "10 Maths Syllabus" or "10 Science Blueprint" so it's easy to tell apart.
+                  Optional: each subject's syllabus or exam-blueprint document (a PDF or a clear photo) — not needed,
+                  but adding these makes the Study Plan and Subject Analysis features more accurate. Name it
+                  something like "10 Maths Syllabus" or "10 Science Blueprint" so it's easy to tell apart.
                 </li>
                 <li>No sub-folders needed — everything goes loose in this one folder, and the app sorts it out.</li>
+                <li>Once it's processed, you'll see every file listed by its name so you can check it came through correctly.</li>
               </ul>
             </div>
           )}
