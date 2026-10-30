@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
+import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { LogoutIcon, PlugIcon, SchoolIcon } from "./Icons";
+import { DocumentIcon, LogoutIcon, PlugIcon, SchoolIcon } from "./Icons";
+import type { ReferenceDocument } from "../types";
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -10,6 +13,20 @@ function initials(name: string): string {
 export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [pendingDocCount, setPendingDocCount] = useState(0);
+
+  function refreshPendingDocCount() {
+    Promise.all([
+      api.get<ReferenceDocument[]>("/reference-documents?status=pending"),
+      api.get<ReferenceDocument[]>("/reference-documents?status=failed"),
+    ])
+      .then(([pending, failed]) => setPendingDocCount(pending.length + failed.length))
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    if (user) refreshPendingDocCount();
+  }, [user]);
 
   return (
     <div className="min-h-screen">
@@ -24,7 +41,7 @@ export function Layout() {
             </div>
           </Link>
           {user && (
-            <details className="group relative">
+            <details className="group relative" onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && refreshPendingDocCount()}>
               <summary
                 className="flex cursor-pointer list-none items-center gap-2 rounded-full border py-1 pl-1 pr-3 transition-colors duration-200 hover:bg-[var(--accent-soft)]"
                 style={{ borderColor: "var(--border)" }}
@@ -67,6 +84,14 @@ export function Layout() {
                 >
                   <PlugIcon size={15} />
                   WhatsApp / SMS setup
+                </Link>
+                <Link
+                  to="/reference-documents"
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  <DocumentIcon size={15} />
+                  Syllabus/blueprint review{pendingDocCount > 0 ? ` (${pendingDocCount})` : ""}
                 </Link>
                 <button
                   onClick={() => {

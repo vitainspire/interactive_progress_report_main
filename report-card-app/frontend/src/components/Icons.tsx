@@ -291,6 +291,16 @@ export function FolderIcon({ size = 18, className }: IconProps) {
   );
 }
 
+export function DocumentIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...base} stroke="currentColor">
+      <path d="M6 3h8l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+      <path d="M14 3v5h5" />
+      <path d="M8 13h8M8 17h5" />
+    </svg>
+  );
+}
+
 export function CameraIcon({ size = 18, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...base} stroke="currentColor">

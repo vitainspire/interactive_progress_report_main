@@ -4,9 +4,8 @@ import { api, continueReferenceDocumentSync } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { FolderIcon } from "../components/Icons";
 import { DriveDuplicateResolver } from "../components/DriveDuplicateResolver";
-import { ReferenceDocumentReview } from "../components/ReferenceDocumentReview";
 import { isGooglePickerConfigured, pickGoogleSheet, preloadGooglePicker } from "../integrations/googlePicker";
-import type { BatchSummary, DriveImportFolderResult, ReferenceDocument } from "../types";
+import type { BatchSummary, DriveImportFolderResult } from "../types";
 
 type Mode = "file" | "link" | "drive" | "folder";
 
@@ -27,30 +26,14 @@ export function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
-  const [pendingReferenceDocs, setPendingReferenceDocs] = useState<ReferenceDocument[] | null>(null);
   const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
+  const [referenceDocsFoundCount, setReferenceDocsFoundCount] = useState(0);
 
   const driveEnabled = isGooglePickerConfigured();
-
-  function refreshPendingReferenceDocs() {
-    Promise.all([
-      api.get<ReferenceDocument[]>("/reference-documents?status=pending"),
-      api.get<ReferenceDocument[]>("/reference-documents?status=failed"),
-    ])
-      .then(([pending, failed]) => {
-        const combined = [...pending, ...failed];
-        setPendingReferenceDocs(combined.length ? combined : null);
-      })
-      .catch(() => {});
-  }
 
   useEffect(() => {
     if (driveEnabled) preloadGooglePicker().catch(() => {});
   }, [driveEnabled]);
-
-  useEffect(() => {
-    refreshPendingReferenceDocs();
-  }, []);
 
   const canSubmit = mode === "link" ? sheetUrl.trim().length > 0 : mode === "folder" ? folderUrl.trim().length > 0 : !!file;
 
@@ -78,6 +61,7 @@ export function UploadPage() {
     if (!canSubmit) return;
     setError(null);
     setFolderResults(null);
+    setReferenceDocsFoundCount(0);
     setBusy(true);
     try {
       if (mode === "folder") {
@@ -91,14 +75,13 @@ export function UploadPage() {
         });
         setFolderResults(result);
         let refDocCount = result.reference_documents.length;
-        if (refDocCount) refreshPendingReferenceDocs();
         if (result.reference_documents_remaining > 0) {
           setImportStatusMessage(`Processed ${refDocCount} document${refDocCount === 1 ? "" : "s"} so far, still working — please don't close this tab.`);
-          await continueReferenceDocumentSync(result.folder_id, result.reference_documents_remaining, (processedSoFar) =>
+          refDocCount += await continueReferenceDocumentSync(result.folder_id, result.reference_documents_remaining, (processedSoFar) =>
             setImportStatusMessage(`Processed ${refDocCount + processedSoFar} document${refDocCount + processedSoFar === 1 ? "" : "s"} so far, still working — please don't close this tab.`),
           );
-          refreshPendingReferenceDocs();
         }
+        setReferenceDocsFoundCount(refDocCount);
         return;
       }
       const form = new FormData();
@@ -358,11 +341,11 @@ export function UploadPage() {
                 </div>
               ),
             )}
-            {folderResults.reference_documents.length > 0 && (
+            {referenceDocsFoundCount > 0 && (
               <p className="pt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
-                Also found {folderResults.reference_documents.length} syllabus/blueprint document
-                {folderResults.reference_documents.length === 1 ? "" : "s"} in this folder — review them below before
-                they're used.
+                Also found {referenceDocsFoundCount} syllabus/blueprint document{referenceDocsFoundCount === 1 ? "" : "s"} in this
+                folder — review {referenceDocsFoundCount === 1 ? "it" : "them"} from the account menu before{" "}
+                {referenceDocsFoundCount === 1 ? "it's" : "they're"} used.
               </p>
             )}
           </div>
@@ -376,17 +359,6 @@ export function UploadPage() {
           {busy ? (mode === "folder" ? "Importing…" : "Reading…") : mode === "folder" ? "Import folder" : "Upload"}
         </button>
       </form>
-
-      {pendingReferenceDocs && pendingReferenceDocs.length > 0 && (
-        <div className="mt-4 space-y-3">
-          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            Syllabus/blueprint documents
-          </h2>
-          {pendingReferenceDocs.map((doc) => (
-            <ReferenceDocumentReview key={doc.id} doc={doc} onChanged={refreshPendingReferenceDocs} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

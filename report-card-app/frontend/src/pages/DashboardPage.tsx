@@ -3,15 +3,7 @@ import { Link } from "react-router-dom";
 import { api, continueReferenceDocumentSync } from "../api/client";
 import { DotsIcon, FolderIcon, PlusIcon, SearchIcon, SheetIcon, TrashIcon } from "../components/Icons";
 import { DriveDuplicateResolver } from "../components/DriveDuplicateResolver";
-import { ReferenceDocumentReview } from "../components/ReferenceDocumentReview";
-import type {
-  BatchSummary,
-  DriveImportFileResult,
-  DriveImportFolderResult,
-  DriveSyncFolderResult,
-  ReferenceDocument,
-  SendResult,
-} from "../types";
+import type { BatchSummary, DriveImportFileResult, DriveImportFolderResult, DriveSyncFolderResult, SendResult } from "../types";
 
 type SortOrder = "recent" | "alphabetical";
 
@@ -184,7 +176,6 @@ export function DashboardPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [syncDuplicates, setSyncDuplicates] = useState<DriveImportFileResult[]>([]);
-  const [pendingReferenceDocs, setPendingReferenceDocs] = useState<ReferenceDocument[] | null>(null);
   const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
 
   function refreshBatches() {
@@ -194,21 +185,8 @@ export function DashboardPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load your uploads"));
   }
 
-  function refreshPendingReferenceDocs() {
-    Promise.all([
-      api.get<ReferenceDocument[]>("/reference-documents?status=pending"),
-      api.get<ReferenceDocument[]>("/reference-documents?status=failed"),
-    ])
-      .then(([pending, failed]) => {
-        const combined = [...pending, ...failed];
-        setPendingReferenceDocs(combined.length ? combined : null);
-      })
-      .catch(() => {});
-  }
-
   useEffect(() => {
     refreshBatches();
-    refreshPendingReferenceDocs();
   }, []);
 
   async function handleDelete(id: number) {
@@ -229,6 +207,7 @@ export function DashboardPage() {
     if (!folderUrl.trim()) return;
     setSettingUp(true);
     setSetupError(null);
+    setSyncNote(null);
     setImportStatusMessage("Reading your folder — this can take a few minutes for folders with many files. Please don't close this tab.");
     try {
       const result = await api.post<DriveImportFolderResult>("/batches/import-folder", { folder_url: folderUrl.trim() });
@@ -236,18 +215,19 @@ export function DashboardPage() {
       const possibleDuplicates = result.results.filter((r) => r.status === "possible_duplicate");
       setSyncDuplicates(possibleDuplicates);
       let refDocCount = result.reference_documents.length;
-      if (refDocCount) refreshPendingReferenceDocs();
       if (result.reference_documents_remaining > 0) {
         setImportStatusMessage(`Processed ${refDocCount} document${refDocCount === 1 ? "" : "s"} so far, still working — please don't close this tab.`);
         refDocCount += await continueReferenceDocumentSync(result.folder_id, result.reference_documents_remaining, (processedSoFar) =>
           setImportStatusMessage(`Processed ${refDocCount + processedSoFar} document${refDocCount + processedSoFar === 1 ? "" : "s"} so far, still working — please don't close this tab.`),
         );
-        refreshPendingReferenceDocs();
       }
       if (created === 0 && possibleDuplicates.length === 0 && refDocCount === 0) {
         setSetupError("No class sheets were found directly inside that folder.");
       } else {
         await refreshBatches();
+        if (refDocCount > 0) {
+          setSyncNote(`Found ${refDocCount} syllabus/blueprint document${refDocCount === 1 ? "" : "s"} — review ${refDocCount === 1 ? "it" : "them"} from the account menu.`);
+        }
       }
     } catch (err) {
       setSetupError(err instanceof Error ? err.message : "Could not read that Drive folder");
@@ -269,20 +249,18 @@ export function DashboardPage() {
       const failed = result.results.filter((r) => r.status === "failed").length;
       const possibleDuplicates = result.results.filter((r) => r.status === "possible_duplicate");
       let refDocCount = result.reference_documents.length;
-      if (refDocCount) refreshPendingReferenceDocs();
       if (result.reference_documents_remaining > 0) {
         setImportStatusMessage(`Processed ${refDocCount} document${refDocCount === 1 ? "" : "s"} so far, still working — please don't close this tab.`);
         refDocCount += await continueReferenceDocumentSync(linkedFolderId, result.reference_documents_remaining, (processedSoFar) =>
           setImportStatusMessage(`Processed ${refDocCount + processedSoFar} document${refDocCount + processedSoFar === 1 ? "" : "s"} so far, still working — please don't close this tab.`),
         );
-        refreshPendingReferenceDocs();
       }
       const bits = [];
       if (created) bits.push(`${created} new class${created === 1 ? "" : "es"}`);
       if (synced) bits.push(`${synced} updated`);
       if (failed) bits.push(`${failed} failed`);
       if (possibleDuplicates.length) bits.push(`${possibleDuplicates.length} need a decision below`);
-      if (refDocCount) bits.push(`${refDocCount} syllabus/blueprint document${refDocCount === 1 ? "" : "s"} to review`);
+      if (refDocCount) bits.push(`${refDocCount} syllabus/blueprint document${refDocCount === 1 ? "" : "s"} found — review from the account menu`);
       setSyncNote(bits.length ? bits.join(", ") : "Already up to date.");
       setSyncDuplicates(possibleDuplicates);
       await refreshBatches();
@@ -372,17 +350,6 @@ export function DashboardPage() {
       )}
 
       {error && <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>{error}</p>}
-
-      {pendingReferenceDocs && pendingReferenceDocs.length > 0 && (
-        <div className="mt-5 space-y-3">
-          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            Syllabus/blueprint documents
-          </h2>
-          {pendingReferenceDocs.map((doc) => (
-            <ReferenceDocumentReview key={doc.id} doc={doc} onChanged={refreshPendingReferenceDocs} />
-          ))}
-        </div>
-      )}
 
       {batches && batches.length > 0 && (
         <>

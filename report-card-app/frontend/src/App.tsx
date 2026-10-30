@@ -6,6 +6,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { LoginPage } from "./pages/LoginPage";
+import { ReferenceDocumentsPage } from "./pages/ReferenceDocumentsPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { SchoolProfilePage } from "./pages/SchoolProfilePage";
 import { SchoolSetupPage } from "./pages/SchoolSetupPage";
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="batches/:id/students/:studentId" element={<StudentPage />} />
         <Route path="integrations" element={<IntegrationsPage />} />
         <Route path="school-profile" element={<SchoolProfilePage />} />
+        <Route path="reference-documents" element={<ReferenceDocumentsPage />} />
       </Route>
     </Routes>
   );
