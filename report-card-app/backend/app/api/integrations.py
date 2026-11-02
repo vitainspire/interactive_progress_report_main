@@ -45,7 +45,10 @@ def test_send(req: TestSendRequest, current_user=Depends(get_current_user)):
 
     if req.channel == "whatsapp":
         try:
-            whatsapp.send_report_whatsapp(phone, "Test Student", "test-token", language=current_user["whatsapp_language"])
+            whatsapp.send_report_whatsapp(
+                phone, "Test Student", "test-token",
+                class_level="10", class_teacher_name="Test Teacher", language=current_user["whatsapp_language"],
+            )
         except whatsapp.WhatsAppNotConfigured as exc:
             raise HTTPException(422, str(exc))
         except whatsapp.WhatsAppSendError as exc:

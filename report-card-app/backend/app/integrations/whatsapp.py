@@ -8,15 +8,19 @@ WhatsApp Business messaging has no free/no-account path):
      set as WHATSAPP_CLOUD_API_TOKEN / WHATSAPP_PHONE_NUMBER_ID.
   3. An APPROVED message template — the Cloud API refuses to send
      free-form text to a parent who hasn't messaged the business first.
-     Create a template (Meta Business Manager -> WhatsApp Manager ->
-     Message Templates) shaped like this, and set its name/language as
-     WHATSAPP_TEMPLATE_NAME / WHATSAPP_TEMPLATE_LANG:
-       Body:   "Hello! {{1}}'s report card is ready to view."
-       Button: a URL button, type "Visit Website", with the base URL set
-               to the public base URL and a trailing variable {{1}} for
-               the per-student path (e.g. "https://yourapp.com/api/public/report/{{1}}").
+     Set its name/language as WHATSAPP_TEMPLATE_NAME / WHATSAPP_TEMPLATE_LANG.
+     The actual approved `student_progress_report` template's body takes
+     3 parameters, confirmed directly against a real send (Meta rejects a
+     mismatched parameter count outright):
+       Body:   "Your student {{1}}'s progress report for class {{2}} is
+                attached... Please contact the class teacher, {{3}}, for
+                any questions."
+       Button: a URL button, type "Visit Website", with a trailing
+               variable {{1}} for the per-student path (e.g.
+               "https://yourapp.com/api/public/report/{{1}}").
      Meta reviews templates before they're usable — this can take from
-     minutes to a day or two.
+     minutes to a day or two. Any future change to this template's body
+     (wording or parameter count) needs the matching change made here too.
 """
 from __future__ import annotations
 
@@ -44,13 +48,22 @@ def is_configured() -> bool:
     return bool(WHATSAPP_CLOUD_API_TOKEN and WHATSAPP_PHONE_NUMBER_ID)
 
 
-def send_report_whatsapp(to_phone_e164: str, student_name: str, share_token: str, language: str | None = None) -> None:
+def send_report_whatsapp(
+    to_phone_e164: str, student_name: str, share_token: str,
+    class_level: str = "", class_teacher_name: str = "", language: str | None = None,
+) -> None:
     """`language` is each school's own choice (app_user.whatsapp_language,
     see app/api/auth.py's PUT /auth/whatsapp-settings) — the template NAME
     stays one shared platform-level credential, but Meta lets one template
     name have several independently-approved language variants, which is
     how one shared WhatsApp Business account still sends each school's
-    parents a message in their own school's language."""
+    parents a message in their own school's language.
+
+    The body's 3 parameters must be sent in exactly this order — it's the
+    order baked into the approved template, not something this function
+    can reinterpret: {{1}} student name, {{2}} class, {{3}} class teacher's
+    name (see app/db/batches.py's class_teacher_name — a teacher has to
+    have actually typed this in; it's never guessed)."""
     if not is_configured():
         raise WhatsAppNotConfigured("WhatsApp isn't configured on this server (missing WHATSAPP_CLOUD_API_TOKEN/WHATSAPP_PHONE_NUMBER_ID).")
 
@@ -63,7 +76,14 @@ def send_report_whatsapp(to_phone_e164: str, student_name: str, share_token: str
             "name": WHATSAPP_TEMPLATE_NAME,
             "language": {"code": language or WHATSAPP_TEMPLATE_LANG},
             "components": [
-                {"type": "body", "parameters": [{"type": "text", "text": student_name}]},
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": student_name},
+                        {"type": "text", "text": class_level or "-"},
+                        {"type": "text", "text": class_teacher_name or "-"},
+                    ],
+                },
                 {
                     "type": "button",
                     "sub_type": "url",

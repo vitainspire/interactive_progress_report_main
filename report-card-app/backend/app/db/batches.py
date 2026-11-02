@@ -326,7 +326,7 @@ def update_batch_settings(conn: psycopg.Connection, batch_id: int, fields: dict)
     values = []
     for key in (
         "name", "school_name", "fa_total", "sa_total", "fa_marks_per_subject", "sa_marks_per_subject",
-        "class_strength_override", "class_level", "total_fa_exams", "total_sa_exams",
+        "class_strength_override", "class_level", "total_fa_exams", "total_sa_exams", "class_teacher_name",
     ):
         if key in fields:
             cols.append(f"{key} = %s")

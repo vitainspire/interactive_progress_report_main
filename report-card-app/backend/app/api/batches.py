@@ -99,6 +99,7 @@ def _batch_out(row, student_count: int | None = None) -> dict:
         "total_fa_exams": row["total_fa_exams"],
         "total_sa_exams": row["total_sa_exams"],
         "class_level": row["class_level"],
+        "class_teacher_name": row["class_teacher_name"],
         "source_filename": row["source_filename"],
         "source_type": row["source_type"],
         "source_folder_id": row["source_folder_id"],
@@ -629,6 +630,7 @@ class SettingsUpdate(BaseModel):
     class_level: str | None = None
     total_fa_exams: int | None = None
     total_sa_exams: int | None = None
+    class_teacher_name: str | None = None
 
 
 @router.put("/{batch_id}/settings")
@@ -726,7 +728,7 @@ def _log_send(conn, student_id: int, channel: str, status: str, detail: str) -> 
     )
 
 
-def _send_one(conn, student_row, language: str, channel_mode: str, country_code: str) -> dict:
+def _send_one(conn, student_row, language: str, channel_mode: str, country_code: str, class_level: str, class_teacher_name: str) -> dict:
     student_id = student_row["id"]
     name = student_row["name"]
     out = {"student_id": student_id, "name": name, "report_url": None}
@@ -757,7 +759,7 @@ def _send_one(conn, student_row, language: str, channel_mode: str, country_code:
     if try_whatsapp:
         if whatsapp.is_configured():
             try:
-                whatsapp.send_report_whatsapp(phone, name, token, language=language)
+                whatsapp.send_report_whatsapp(phone, name, token, class_level=class_level, class_teacher_name=class_teacher_name, language=language)
                 _log_send(conn, student_id, "whatsapp", "sent", "")
                 return {**out, "channel": "whatsapp", "status": "sent", "detail": ""}
             except whatsapp.WhatsAppSendError as exc:
@@ -834,7 +836,10 @@ def send_reports(batch_id: int, req: SendReportsRequest, current_user=Depends(ge
             raise HTTPException(422, "No students selected")
 
         results = [
-            _send_one(conn, s, current_user["whatsapp_language"], current_user["whatsapp_channel_mode"], current_user["default_country_code"])
+            _send_one(
+                conn, s, current_user["whatsapp_language"], current_user["whatsapp_channel_mode"], current_user["default_country_code"],
+                batch_row["class_level"], batch_row["class_teacher_name"],
+            )
             for s in student_rows
         ]
         return {"results": results}

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { BarChartIcon, CheckIcon, CopyIcon, PrinterIcon, RefreshIcon, SearchIcon, SendIcon, TrashIcon } from "../components/Icons";
 import { StudentActionList } from "../components/StudentActionList";
-import type { BatchDetail, BatchSyncResult, ClassStats, RankedStudent, SendResult, StudentBrief } from "../types";
+import type { BatchDetail, BatchSummary, BatchSyncResult, ClassStats, RankedStudent, SendResult, StudentBrief } from "../types";
 
 function timeAgo(iso: string): string {
   const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
@@ -15,15 +15,75 @@ function timeAgo(iso: string): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
+function ClassTeacherNameField({ value, onSave }: { value: string; onSave: (name: string) => Promise<void> }) {
+  const [name, setName] = useState(value);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setName(value);
+  }, [value]);
+
+  async function save() {
+    setBusy(true);
+    setSaved(false);
+    try {
+      await onSave(name.trim());
+      setSaved(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <label className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+        Class teacher's name
+      </label>
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        Included in the WhatsApp report message sent to parents.
+      </p>
+      <div className="mt-1.5 flex max-w-sm items-center gap-2">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="e.g. Sunita Rao"
+          className="flex-1"
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy || name.trim() === value}
+          className="flex-none rounded-md border px-3 py-1.5 text-sm font-semibold disabled:opacity-60"
+          style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+      </div>
+      {saved && (
+        <p className="mt-1 text-xs" style={{ color: "var(--status-good)" }}>
+          Saved.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function BatchHeader({
   detail,
   onDelete,
   onSync,
+  onUpdateClassTeacherName,
   syncing,
 }: {
   detail: BatchDetail;
   onDelete: () => void;
   onSync: () => void;
+  onUpdateClassTeacherName: (name: string) => Promise<void>;
   syncing: boolean;
 }) {
   const syncable = detail.source_type !== "file";
@@ -74,6 +134,7 @@ function BatchHeader({
           Last synced {timeAgo(detail.last_synced_at)}
         </p>
       )}
+      <ClassTeacherNameField value={detail.class_teacher_name} onSave={onUpdateClassTeacherName} />
     </div>
   );
 }
@@ -645,6 +706,11 @@ export function BatchPage() {
     }
   }
 
+  async function updateClassTeacherName(name: string) {
+    const updated = await api.put<BatchSummary>(`/batches/${batchId}/settings`, { class_teacher_name: name });
+    setDetail((prev) => (prev ? { ...prev, class_teacher_name: updated.class_teacher_name } : prev));
+  }
+
   function printSelected() {
     iframeRef.current?.contentWindow?.focus();
     iframeRef.current?.contentWindow?.print();
@@ -681,7 +747,7 @@ export function BatchPage() {
 
   return (
     <div className="space-y-5">
-      <BatchHeader detail={detail} onDelete={deleteBatch} onSync={syncBatch} syncing={syncing} />
+      <BatchHeader detail={detail} onDelete={deleteBatch} onSync={syncBatch} onUpdateClassTeacherName={updateClassTeacherName} syncing={syncing} />
 
       {error && (
         <p className="text-sm" style={{ color: "var(--accent-mark)" }}>

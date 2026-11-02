@@ -116,6 +116,14 @@ def _migrate_batch_source_sync(conn: psycopg.Connection) -> None:
     conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS last_synced_at TEXT")
 
 
+def _migrate_batch_class_teacher_name(conn: psycopg.Connection) -> None:
+    """Adds `class_teacher_name` to a pre-existing `batch` table (see
+    schema.sql) — the real approved WhatsApp template needs a class
+    teacher's name as one of its parameters, which this app had nowhere to
+    store until now."""
+    conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS class_teacher_name TEXT NOT NULL DEFAULT ''")
+
+
 def _migrate_school_address(conn: psycopg.Connection) -> None:
     """Adds an optional `school_address` to the pre-existing `app_user`
     table (see schema.sql) — used on the printed substitution sheet below
@@ -208,6 +216,7 @@ def init_db() -> None:
         _migrate_school_photo(conn)
         _migrate_whatsapp_settings(conn)
         _migrate_exam_counts(conn)
+        _migrate_batch_class_teacher_name(conn)
         seed_syllabus(conn)
         seed_subject_blueprint(conn)
         conn.commit()

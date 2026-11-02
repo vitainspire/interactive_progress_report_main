@@ -25,6 +25,7 @@ export interface BatchSummary {
   total_fa_exams: number;
   total_sa_exams: number;
   class_level: string;
+  class_teacher_name: string;
   source_filename: string | null;
   source_type: "file" | "sheet_link" | "drive_folder_item";
   source_folder_id: string | null;

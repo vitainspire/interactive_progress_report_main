@@ -47,6 +47,11 @@ CREATE TABLE IF NOT EXISTS batch (
     -- defaults to '10' since every syllabus seeded so far is SSC/10th.
     -- A teacher uploading another class's marks sets this explicitly.
     class_level TEXT NOT NULL DEFAULT '10',
+    -- Sent as the WhatsApp report message's {{3}} parameter (see
+    -- app/integrations/whatsapp.py) — the approved template names a real
+    -- class teacher, so this has to be a real name a teacher types in, not
+    -- guessed from anywhere else in this app's data.
+    class_teacher_name TEXT NOT NULL DEFAULT '',
     source_filename TEXT,
     exam_order TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL,
