@@ -2429,10 +2429,11 @@ export function TimetablePage() {
   const [error, setError] = useState<string | null>(null);
   const [hasTimetable, setHasTimetable] = useState<boolean | null>(null);
   const [setupOpen, setSetupOpen] = useState(true);
-  // Set only when the "Already have a timetable?" banner's button is
-  // clicked, so TimetableImportPanel can open itself immediately on the
-  // Timetable tab instead of making that a second click.
-  const [onboardingChoice, setOnboardingChoice] = useState<"import" | null>(null);
+  // Set when the "Already have a timetable?" banner's button is clicked —
+  // the "Timetable" tab itself is hidden until a timetable exists, so this
+  // renders TimetableImportPanel inline under the banner instead of
+  // switching to a tab that wouldn't be visible yet.
+  const [showInlineImport, setShowInlineImport] = useState(false);
 
   function closeSetup() {
     setSetupOpen(false);
@@ -2576,11 +2577,6 @@ export function TimetablePage() {
   // this hides on its own — no separate "seen it" flag needed.
   const isBlankSlate = loaded && hasTimetable === false && classes.length === 0 && subjects.length === 0 && teachers.length === 0;
 
-  function openImportPanel() {
-    setOnboardingChoice("import");
-    setTab("timetable");
-  }
-
   return (
     <section>
       <nav className="text-xs" style={{ color: "var(--text-muted)" }} aria-label="Breadcrumb">
@@ -2599,26 +2595,36 @@ export function TimetablePage() {
       {error && <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>{error}</p>}
 
       {isBlankSlate && (
-        <div className="soft-card mt-5 flex flex-wrap items-center justify-between gap-3 p-4" style={{ borderLeft: "3px solid var(--status-good)" }}>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg" style={{ background: "var(--status-good-soft)", color: "var(--status-good)" }}>
-              <FolderIcon size={16} />
-            </span>
-            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              Already have a timetable? Upload it here and we'll go on with it.
-            </p>
+        <div className="soft-card mt-5 p-4" style={{ borderLeft: "3px solid var(--status-good)" }}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg" style={{ background: "var(--status-good-soft)", color: "var(--status-good)" }}>
+                <FolderIcon size={16} />
+              </span>
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                Already have a timetable? Upload it here and we'll go on with it.
+              </p>
+            </div>
+            {!showInlineImport && (
+              <button
+                type="button"
+                onClick={() => setShowInlineImport(true)}
+                className="flex-none rounded-md border px-3.5 py-1.5 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--status-good-soft)]"
+                style={{ borderColor: "var(--status-good)", color: "var(--status-good)" }}
+              >
+                Upload timetable
+              </button>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={openImportPanel}
-            className="flex-none rounded-md border px-3.5 py-1.5 text-sm font-semibold transition-colors duration-200 hover:bg-[var(--status-good-soft)]"
-            style={{ borderColor: "var(--status-good)", color: "var(--status-good)" }}
-          >
-            Upload timetable
-          </button>
+          {showInlineImport && (
+            <div className="mt-3">
+              <TimetableImportPanel onImported={() => window.location.reload()} defaultOpen />
+            </div>
+          )}
         </div>
       )}
 
+      {hasTimetable && (
       <div className="mt-5 flex flex-wrap items-center gap-1.5">
         {PRIMARY_TABS.map((t) => (
           <button
@@ -2647,7 +2653,7 @@ export function TimetablePage() {
             )}
           </button>
         ))}
-        {hasTimetable && !setupOpen && (
+        {!setupOpen && (
           <button
             type="button"
             onClick={() => setSetupOpen(true)}
@@ -2658,6 +2664,7 @@ export function TimetablePage() {
           </button>
         )}
       </div>
+      )}
 
       {(setupOpen || !hasTimetable) && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -2715,7 +2722,7 @@ export function TimetablePage() {
              * tab on this page already holds its own copy of, and this is
              * a one-time onboarding action, not something worth threading
              * a refresh callback through every one of those tabs for. */}
-            <TimetableImportPanel onImported={() => window.location.reload()} defaultOpen={onboardingChoice === "import"} />
+            <TimetableImportPanel onImported={() => window.location.reload()} />
             <GeneratedTimetableTab classes={classes} teachers={teachers} config={config} onGenerate={runGenerate} />
           </>
         )}
