@@ -26,6 +26,7 @@ from __future__ import annotations
 import html
 import math
 import re
+from urllib.parse import quote
 
 import psycopg
 
@@ -281,7 +282,23 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 .subject-card .commentary{margin-top:.8em;padding-left:1.2em}
 .subject-card .commentary::before{font-size:2.4em}
 .subject-card .commentary .ctext{font-size:.92em}
-.exam-focus-note{margin-top:.7em;padding:.7em .8em;border-radius:10px;background:#f4f1fb;font-size:.85em;line-height:1.55;color:var(--ink)}
+.subject-plan-link{margin-top:.7em;text-decoration:none}
+
+/* ---- Subject prep-plan page: reached from a subject card's "View prep
+   plan" link rather than squeezing this content into that card. Same
+   .view-shell container width as the main report, so it reads as part of
+   the same product rather than a visually different page. ---- */
+.subject-plan-head{text-align:left}
+.subject-plan-head .eyebrow{font-size:.7em;font-weight:700;letter-spacing:1.5px;color:var(--navy);text-transform:uppercase}
+.subject-plan-head h1{margin:.3em 0 0;font-size:1.3em;color:var(--ink)}
+.subject-plan-head p{margin-top:.3em;font-size:.88em;color:var(--muted)}
+.subject-plan-card{padding:1.1em}
+.subject-plan-list{margin:.8em 0 0;padding-left:1.3em;font-size:.92em;line-height:1.7;color:var(--ink)}
+.subject-plan-topics{list-style:none;padding-left:0;display:flex;flex-direction:column;gap:.5em}
+.subject-plan-topics li{display:flex;align-items:center;justify-content:space-between;gap:.8em;border-top:1px solid var(--line);padding-top:.5em}
+.subject-plan-topics li:first-child{border-top:none;padding-top:0}
+.subject-plan-topics .spt-name{font-weight:600}
+.subject-plan-topics .spt-marks{flex:none;font-size:.82em;font-weight:700;color:var(--navy)}
 
 .attendance-card{border:1px solid var(--line);border-radius:14px;background:#fff;padding:1.1em}
 .attendance-total{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9em}
@@ -533,7 +550,7 @@ def _render_listen_section(student: dict, all_students: list[dict], exam_defs: l
 
 def _render_subject_card(
     student: dict, all_students: list[dict], exam_defs: list[dict], settings, subject_name: str,
-    conn: psycopg.Connection, account_id: int, class_level: str,
+    conn: psycopg.Connection, account_id: int, class_level: str, token: str,
 ) -> str:
     is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
 
@@ -584,18 +601,27 @@ def _render_subject_card(
         "</div>"
     )
 
-    # Deterministic (no LLM) exam-prep context for THIS subject specifically
-    # — same engine as the Teacher's Advice section's Exam Focus card (see
-    # app/reports/exam_focus.py), just run per-subject here instead of only
-    # for the student's single weakest one, since every subject already has
-    # its own card in this section. Silently adds nothing when this account
-    # hasn't confirmed a blueprint for the subject.
+    # Whether there's anything to show on the dedicated prep-plan page is
+    # the same check build_subject_plan_page itself does — computed again
+    # here (cheap, no LLM) just to decide whether this card's link even
+    # appears, same "hide rather than show a dead link" rule as the rest of
+    # this app's optional sections.
     chapters = study_plan.get_chapters(conn, account_id, class_level, subject_name)
     topics = get_blueprint(conn, account_id, class_level, subject_name)
     completed_keys = [e.exam_key for e in facts.history]
     focus = exam_focus.build_exam_focus(chapters, topics, completed_keys, settings.total_fa_exams, settings.total_sa_exams)
     if focus:
-        h += f'<div class="exam-focus-note">\U0001f3af {_esc(exam_focus.format_exam_focus_text(focus, subject_name))}</div>'
+        plan_url = f"/api/public/report/{_esc(token)}/subject/{quote(subject_name, safe='')}/plan"
+        h += (
+            f'<a class="advice-banner subject-plan-link" href="{plan_url}">'
+            '<span class="ab-icon">\U0001f4d8</span>'
+            '<span class="ab-text">'
+            '<span class="ab-title">ప్రిపరేషన్ ప్లాన్ చూడండి</span>'
+            '<span class="ab-sub">View prep plan for this subject</span>'
+            "</span>"
+            '<span class="ab-chev">›</span>'
+            "</a>"
+        )
 
     h += "</div>"
     return h
@@ -603,12 +629,12 @@ def _render_subject_card(
 
 def _render_subjects_section(
     student: dict, all_students: list[dict], exam_defs: list[dict], settings,
-    conn: psycopg.Connection, account_id: int, class_level: str,
+    conn: psycopg.Connection, account_id: int, class_level: str, token: str,
 ) -> str:
     subjects = _discover_subjects(student, exam_defs)
     cards = [
         c for c in (
-            _render_subject_card(student, all_students, exam_defs, settings, name, conn, account_id, class_level)
+            _render_subject_card(student, all_students, exam_defs, settings, name, conn, account_id, class_level, token)
             for name in subjects
         ) if c
     ]
@@ -771,7 +797,7 @@ def render_parent_report_page(
     content = f'<div class="view-shell" id="viewShell" data-token="{_esc(token)}">'
     content += _render_summary_card(student, all_students, exam_defs, settings, facts)
     content += _render_listen_section(student, all_students, exam_defs, settings)
-    content += _render_subjects_section(student, all_students, exam_defs, settings, conn, account_id, class_level)
+    content += _render_subjects_section(student, all_students, exam_defs, settings, conn, account_id, class_level, token)
     content += _render_attendance_section(student)
     content += _render_advice_section_inline(student, all_students, exam_defs, settings, student["name"])
     content += _render_view_footer(school_name, student["name"], token)
@@ -780,6 +806,78 @@ def render_parent_report_page(
 
     return SIMPLE_SHELL.format(
         title=_esc(title),
+        css=PARENT_CSS,
+        html_class="scroll-html",
+        body_class="scroll-body-root",
+        header=header,
+        content=content,
+    )
+
+
+def render_subject_plan_page(
+    student: dict, exam_defs: list[dict], settings, subject_name: str,
+    conn: psycopg.Connection, account_id: int, class_level: str, school_name: str, token: str,
+) -> str | None:
+    """A dedicated page for one subject's exam-prep outline (chapters
+    likely in the next exam, the blueprint's highest-weightage topics) —
+    reached via the "View prep plan" link on that subject's card in
+    render_parent_report_page, instead of squeezing this into that card as
+    one run-on sentence. Same deterministic data that card already computed
+    (app/reports/exam_focus.py) — nothing new here, just a proper home for
+    it. Returns None when there's nothing confirmed for this subject yet
+    (caller 404s), same "hide rather than show something empty" rule as
+    everywhere else this data is used."""
+    is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
+
+    def max_marks(key: str) -> float:
+        return settings.fa_marks_per_subject if is_fa_by_key[key] else settings.sa_marks_per_subject
+
+    exam_order = [e["key"] for e in exam_defs]
+    facts = compute_subject_facts(student, exam_order, subject_name, max_marks)
+    chapters = study_plan.get_chapters(conn, account_id, class_level, subject_name)
+    topics = get_blueprint(conn, account_id, class_level, subject_name)
+    completed_keys = [e.exam_key for e in facts.history]
+    focus = exam_focus.build_exam_focus(chapters, topics, completed_keys, settings.total_fa_exams, settings.total_sa_exams)
+    if not focus:
+        return None
+
+    header = TOPBAR_HEADER.format(school=_esc(school_name or "School"), student_name=_esc(student["name"]))
+
+    content = '<div class="view-shell">'
+    content += '<div class="subject-plan-head">'
+    content += '<div class="eyebrow">ప్రిపరేషన్ ప్లాన్ / Prep plan</div>'
+    content += f'<h1>{_esc(subject_name)}</h1>'
+    if focus["exam"]:
+        content += f'<p>రాబోయే {_esc(focus["exam"])} పరీక్ష కోసం / For the upcoming {_esc(focus["exam"])} exam</p>'
+    content += "</div>"
+
+    if focus["covered_chapters"]:
+        content += '<div class="summary-card subject-plan-card">'
+        content += '<div class="section-heading">\U0001f4d6 ఈ పరీక్షలో ఉండే పాఠాలు / Chapters likely in this exam</div>'
+        content += '<ol class="subject-plan-list">'
+        for ch in focus["covered_chapters"]:
+            content += f"<li>{_esc(ch)}</li>"
+        content += "</ol></div>"
+
+    if focus["top_topics"]:
+        content += '<div class="summary-card subject-plan-card">'
+        content += '<div class="section-heading">⭐ ఎక్కువ మార్కులు ఉన్న టాపిక్స్ / Highest-weightage topics</div>'
+        content += '<ul class="subject-plan-list subject-plan-topics">'
+        for t in focus["top_topics"]:
+            extra = f" (+{t['choice_marks']})" if t["choice_marks"] else ""
+            content += (
+                "<li>"
+                f'<span class="spt-name">{_esc(t["name"])}</span>'
+                f'<span class="spt-marks">{t["marks"]}{extra} మార్కులు</span>'
+                "</li>"
+            )
+        content += "</ul></div>"
+
+    content += f'<a class="about-back" href="/api/public/report/{_esc(token)}/view">← వెనక్కి / Back to report</a>'
+    content += "</div>"
+
+    return SIMPLE_SHELL.format(
+        title=_esc(f"{subject_name} — Prep Plan"),
         css=PARENT_CSS,
         html_class="scroll-html",
         body_class="scroll-body-root",

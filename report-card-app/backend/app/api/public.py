@@ -19,6 +19,7 @@ from app.reports.parent_report import (
     render_parent_report_page,
     render_report_about_page,
     render_report_landing_page,
+    render_subject_plan_page,
 )
 from app.reports.subject_analysis import get_blueprint
 
@@ -130,6 +131,24 @@ def get_public_report(token: str):
             student, all_students, json.loads(batch_row["exam_order"]), settings, batch_row["school_name"],
             conn, batch_row["user_id"], batch_row["class_level"], title=batch_row["name"], token=token,
         )
+        return HTMLResponse(content=html)
+
+
+@router.get("/report/{token}/subject/{subject_name}/plan", response_class=HTMLResponse)
+def get_subject_plan(token: str, subject_name: str):
+    """One subject's exam-prep outline — reached via the "View prep plan"
+    link on that subject's card in /view. 404s if this account hasn't
+    confirmed a syllabus/blueprint for this subject (nothing to show)."""
+    with session() as conn:
+        student, _all_students, batch_row = _resolve_report_context(conn, token)
+        settings = repo.settings_from_row(batch_row)
+        exam_defs = json.loads(batch_row["exam_order"])
+        html = render_subject_plan_page(
+            student, exam_defs, settings, subject_name,
+            conn, batch_row["user_id"], batch_row["class_level"], batch_row["school_name"], token,
+        )
+        if html is None:
+            raise HTTPException(404, "No prep plan available for this subject yet.")
         return HTMLResponse(content=html)
 
 
