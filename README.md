@@ -22,8 +22,8 @@ diagrams.
 
 ```mermaid
 flowchart LR
-    Teacher((Teacher / school admin))
-    Parent((Parent's phone))
+    Teacher(("Teacher / school admin"))
+    Parent(("Parent's phone"))
 
     subgraph Vercel["Vercel"]
         FE["React + Vite + TypeScript\nfrontend"]
