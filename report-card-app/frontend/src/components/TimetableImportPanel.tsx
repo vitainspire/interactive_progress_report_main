@@ -63,8 +63,8 @@ function ReconstructedGridPreview({ grid }: { grid: TtImportGrid }) {
  * to a real subject name or a teacher's full name/phone — a wrong guess
  * there is a real safety issue (a substitute alert texting the wrong
  * person), so a human always fills those in here before confirming. */
-export function TimetableImportPanel({ onImported }: { onImported: () => void }) {
-  const [open, setOpen] = useState(false);
+export function TimetableImportPanel({ onImported, defaultOpen = false }: { onImported: () => void; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<TtImportPreview | null>(null);

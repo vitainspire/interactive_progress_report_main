@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { CheckIcon, PlusIcon, PrinterIcon, TrashIcon } from "../components/Icons";
+import { CalendarIcon, CheckIcon, FolderIcon, PlusIcon, PrinterIcon, TrashIcon } from "../components/Icons";
 import { TimetableImportPanel } from "../components/TimetableImportPanel";
 import type {
   TtBreak,
@@ -2429,6 +2429,14 @@ export function TimetablePage() {
   const [error, setError] = useState<string | null>(null);
   const [hasTimetable, setHasTimetable] = useState<boolean | null>(null);
   const [setupOpen, setSetupOpen] = useState(true);
+  // A school that hasn't created a single class/subject/teacher yet AND
+  // has no generated/imported timetable is a genuinely blank slate — show
+  // them the create-vs-import choice up front instead of dropping them
+  // straight into the Schedule setup form, which used to be the default
+  // tab regardless of which path they actually wanted. Once they've made
+  // any real progress (or reload after that), this stays hidden on its
+  // own — no separate "seen it" flag needed.
+  const [onboardingChoice, setOnboardingChoice] = useState<"create" | "import" | null>(null);
 
   function closeSetup() {
     setSetupOpen(false);
@@ -2565,6 +2573,18 @@ export function TimetablePage() {
   }
 
   const loaded = classes && subjects && teachers && config;
+  const isBlankSlate = loaded && hasTimetable === false && classes.length === 0 && subjects.length === 0 && teachers.length === 0;
+  const showOnboardingChoice = isBlankSlate && onboardingChoice === null;
+
+  function chooseCreate() {
+    setOnboardingChoice("create");
+    setTab("schedule");
+  }
+
+  function chooseImport() {
+    setOnboardingChoice("import");
+    setTab("timetable");
+  }
 
   return (
     <section>
@@ -2583,6 +2603,63 @@ export function TimetablePage() {
 
       {error && <p className="mt-4 text-sm" style={{ color: "var(--accent-mark)" }}>{error}</p>}
 
+      {showOnboardingChoice && (
+        <div className="mt-6">
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            Nothing set up here yet — how do you want to start?
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={chooseCreate}
+              className="soft-card reveal group relative flex flex-col p-5 text-left transition-transform duration-200 hover:-translate-y-0.5"
+              style={{ borderTop: "3px solid var(--accent)" }}
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+                <CalendarIcon size={20} />
+              </div>
+              <h2 className="font-display mt-4 text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+                Create a timetable
+              </h2>
+              <p className="mt-1.5 flex-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                A one-time setup for the year: tell us your school day, classes, subjects and teachers, and we'll
+                generate the full weekly schedule you'll use all year — with substitutes found automatically
+                whenever a teacher's away.
+              </p>
+              <span className="accent-fill mt-5 inline-flex w-fit items-center rounded-md px-4 py-2 text-sm font-semibold text-white">
+                Start
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={chooseImport}
+              className="soft-card reveal group relative flex flex-col p-5 text-left transition-transform duration-200 hover:-translate-y-0.5"
+              style={{ borderTop: "3px solid var(--status-good)" }}
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: "var(--status-good-soft)", color: "var(--status-good)" }}>
+                <FolderIcon size={20} />
+              </div>
+              <h2 className="font-display mt-4 text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+                Import an existing timetable
+              </h2>
+              <p className="mt-1.5 flex-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                Already built this year's timetable in an Excel file? Upload it once — we'll read it in, so you can
+                start finding substitutes right away.
+              </p>
+              <span
+                className="mt-5 inline-flex w-fit items-center rounded-md px-4 py-2 text-sm font-semibold text-white"
+                style={{ background: "var(--status-good)" }}
+              >
+                Start
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!showOnboardingChoice && (
+      <>
       <div className="mt-5 flex flex-wrap items-center gap-1.5">
         {PRIMARY_TABS.map((t) => (
           <button
@@ -2679,7 +2756,7 @@ export function TimetablePage() {
              * tab on this page already holds its own copy of, and this is
              * a one-time onboarding action, not something worth threading
              * a refresh callback through every one of those tabs for. */}
-            <TimetableImportPanel onImported={() => window.location.reload()} />
+            <TimetableImportPanel onImported={() => window.location.reload()} defaultOpen={onboardingChoice === "import"} />
             <GeneratedTimetableTab classes={classes} teachers={teachers} config={config} onGenerate={runGenerate} />
           </>
         )}
@@ -2696,6 +2773,8 @@ export function TimetablePage() {
           />
         )}
       </div>
+      </>
+      )}
     </section>
   );
 }
