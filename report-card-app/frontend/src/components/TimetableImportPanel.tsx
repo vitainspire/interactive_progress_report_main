@@ -1,7 +1,60 @@
 import { useState } from "react";
 import { api } from "../api/client";
-import type { TtImportConfirmResult, TtImportPreview } from "../types";
+import type { TtImportConfirmResult, TtImportGrid, TtImportPreview } from "../types";
 import { FolderIcon } from "./Icons";
+
+const DAY_ORDER = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+
+/** Only the LLM fallback can get the grid's *shape* wrong (which day/
+ * period/class a cell belongs to) — the deterministic parser's grid
+ * position is always exactly right, so this preview only needs to be
+ * shown when `source === "llm"`, for a teacher to glance over before
+ * trusting it enough to even bother naming the codes below. */
+function ReconstructedGridPreview({ grid }: { grid: TtImportGrid }) {
+  return (
+    <div className="space-y-3">
+      {Object.entries(grid).map(([label, byDay]) => {
+        const days = DAY_ORDER.filter((d) => byDay[d]);
+        const periods = Array.from(new Set(days.flatMap((d) => Object.keys(byDay[d]).map(Number)))).sort((a, b) => a - b);
+        return (
+          <div key={label} className="overflow-x-auto rounded-lg" style={{ border: "1px solid var(--border)" }}>
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: "var(--surface-2)" }}>
+                  <th className="px-2 py-1 text-left font-bold" style={{ color: "var(--text-primary)" }}>
+                    {label}
+                  </th>
+                  {days.map((d) => (
+                    <th key={d} className="px-2 py-1 text-center font-semibold" style={{ color: "var(--text-muted)" }}>
+                      {d}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {periods.map((p) => (
+                  <tr key={p} className="border-t" style={{ borderColor: "var(--border)" }}>
+                    <td className="px-2 py-1 font-semibold" style={{ color: "var(--text-muted)" }}>
+                      P{p}
+                    </td>
+                    {days.map((d) => {
+                      const cell = byDay[d]?.[String(p)];
+                      return (
+                        <td key={d} className="px-2 py-1 text-center" style={{ color: "var(--text-secondary)" }}>
+                          {cell ? `${cell.subject_code}/${cell.teacher_code || "—"}` : ""}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /** Lets a school that already has a built timetable (an Excel "master
  * sheet" grid — see app/parsing/timetable_parser.py) upload it instead of
@@ -125,6 +178,16 @@ export function TimetableImportPanel({ onImported }: { onImported: () => void })
             Found {preview.classes.length} classes: {preview.classes.map((c) => c.label).join(", ")}. Name the real
             subjects and teachers behind each short code below before confirming — nothing is guessed for you.
           </p>
+
+          {preview.source === "llm" && (
+            <div className="space-y-2">
+              <p className="rounded-lg p-2.5 text-xs font-medium" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+                This file didn't match our usual timetable format, so AI reconstructed the schedule below. Please
+                check it looks right before naming subjects/teachers and confirming.
+              </p>
+              <ReconstructedGridPreview grid={preview.grid} />
+            </div>
+          )}
 
           <div>
             <h4 className="text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>

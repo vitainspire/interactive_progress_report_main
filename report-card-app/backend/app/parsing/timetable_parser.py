@@ -78,13 +78,22 @@ def _find_day_columns(rows: list[list], max_col: int) -> tuple[int | None, dict[
     return None, {}
 
 
-def parse_master_sheet(ws) -> dict:
-    """`ws` is one openpyxl worksheet. Returns {"classes": {label: grid}}
-    where `grid` is {day_code: {period: {"subject_code": str, "teacher_code": str}}}
-    — only for classes that actually had at least one period filled in
-    (an empty/not-yet-assigned class row is silently skipped, same as a
+def load_sheet_rows(source) -> list[list[list]]:
+    """Opens an .xlsx workbook (a path or file-like object) and returns
+    every sheet's cell values as `[[[cell.value, ...], ...], ...]` — the
+    one place both the deterministic parser and the LLM fallback
+    (app/integrations/timetable_extraction.py) read a sheet's raw cells
+    from, so a school's upload is only ever opened once."""
+    wb = openpyxl.load_workbook(source, data_only=True)
+    return [[[cell.value for cell in row] for row in ws.iter_rows()] for ws in wb.worksheets]
+
+
+def parse_rows(rows: list[list]) -> dict:
+    """Returns {"classes": {label: grid}} where `grid` is
+    {day_code: {period: {"subject_code": str, "teacher_code": str}}} —
+    only for classes that actually had at least one period filled in (an
+    empty/not-yet-assigned class row is silently skipped, same as a
     sheet_parser student row with no usable marks)."""
-    rows = [[cell.value for cell in row] for row in ws.iter_rows()]
     max_col = max((len(r) for r in rows), default=0)
     header_idx, day_cols = _find_day_columns(rows, max_col)
     if header_idx is None:
@@ -123,11 +132,10 @@ def parse_timetable_file(source) -> dict:
     """Opens an .xlsx workbook (a path or file-like object) and tries each
     sheet in turn until one parses as a master timetable grid — same
     fall-through-sheets approach as sheet_parser.parse_workbook_file."""
-    wb = openpyxl.load_workbook(source, data_only=True)
     last_error: TimetableParseError | None = None
-    for ws in wb.worksheets:
+    for rows in load_sheet_rows(source):
         try:
-            return parse_master_sheet(ws)
+            return parse_rows(rows)
         except TimetableParseError as exc:
             last_error = exc
     raise last_error or TimetableParseError("No usable sheet found.")

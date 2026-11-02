@@ -436,6 +436,7 @@ export interface TtImportPreview {
   subject_codes: string[];
   teacher_codes: string[];
   grid: TtImportGrid;
+  source: "deterministic" | "llm";
 }
 
 export interface TtImportConfirmResult {

@@ -11,9 +11,9 @@ from pydantic import BaseModel
 from app.core.deps import get_current_user, get_current_user_from_header_or_query
 from app.db import timetable as repo
 from app.db.database import session
-from app.integrations import sms
+from app.integrations import sms, timetable_extraction
 from app.integrations.phone import InvalidPhoneNumber, normalize_phone
-from app.parsing.timetable_parser import TimetableParseError, class_label_to_grade_section, extract_codes, parse_timetable_file
+from app.parsing.timetable_parser import TimetableParseError, class_label_to_grade_section, extract_codes, load_sheet_rows, parse_rows
 from app.reports.substitution_sheet import render_substitution_sheet
 from app.reports.timetable_print import render_class_timetable_print
 from app.timetable.generator import ClassSpec, SubjectRequirement, generate_timetable
@@ -451,19 +451,54 @@ def generate(current_user=Depends(get_current_user)):
 
 @router.post("/import")
 async def import_timetable_preview(file: UploadFile = File(...), current_user=Depends(get_current_user)):
-    """Parses an uploaded .xlsx master timetable grid (the format many
-    schools already maintain) and returns a preview — nothing is written
-    yet. The short subject/teacher codes it finds (e.g. "PS", "KSVL") need
-    a teacher to say what they actually mean before anything becomes real
-    (POST /import/confirm) — same extract-then-confirm shape as the Drive-
-    folder syllabus import, and for the same reason: guessing a teacher's
-    real name/phone from a code is a real safety issue (a substitute alert
-    texting the wrong person), not something to leave to a guess."""
+    """Parses an uploaded .xlsx timetable grid and returns a preview —
+    nothing is written yet. Tries the deterministic "master sheet" parser
+    (the format many schools already maintain) on every sheet first, since
+    it's free, instant, and its grid position is always exactly right; only
+    if that finds nothing usable anywhere in the workbook does it fall back
+    to an LLM reconstruction (see app/integrations/timetable_extraction.py)
+    of whatever layout this school's sheet actually uses. Either way, the
+    short subject/teacher codes found (e.g. "PS", "KSVL") need a teacher to
+    say what they actually mean before anything becomes real (POST
+    /import/confirm) — same extract-then-confirm shape as the Drive-folder
+    syllabus import, and for the same reason: guessing a teacher's real
+    name/phone from a code is a real safety issue (a substitute alert
+    texting the wrong person), not something to leave to a guess. The
+    response's `source` tells the review screen whether to also show the
+    reconstructed grid itself for a teacher to check — only the LLM path
+    can get the grid *shape* wrong, not just the code names."""
     raw = await file.read()
     try:
-        result = parse_timetable_file(io.BytesIO(raw))
-    except TimetableParseError as exc:
-        raise HTTPException(422, str(exc))
+        sheets = load_sheet_rows(io.BytesIO(raw))
+    except Exception as exc:
+        raise HTTPException(422, f"Could not read this as an Excel (.xlsx) file: {exc}") from exc
+
+    result = None
+    source = "deterministic"
+    last_error: TimetableParseError | None = None
+    for rows in sheets:
+        try:
+            result = parse_rows(rows)
+            break
+        except TimetableParseError as exc:
+            last_error = exc
+
+    if result is None:
+        llm_error: Exception | None = None
+        for rows in sheets:
+            try:
+                result = timetable_extraction.extract_timetable(rows)
+                source = "llm"
+                break
+            except (timetable_extraction.TimetableExtractionNotConfigured, timetable_extraction.TimetableExtractionError) as exc:
+                llm_error = exc
+
+    if result is None:
+        detail = str(last_error) if last_error else "Could not read this as a timetable."
+        if llm_error is not None and not isinstance(llm_error, timetable_extraction.TimetableExtractionNotConfigured):
+            detail += f" AI-assisted reading also couldn't make sense of it: {llm_error}"
+        raise HTTPException(422, detail)
+
     subject_codes, teacher_codes = extract_codes(result["classes"])
     classes_out = []
     for label in result["classes"]:
@@ -474,7 +509,13 @@ async def import_timetable_preview(file: UploadFile = File(...), current_user=De
         classes_out.append({"label": label, "grade": grade, "section": section})
     if not classes_out:
         raise HTTPException(422, "Found a timetable grid, but none of the row labels looked like a class (e.g. '10A').")
-    return {"classes": classes_out, "subject_codes": subject_codes, "teacher_codes": teacher_codes, "grid": result["classes"]}
+    return {
+        "classes": classes_out,
+        "subject_codes": subject_codes,
+        "teacher_codes": teacher_codes,
+        "grid": result["classes"],
+        "source": source,
+    }
 
 
 class TimetableImportConfirmRequest(BaseModel):
