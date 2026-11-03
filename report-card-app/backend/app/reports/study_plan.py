@@ -44,17 +44,27 @@ def weakest_subject(student: dict, exam_defs: list[dict]) -> str | None:
 
 
 def get_chapters(conn: psycopg.Connection, account_id: int, class_level: str, subject: str) -> list[dict]:
-    """Only ever this account's own confirmed syllabus (see
-    app/db/reference_documents.py) — never another school's data, so an
-    account that hasn't uploaded and confirmed its own syllabus simply gets
-    nothing here (callers already treat that as "show nothing")."""
+    """This account's own confirmed syllabus (see app/db/reference_documents.py)
+    when it has one, otherwise the built-in global default (account_id IS
+    NULL, seeded by app/db/syllabus_seed.py) — so every school gets a real
+    prep plan by default, and a school's own upload only ever replaces that
+    default rather than needing one before this feature works at all."""
     class_level = (class_level or "").strip()
     normalized_subject = _normalize_subject(subject)
-    return list(
+    own = list(
         conn.execute(
             "SELECT chapter_no, chapter_name, genre, theme, month, periods FROM syllabus_chapter "
             "WHERE account_id = %s AND class_level = %s AND subject = %s ORDER BY chapter_no",
             (account_id, class_level, normalized_subject),
+        ).fetchall()
+    )
+    if own:
+        return own
+    return list(
+        conn.execute(
+            "SELECT chapter_no, chapter_name, genre, theme, month, periods FROM syllabus_chapter "
+            "WHERE account_id IS NULL AND class_level = %s AND subject = %s ORDER BY chapter_no",
+            (class_level, normalized_subject),
         ).fetchall()
     )
 

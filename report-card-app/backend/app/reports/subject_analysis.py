@@ -176,20 +176,31 @@ def compute_exam_stats(all_students: list[dict], exam_defs: list[dict], settings
 
 
 def get_blueprint(conn: psycopg.Connection, account_id: int, class_level: str, subject_name: str) -> list[dict]:
-    """Only ever this account's own confirmed blueprint (see
-    app/db/reference_documents.py) — never another school's data."""
+    """This account's own confirmed blueprint (see
+    app/db/reference_documents.py) when it has one, otherwise the built-in
+    global default (account_id IS NULL) — same fallback as get_chapters, so
+    every school sees a real blueprint by default."""
     canon = normalize_subject_key(subject_name)
     if not canon:
         return []
-    return list(
+    own = list(
         conn.execute(
             "SELECT topic_name, marks, choice_marks FROM subject_blueprint WHERE account_id = %s AND class_level = %s AND subject = %s ORDER BY marks DESC",
             (account_id, class_level, canon),
         ).fetchall()
     )
+    if own:
+        return own
+    return list(
+        conn.execute(
+            "SELECT topic_name, marks, choice_marks FROM subject_blueprint WHERE account_id IS NULL AND class_level = %s AND subject = %s ORDER BY marks DESC",
+            (class_level, canon),
+        ).fetchall()
+    )
 
 
 def get_exam_info(conn: psycopg.Connection, account_id: int, class_level: str, subject_name: str) -> tuple[str, list[str]]:
+    """Same own-account-first, global-default-fallback rule as get_blueprint."""
     canon = normalize_subject_key(subject_name)
     if not canon:
         return "", []
@@ -197,6 +208,11 @@ def get_exam_info(conn: psycopg.Connection, account_id: int, class_level: str, s
         "SELECT exam_format, tips FROM subject_exam_info WHERE account_id = %s AND class_level = %s AND subject = %s",
         (account_id, class_level, canon),
     ).fetchone()
+    if not row:
+        row = conn.execute(
+            "SELECT exam_format, tips FROM subject_exam_info WHERE account_id IS NULL AND class_level = %s AND subject = %s",
+            (class_level, canon),
+        ).fetchone()
     if not row:
         return "", []
     return row["exam_format"] or "", json.loads(row["tips"] or "[]")
