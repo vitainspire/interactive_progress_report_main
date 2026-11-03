@@ -30,6 +30,7 @@ from urllib.parse import quote
 
 import psycopg
 
+from app.integrations import science_lab
 from app.reports import exam_focus, study_plan
 from app.reports.analysis import build_analysis
 from app.reports.chat_canned import answer_canned_question, build_advice_items
@@ -40,7 +41,7 @@ from app.reports.parent_subject import (
     compute_subject_facts,
     subject_commentary_telugu,
 )
-from app.reports.subject_analysis import get_blueprint
+from app.reports.subject_analysis import get_blueprint, normalize_subject_key
 from app.reports.voice_script import _compute_facts
 
 
@@ -299,6 +300,16 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 .subject-plan-topics li:first-child{border-top:none;padding-top:0}
 .subject-plan-topics .spt-name{font-weight:600}
 .subject-plan-topics .spt-marks{flex:none;font-size:.82em;font-weight:700;color:var(--navy)}
+
+/* Smart Science Lab: an external interactive-labs site this app links out
+   to, only ever for Physical Science chapters it actually has content for
+   (see app/integrations/science_lab.py) — opens in a new tab since it's a
+   different site entirely, not part of this report. */
+.science-lab-chapter{border-top:1px solid var(--line);padding-top:.8em;margin-top:.8em}
+.science-lab-chapter:first-child{border-top:none;padding-top:0;margin-top:0}
+.science-lab-chapter .slc-title{font-weight:700;font-size:.92em;color:var(--ink)}
+.science-lab-links{display:flex;flex-wrap:wrap;gap:.5em;margin-top:.6em}
+.science-lab-link{display:inline-flex;align-items:center;gap:.4em;border:1px solid var(--line);border-radius:99px;padding:.45em 1em;font-size:.82em;font-weight:600;color:var(--navy);text-decoration:none;background:var(--ivory)}
 
 .attendance-card{border:1px solid var(--line);border-radius:14px;background:#fff;padding:1.1em}
 .attendance-total{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9em}
@@ -872,6 +883,27 @@ def render_subject_plan_page(
                 "</li>"
             )
         content += "</ul></div>"
+
+    # Smart Science Lab only has content for Physical Science (see
+    # app/integrations/science_lab.py) — looked up by chapter TITLE, never
+    # by number, since this app's own chapter numbering doesn't match that
+    # catalog's. Silently adds nothing for any other subject, or if none of
+    # this subject's current chapters happen to be in the catalog yet.
+    if normalize_subject_key(subject_name) == "PHYSICAL SCIENCE":
+        lab_chapters = [c for c in (science_lab.find_chapter_by_title(name) for name in focus["covered_chapters"]) if c]
+        if lab_chapters:
+            content += '<div class="summary-card subject-plan-card">'
+            content += '<div class="section-heading">\U0001f52c ప్రయత్నించి చూడండి / Try it yourself</div>'
+            for lab_ch in lab_chapters:
+                content += '<div class="science-lab-chapter">'
+                content += f'<div class="slc-title">{lab_ch["emoji"] if lab_ch.get("emoji") else ""} {_esc(lab_ch["title"])}</div>'
+                content += '<div class="science-lab-links">'
+                if lab_ch["lab"]["experiments"]:
+                    content += f'<a class="science-lab-link" href="{_esc(lab_ch["lab"]["url"])}" target="_blank" rel="noopener">\U0001f9ea ప్రయోగం చేయండి / Try the lab</a>'
+                if lab_ch["games"]["list"]:
+                    content += f'<a class="science-lab-link" href="{_esc(lab_ch["games"]["url"])}" target="_blank" rel="noopener">\U0001f3ae ఆటలు ఆడండి / Play games</a>'
+                content += "</div></div>"
+            content += "</div>"
 
     content += f'<a class="about-back" href="/api/public/report/{_esc(token)}/view">← వెనక్కి / Back to report</a>'
     content += "</div>"
