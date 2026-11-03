@@ -67,6 +67,27 @@ def create_event(req: EventCreate, current_user=Depends(get_current_user)):
         return _event_out(row)
 
 
+@router.put("/events/{event_id}")
+def update_event(event_id: int, req: EventCreate, current_user=Depends(get_current_user)):
+    if req.event_type not in _VALID_TYPES:
+        raise HTTPException(422, "event_type must be 'holiday' or 'exam'")
+    if not req.label.strip():
+        raise HTTPException(422, "label is required")
+    if not _DATE_RE.match(req.start_date) or not _DATE_RE.match(req.end_date):
+        raise HTTPException(422, "Dates must be in YYYY-MM-DD format")
+    if req.end_date < req.start_date:
+        raise HTTPException(422, "End date must be on or after the start date")
+    exam_key = req.exam_key.strip().upper() if (req.event_type == "exam" and req.exam_key) else None
+    if req.event_type == "exam" and not exam_key:
+        raise HTTPException(422, "exam_key is required for an exam date (e.g. 'FA-2')")
+    plan_type = req.plan_type.strip() if (req.event_type == "exam" and req.plan_type) else None
+    with session() as conn:
+        row = repo.update_event(conn, current_user["id"], event_id, req.label.strip(), exam_key, req.start_date, req.end_date, plan_type)
+        if not row:
+            raise HTTPException(404, "Calendar event not found")
+        return _event_out(row)
+
+
 @router.delete("/events/{event_id}")
 def delete_event(event_id: int, current_user=Depends(get_current_user)):
     with session() as conn:

@@ -20,7 +20,11 @@ function pad2(n: number): string {
 /** A visual month grid — Sun..Sat columns, every day a cell, events shown
  * directly on the date(s) they cover. Reads straight off the same event
  * list the List view uses; no separate data source. */
-function MonthGrid({ year, month, events }: { year: number; month: number; events: TtCalendarEvent[] }) {
+function MonthGrid({
+  year, month, events, onDayClick,
+}: {
+  year: number; month: number; events: TtCalendarEvent[]; onDayClick: (dateStr: string) => void;
+}) {
   const firstWeekday = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
@@ -52,7 +56,12 @@ function MonthGrid({ year, month, events }: { year: number; month: number; event
         {weeks.map((week, wi) => (
           <tr key={wi}>
             {week.map((day, di) => (
-              <td key={di} className="h-24 w-[14.28%] align-top border p-1" style={{ borderColor: "var(--border)" }}>
+              <td
+                key={di}
+                className={`h-24 w-[14.28%] align-top border p-1 ${day !== null ? "cursor-pointer transition-colors hover:bg-[var(--accent-soft)]" : ""}`}
+                style={{ borderColor: "var(--border)" }}
+                onClick={day !== null ? () => onDayClick(`${year}-${pad2(month + 1)}-${pad2(day)}`) : undefined}
+              >
                 {day !== null && (
                   <>
                     <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -173,6 +182,198 @@ function ExamTypeRow({
   );
 }
 
+function formatDateHeading(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  return `${MONTH_LABELS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+/** Opened by clicking a day in the month grid — shows what's already on
+ * that date (editable in place) plus a form to add something new starting
+ * there, so a teacher doesn't have to hunt through the List view or the
+ * Exam Plan section to fix a single date. */
+function DayModal({
+  date, events, examTypes, onClose, onSave, onDelete, onAdd,
+}: {
+  date: string;
+  events: TtCalendarEvent[];
+  examTypes: ExamPlanType[];
+  onClose: () => void;
+  onSave: (id: number, label: string, examKey: string | null, planType: string | null, startDate: string, endDate: string) => Promise<void>;
+  onDelete: (id: number) => void;
+  onAdd: (eventType: "holiday" | "exam", label: string, examKey: string | null, planType: string | null, startDate: string, endDate: string) => Promise<void>;
+}) {
+  const [addType, setAddType] = useState<"holiday" | "exam">("holiday");
+  const [addLabel, setAddLabel] = useState("");
+  const [addExamKey, setAddExamKey] = useState("");
+  const [addPlanType, setAddPlanType] = useState("");
+  const [addEnd, setAddEnd] = useState(date);
+  const [addBusy, setAddBusy] = useState(false);
+
+  async function submitAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!addLabel.trim()) return;
+    if (addType === "exam" && !addExamKey.trim()) return;
+    setAddBusy(true);
+    try {
+      await onAdd(addType, addLabel.trim(), addType === "exam" ? addExamKey.trim() : null, addType === "exam" ? addPlanType || null : null, date, addEnd);
+      setAddLabel("");
+      setAddExamKey("");
+      setAddPlanType("");
+      setAddEnd(date);
+    } finally {
+      setAddBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(15, 23, 42, 0.45)" }} onClick={onClose}>
+      <div className="soft-card w-full max-w-md max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+            {formatDateHeading(date)}
+          </h3>
+          <button type="button" onClick={onClose} className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+            Close
+          </button>
+        </div>
+
+        {events.length > 0 ? (
+          <div className="mt-3 space-y-3">
+            {events.map((ev) => (
+              <DayEventRow key={ev.id} event={ev} onSave={onSave} onDelete={onDelete} />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+            Nothing on this date yet.
+          </p>
+        )}
+
+        <form onSubmit={submitAdd} className="mt-4 space-y-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
+          <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+            Add something on this date
+          </p>
+          <div className="flex gap-2">
+            <select
+              value={addType}
+              onChange={(e) => setAddType(e.target.value as "holiday" | "exam")}
+              className="rounded-md border px-2 py-1.5 text-xs font-medium"
+              style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+            >
+              <option value="holiday">Holiday</option>
+              <option value="exam">Exam date</option>
+            </select>
+            <input
+              type="text"
+              value={addLabel}
+              onChange={(e) => setAddLabel(e.target.value)}
+              placeholder={addType === "holiday" ? "e.g. Diwali" : "e.g. Unit Test (UT-2)"}
+              className="min-w-0 flex-1 text-sm"
+              required
+            />
+          </div>
+          {addType === "exam" && (
+            <div className="flex gap-2">
+              <select
+                value={addPlanType}
+                onChange={(e) => setAddPlanType(e.target.value)}
+                className="flex-1 rounded-md border px-2 py-1.5 text-xs font-medium"
+                style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+              >
+                <option value="">No exam type</option>
+                {examTypes.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={addExamKey}
+                onChange={(e) => setAddExamKey(e.target.value)}
+                placeholder="Exam code, e.g. FA-1"
+                className="flex-1 text-sm"
+                required
+              />
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Through
+            </label>
+            <input type="date" value={addEnd} min={date} onChange={(e) => setAddEnd(e.target.value)} className="text-sm" />
+            <button type="submit" disabled={addBusy} className="ml-auto flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+              <PlusIcon size={12} />
+              Add
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function DayEventRow({
+  event,
+  onSave,
+  onDelete,
+}: {
+  event: TtCalendarEvent;
+  onSave: (id: number, label: string, examKey: string | null, planType: string | null, startDate: string, endDate: string) => Promise<void>;
+  onDelete: (id: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [label, setLabel] = useState(event.label);
+  const [startDate, setStartDate] = useState(event.start_date);
+  const [endDate, setEndDate] = useState(event.end_date);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await onSave(event.id, label.trim() || event.label, event.exam_key, event.plan_type, startDate, endDate);
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5" style={{ background: "var(--surface-2)" }}>
+        <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+          {event.event_type === "holiday" ? "🎉" : "📝"} {event.label}
+        </span>
+        <span className="flex items-center gap-2">
+          <button type="button" onClick={() => setEditing(true)} className="text-xs font-semibold" style={{ color: "var(--accent)" }}>
+            Edit
+          </button>
+          <button type="button" onClick={() => onDelete(event.id)} style={{ color: "var(--text-muted)" }}>
+            <TrashIcon size={13} />
+          </button>
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5 rounded-lg p-2" style={{ background: "var(--surface-2)" }}>
+      <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} className="w-full text-sm" />
+      <div className="flex items-center gap-2">
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs" />
+        <span style={{ color: "var(--text-muted)" }}>–</span>
+        <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs" />
+        <button type="button" onClick={save} disabled={busy} className="ml-auto rounded-md px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+          Save
+        </button>
+        <button type="button" onClick={() => setEditing(false)} className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** One school-wide calendar of holidays and real exam dates — reachable
  * from the account menu (like Syllabus/blueprint review) rather than
  * nested inside the Timetable tool, since it's relevant whether or not a
@@ -200,6 +401,7 @@ export function CalendarPage() {
   const [holidayEnd, setHolidayEnd] = useState(todayStr);
   const [holidayBusy, setHolidayBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   function refresh() {
     api
@@ -294,6 +496,30 @@ export function CalendarPage() {
     await api.del(`/calendar/events/${id}`);
     refresh();
   }
+
+  async function saveEvent(
+    id: number, label: string, examKey: string | null, planType: string | null, startDate: string, endDate: string,
+  ) {
+    await api.put(`/calendar/events/${id}`, {
+      event_type: examKey ? "exam" : "holiday",
+      label, exam_key: examKey, plan_type: planType, start_date: startDate, end_date: endDate,
+    });
+    refresh();
+  }
+
+  async function addEventOnDate(
+    eventType: "holiday" | "exam", label: string, examKey: string | null, planType: string | null, startDate: string, endDate: string,
+  ) {
+    await api.post("/calendar/events", {
+      event_type: eventType, label, exam_key: examKey, plan_type: planType, start_date: startDate, end_date: endDate,
+    });
+    refresh();
+  }
+
+  const selectedDateEvents = useMemo(
+    () => (overview?.events ?? []).filter((e) => selectedDate && e.start_date <= selectedDate && e.end_date >= selectedDate),
+    [overview, selectedDate],
+  );
 
   const occurrencesByType = useMemo(() => {
     const map = new Map<string, TtCalendarEvent[]>();
@@ -535,7 +761,7 @@ export function CalendarPage() {
                   </button>
                 </div>
                 <div className="mt-2 overflow-x-auto">
-                  <MonthGrid year={cursor.getFullYear()} month={cursor.getMonth()} events={overview.events} />
+                  <MonthGrid year={cursor.getFullYear()} month={cursor.getMonth()} events={overview.events} onDayClick={setSelectedDate} />
                 </div>
               </div>
             ) : (
@@ -571,6 +797,18 @@ export function CalendarPage() {
             )}
           </div>
         </>
+      )}
+
+      {selectedDate && overview && (
+        <DayModal
+          date={selectedDate}
+          events={selectedDateEvents}
+          examTypes={overview.exam_types}
+          onClose={() => setSelectedDate(null)}
+          onSave={saveEvent}
+          onDelete={deleteEvent}
+          onAdd={addEventOnDate}
+        />
       )}
     </section>
   );

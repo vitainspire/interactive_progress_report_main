@@ -31,6 +31,17 @@ def create_event(
     return row
 
 
+def update_event(
+    conn: psycopg.Connection, account_id: int, event_id: int, label: str,
+    exam_key: str | None, start_date: str, end_date: str, plan_type: str | None,
+) -> dict | None:
+    return conn.execute(
+        "UPDATE academic_calendar_event SET label = %s, exam_key = %s, plan_type = %s, start_date = %s, end_date = %s "
+        "WHERE id = %s AND account_id = %s RETURNING *",
+        (label, exam_key, plan_type, start_date, end_date, event_id, account_id),
+    ).fetchone()
+
+
 def delete_event(conn: psycopg.Connection, account_id: int, event_id: int) -> bool:
     cur = conn.execute(
         "DELETE FROM academic_calendar_event WHERE id = %s AND account_id = %s",
