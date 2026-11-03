@@ -157,3 +157,31 @@ def compute_working_capacity(
         "non_working_days": total_days - working_days,
         "working_hours": round(working_days * hours_per_day) if hours_per_day else None,
     }
+
+
+def working_dates_between(start_date: str, end_date: str, week_pattern: str, holidays: list[dict]) -> list[str]:
+    """Same rule as compute_working_capacity (weekly off day(s) + declared
+    holidays don't count), but returns the actual dates instead of just a
+    count — used by the day-by-day exam revision plan, which needs to put
+    each study day on a real calendar date rather than a "day 3 of 12"
+    label with no date behind it."""
+    start = date.fromisoformat(start_date)
+    end = date.fromisoformat(end_date)
+    working_weekdays = set(range(6)) if week_pattern == "6-day" else set(range(5))
+
+    holiday_dates: set[date] = set()
+    for h in holidays:
+        d = date.fromisoformat(h["start_date"])
+        e = date.fromisoformat(h["end_date"])
+        cur = d
+        while cur <= e:
+            holiday_dates.add(cur)
+            cur += timedelta(days=1)
+
+    out: list[str] = []
+    cur = start
+    while cur <= end:
+        if cur.weekday() in working_weekdays and cur not in holiday_dates:
+            out.append(cur.isoformat())
+        cur += timedelta(days=1)
+    return out

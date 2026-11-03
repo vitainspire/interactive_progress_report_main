@@ -181,6 +181,16 @@ CREATE TABLE IF NOT EXISTS study_plan_cache (
     created_at TEXT NOT NULL
 );
 
+-- Caches one generated day-by-day exam revision plan per (account, subject,
+-- exam, exact list of usable study dates) — the date list changes every
+-- day as today moves forward, so this naturally regenerates once a day
+-- rather than ever showing a parent a plan with dates already in the past.
+CREATE TABLE IF NOT EXISTS exam_day_plan_cache (
+    cache_key TEXT PRIMARY KEY,
+    plan_text TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 -- The official SSC exam BLUEPRINT's marks-weightage per topic — distinct
 -- from syllabus_chapter's textbook table-of-contents (periods/month/page):
 -- the blueprint groups topics differently (e.g. one "Light: Reflection and

@@ -302,6 +302,7 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
 .subject-plan-topics li:first-child{border-top:none;padding-top:0}
 .subject-plan-topics .spt-name{font-weight:600}
 .subject-plan-topics .spt-marks{flex:none;font-size:.82em;font-weight:700;color:var(--navy)}
+.subject-plan-dayplan{margin-top:.8em;font-size:.9em;line-height:1.8;color:var(--ink);white-space:pre-line}
 
 /* Smart Science Lab: an external interactive-labs site this app links out
    to, only ever for Physical Science chapters it actually has content for
@@ -791,6 +792,26 @@ VIEW_REPORT_SCRIPT = """
 </script>
 """
 
+SUBJECT_PLAN_SCRIPT = """
+<script>
+(function(){
+  var shell = document.getElementById('subjectPlanShell');
+  var dayPlanCard = document.getElementById('dayPlanCard');
+  if(!shell || !dayPlanCard) return;
+  var token = shell.dataset.token;
+  var subject = shell.dataset.subject;
+  fetch('/api/public/report/' + token + '/subject/' + encodeURIComponent(subject) + '/day-plan')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data && data.available){
+        document.getElementById('dayPlanText').textContent = data.plan;
+        dayPlanCard.hidden = false;
+      }
+    }).catch(function(){});
+})();
+</script>
+"""
+
 
 def render_parent_report_page(
     student: dict, all_students: list[dict], exam_defs: list[dict], settings, school_name: str,
@@ -857,7 +878,7 @@ def render_subject_plan_page(
 
     header = TOPBAR_HEADER.format(school=_esc(school_name or "School"), student_name=_esc(student["name"]))
 
-    content = '<div class="view-shell">'
+    content = f'<div class="view-shell" id="subjectPlanShell" data-token="{_esc(token)}" data-subject="{_esc(subject_name)}">'
     content += '<div class="subject-plan-head">'
     content += '<div class="eyebrow">ప్రిపరేషన్ ప్లాన్ / Prep plan</div>'
     content += f'<h1>{_esc(subject_name)}</h1>'
@@ -896,6 +917,19 @@ def render_subject_plan_page(
                 "</li>"
             )
         content += "</ul></div>"
+
+    # AI-generated day-by-day revision schedule (app/reports/study_plan.py's
+    # generate_exam_day_plan) — fetched lazily (see SUBJECT_PLAN_SCRIPT
+    # below) since it's a slow LLM call, same reasoning as the main report
+    # page's study-plan/exam-focus cards. Hidden until the fetch resolves;
+    # stays hidden entirely if this account hasn't set a real date for
+    # focus["exam"] in the Academic Calendar (nothing to build a day count
+    # from) or the LLM call fails.
+    if focus["exam"]:
+        content += '<div class="summary-card subject-plan-card" id="dayPlanCard" hidden>'
+        content += '<div class="section-heading">\U0001f4c5 రోజువారీ ప్రణాళిక / Day-by-day plan</div>'
+        content += '<div class="subject-plan-dayplan" id="dayPlanText">లోడ్ అవుతోంది…</div>'
+        content += "</div>"
 
     # Smart Science Lab only has content for Physical Science (see
     # app/integrations/science_lab.py) — looked up by chapter TITLE, never
@@ -940,6 +974,7 @@ def render_subject_plan_page(
 
     content += f'<a class="about-back" href="/api/public/report/{_esc(token)}/view">← వెనక్కి / Back to report</a>'
     content += "</div>"
+    content += SUBJECT_PLAN_SCRIPT
 
     return SIMPLE_SHELL.format(
         title=_esc(f"{subject_name} — Prep Plan"),

@@ -46,13 +46,13 @@ def is_configured() -> bool:
     return bool(OPENROUTER_API_KEY)
 
 
-def _post(messages: list[dict]) -> httpx.Response:
+def _post(messages: list[dict], max_tokens: int = 1500) -> httpx.Response:
     return httpx.post(
         OPENROUTER_URL,
         json={
             "model": OPENROUTER_MODEL,
             "messages": messages,
-            "max_tokens": 1500,
+            "max_tokens": max_tokens,
             # qwen3.8-flash reasons before answering, spending completion
             # tokens on a hidden "reasoning" field before ever writing the
             # visible one — capped separately so a long think can't eat
@@ -73,18 +73,18 @@ def _post(messages: list[dict]) -> httpx.Response:
 
 
 @traceable(run_type="llm", name="openrouter_completion")
-def _complete(messages: list[dict]) -> str:
+def _complete(messages: list[dict], max_tokens: int = 1500) -> str:
     if not is_configured():
         raise ChatNotConfigured("Chat isn't configured on this server (missing OPENROUTER_API_KEY).")
 
     try:
-        response = _post(messages)
+        response = _post(messages, max_tokens)
         # The shared/free-tier key on this model gets transient 429s under
         # light concurrent load — one short retry clears most of them
         # without making every rate-limit a hard failure for the parent.
         if response.status_code == 429:
             time.sleep(2)
-            response = _post(messages)
+            response = _post(messages, max_tokens)
     except httpx.HTTPError as exc:
         raise ChatSendError(f"Could not reach the chat service: {exc}") from exc
     if response.status_code >= 400:
@@ -114,11 +114,17 @@ def ask_about_student(context: str, history: list[dict], question: str) -> str:
 
 
 @traceable(name="study_plan")
-def generate_text(system_prompt: str, user_prompt: str) -> str:
+def generate_text(system_prompt: str, user_prompt: str, max_tokens: int = 1500) -> str:
     """A one-off completion with no conversation history — used by the
-    syllabus-aware study plan (app/reports/study_plan.py), which needs a
-    single generated answer rather than a back-and-forth chat."""
-    return _complete([
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ])
+    syllabus-aware study plan and the day-by-day exam plan
+    (app/reports/study_plan.py), which need a single generated answer
+    rather than a back-and-forth chat. `max_tokens` is overridable because
+    a multi-week day-by-day schedule in Telugu genuinely needs more room
+    than a 3-4 sentence study tip."""
+    return _complete(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        max_tokens,
+    )

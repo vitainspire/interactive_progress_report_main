@@ -137,3 +137,100 @@ def generate_study_plan(conn: psycopg.Connection, account_id: int, class_level: 
         (key, _normalize_subject(subject), plan, datetime.now(timezone.utc).isoformat()),
     )
     return plan
+
+
+def _format_topics(topics: list[dict]) -> str:
+    lines = []
+    for t in topics:
+        marks = t["marks"] + (t.get("choice_marks") or 0)
+        lines.append(f"{t['topic_name']} ({marks} marks)")
+    return "\n".join(lines)
+
+
+def _format_date_with_weekday(iso_date: str) -> str:
+    # %-d (no leading zero) is Unix-only and raises on Windows, so the day
+    # number is built separately rather than via a single strftime format.
+    d = datetime.fromisoformat(iso_date)
+    return f"{d.strftime('%B')} {d.day} ({d.strftime('%A')})"
+
+
+def _day_plan_cache_key(account_id: int, class_level: str, subject: str, exam_key: str, study_dates: list[str]) -> str:
+    # study_dates is folded in whole (not just its length) because it's a
+    # different list every single day — today drops off the front as it
+    # becomes the past — so caching busts itself once a day with no extra
+    # bookkeeping, and a parent never sees a cached plan with dates that
+    # have already gone by.
+    dates_blob = ",".join(study_dates)
+    return hashlib.sha256(
+        f"{account_id}:{(class_level or '').strip()}:{_normalize_subject(subject)}:{exam_key}:{dates_blob}".encode("utf-8")
+    ).hexdigest()
+
+
+_DAY_PLAN_SYSTEM_PROMPT = (
+    "You write a short, specific day-by-day exam revision schedule in Telugu for a parent. You're given a "
+    "child's real syllabus chapters likely in their next exam (with how many real class periods each took "
+    "to teach), the highest-marks topics from the official exam blueprint, and the exact list of usable "
+    "study dates between today and the exam (weekly off-days and holidays are already excluded from this "
+    "list). Assign the chapters across those dates — a chapter that took more class periods to teach should "
+    "get more days — and reserve the LAST date in the list purely for revision, explicitly naming the "
+    "single highest-marks topic to prioritize then. You MUST write exactly one line per date given to you, "
+    "covering every date in the list with nothing skipped, in the format 'Month Day (Weekday): what to "
+    "study'. Never invent a chapter, topic, or date that wasn't given to you, and never use a date outside "
+    "the list you were given. Plain conversational Telugu, one short sentence per line, no markdown, no "
+    "headings, no extra commentary before or after the day list."
+)
+
+# A day-by-day plan more than this many working days out gets capped to the
+# final stretch before the exam (the actual revision-critical window) —
+# both to keep the LLM call's token cost bounded and because a granular
+# daily chapter assignment 2+ months ahead of an exam isn't realistically
+# useful; a school that sets an exam date far in advance still gets a real
+# plan, just scoped to the weeks that matter most.
+_MAX_PLAN_DAYS = 25
+
+
+def generate_exam_day_plan(
+    conn: psycopg.Connection, account_id: int, class_level: str, subject: str,
+    exam_key: str, chapters: list[dict], topics: list[dict], study_dates: list[str],
+) -> str | None:
+    """A day-by-day revision schedule for this subject's next exam, spanning
+    `study_dates` (already computed by the caller from this account's own
+    Academic Calendar — see app/db/calendar.py's working_dates_between — so
+    weekends/holidays are never assigned a chapter), capped to the final
+    _MAX_PLAN_DAYS of it when the exam is still far off. Returns None if
+    there's nothing to schedule (no chapters, no study days left) or the
+    LLM call isn't configured/fails, same silent-fallback shape as
+    generate_study_plan."""
+    if not chapters or not study_dates:
+        return None
+    plan_dates = study_dates[-_MAX_PLAN_DAYS:]
+
+    key = _day_plan_cache_key(account_id, class_level, subject, exam_key, plan_dates)
+    row = conn.execute("SELECT plan_text FROM exam_day_plan_cache WHERE cache_key = %s", (key,)).fetchone()
+    if row:
+        return row["plan_text"]
+
+    user_prompt = (
+        f"Class: {class_level}\n"
+        f"Subject: {subject}\n"
+        f"Upcoming exam: {exam_key}\n\n"
+        f"Real syllabus chapters likely in this exam:\n{_format_chapters(chapters)}\n\n"
+        f"Highest-weightage topics from the exam blueprint:\n{_format_topics(topics)}\n\n"
+        f"Usable study dates before the exam (Sundays/holidays already excluded):\n"
+        + "\n".join(_format_date_with_weekday(d) for d in plan_dates)
+    )
+    try:
+        plan = chat.generate_text(
+            _DAY_PLAN_SYSTEM_PROMPT, user_prompt, max_tokens=3000,
+            langsmith_extra={"metadata": {"account_id": account_id}},
+        )
+    except (chat.ChatNotConfigured, chat.ChatSendError) as exc:
+        print(f"[study_plan] generate_exam_day_plan failed: {exc}")
+        return None
+
+    conn.execute(
+        "INSERT INTO exam_day_plan_cache (cache_key, plan_text, created_at) VALUES (%s, %s, %s) "
+        "ON CONFLICT (cache_key) DO NOTHING",
+        (key, plan, datetime.now(timezone.utc).isoformat()),
+    )
+    return plan

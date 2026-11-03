@@ -1,5 +1,6 @@
 import json
 import time
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -7,6 +8,7 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from app.db import batches as repo
+from app.db import calendar as calendar_repo
 from app.db import users as user_repo
 from app.db.database import session
 from app.integrations import bhashini, chat, tts_audio
@@ -21,6 +23,7 @@ from app.reports.parent_report import (
     render_report_landing_page,
     render_subject_plan_page,
 )
+from app.reports.parent_subject import compute_subject_facts
 from app.reports.subject_analysis import get_blueprint
 
 
@@ -150,6 +153,52 @@ def get_subject_plan(token: str, subject_name: str):
         if html is None:
             raise HTTPException(404, "No prep plan available for this subject yet.")
         return HTMLResponse(content=html)
+
+
+@router.get("/report/{token}/subject/{subject_name}/day-plan")
+def get_subject_day_plan(token: str, subject_name: str):
+    """A day-by-day revision schedule for this subject's next exam, fetched
+    client-side after the prep-plan page (/subject/{subject_name}/plan) has
+    already rendered — same lazy-load reasoning as /study-plan, since this
+    also makes an LLM call. Needs a real date for the upcoming exam set in
+    this account's Academic Calendar (app/db/calendar.py); without one
+    there's no day count to build a schedule from, so this returns
+    {"available": false} rather than guessing at one."""
+    with session() as conn:
+        student, _all_students, batch_row = _resolve_report_context(conn, token)
+        settings = repo.settings_from_row(batch_row)
+        exam_defs = json.loads(batch_row["exam_order"])
+        account_id, class_level = batch_row["user_id"], batch_row["class_level"]
+        is_fa_by_key = {e["key"]: e["is_fa"] for e in exam_defs}
+
+        def max_marks(key: str) -> float:
+            return settings.fa_marks_per_subject if is_fa_by_key[key] else settings.sa_marks_per_subject
+
+        exam_order = [e["key"] for e in exam_defs]
+        facts = compute_subject_facts(student, exam_order, subject_name, max_marks)
+        chapters = study_plan.get_chapters(conn, account_id, class_level, subject_name)
+        topics = get_blueprint(conn, account_id, class_level, subject_name)
+        completed_keys = [e.exam_key for e in facts.history]
+        focus = exam_focus.build_exam_focus(chapters, topics, completed_keys, settings.total_fa_exams, settings.total_sa_exams)
+        if not focus or not focus["exam"]:
+            return {"available": False}
+
+        exam_date_row = calendar_repo.get_exam_date(conn, account_id, focus["exam"])
+        if not exam_date_row:
+            return {"available": False, "reason": "no_exam_date"}
+
+        academic_year = calendar_repo.get_academic_year(conn, account_id)
+        holidays = [e for e in calendar_repo.list_events(conn, account_id) if e["event_type"] == "holiday"]
+        today = date.today().isoformat()
+        study_dates = calendar_repo.working_dates_between(today, exam_date_row["start_date"], academic_year["week_pattern"], holidays)
+        if not study_dates:
+            return {"available": False, "reason": "no_days_left"}
+
+        covered = [c for c in chapters if c["chapter_name"] in focus["covered_chapters"]] or chapters
+        plan = study_plan.generate_exam_day_plan(conn, account_id, class_level, subject_name, focus["exam"], covered, topics, study_dates)
+        if not plan:
+            return {"available": False}
+        return {"available": True, "exam": focus["exam"], "days_left": len(study_dates), "plan": plan}
 
 
 @router.get("/report/{token}/about", response_class=HTMLResponse)
