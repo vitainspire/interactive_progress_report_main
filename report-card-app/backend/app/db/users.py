@@ -53,3 +53,10 @@ def set_whatsapp_settings(conn: psycopg.Connection, user_id: int, language: str,
         "UPDATE app_user SET whatsapp_language = %s, whatsapp_channel_mode = %s, default_country_code = %s WHERE id = %s",
         (language, channel_mode, default_country_code.strip(), user_id),
     )
+
+
+def set_academic_year(conn: psycopg.Connection, user_id: int, start_date: str, end_date: str, week_pattern: str) -> None:
+    conn.execute(
+        "UPDATE app_user SET academic_year_start = %s, academic_year_end = %s, academic_week_pattern = %s WHERE id = %s",
+        (start_date, end_date, week_pattern, user_id),
+    )

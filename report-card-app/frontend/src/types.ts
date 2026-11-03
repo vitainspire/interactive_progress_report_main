@@ -369,8 +369,34 @@ export interface TtCalendarEvent {
   event_type: "holiday" | "exam";
   label: string;
   exam_key: string | null;
+  plan_type: string | null;
   start_date: string;
   end_date: string;
+}
+
+export interface ExamPlanType {
+  id: number;
+  name: string;
+  count_per_year: number;
+}
+
+export interface AcademicYear {
+  start_date: string | null;
+  end_date: string | null;
+  week_pattern: "5-day" | "6-day";
+}
+
+export interface WorkingCapacity {
+  working_days: number;
+  non_working_days: number;
+  working_hours: number | null;
+}
+
+export interface CalendarOverview {
+  academic_year: AcademicYear;
+  events: TtCalendarEvent[];
+  exam_types: ExamPlanType[];
+  working_capacity: WorkingCapacity | null;
 }
 
 export interface TtPendingNeed {

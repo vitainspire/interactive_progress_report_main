@@ -124,6 +124,24 @@ def _migrate_batch_class_teacher_name(conn: psycopg.Connection) -> None:
     conn.execute("ALTER TABLE batch ADD COLUMN IF NOT EXISTS class_teacher_name TEXT NOT NULL DEFAULT ''")
 
 
+def _migrate_academic_year(conn: psycopg.Connection) -> None:
+    """Adds the academic-year range + weekly pattern to a pre-existing
+    `app_user` table (see schema.sql) — everything else in the Academic
+    Calendar (working-capacity stats, the exam plan) is measured against
+    this range. NULL start/end means a school hasn't set it yet — callers
+    must not assume a default range."""
+    conn.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS academic_year_start TEXT")
+    conn.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS academic_year_end TEXT")
+    conn.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS academic_week_pattern TEXT NOT NULL DEFAULT '6-day'")
+
+
+def _migrate_calendar_plan_type(conn: psycopg.Connection) -> None:
+    """Adds `plan_type` to a pre-existing `academic_calendar_event` table
+    (see schema.sql) — groups an exam date under its exam_plan_type (e.g.
+    "Unit Test"), added after the Exam Plan feature."""
+    conn.execute("ALTER TABLE academic_calendar_event ADD COLUMN IF NOT EXISTS plan_type TEXT")
+
+
 def _migrate_school_address(conn: psycopg.Connection) -> None:
     """Adds an optional `school_address` to the pre-existing `app_user`
     table (see schema.sql) — used on the printed substitution sheet below
@@ -217,6 +235,8 @@ def init_db() -> None:
         _migrate_whatsapp_settings(conn)
         _migrate_exam_counts(conn)
         _migrate_batch_class_teacher_name(conn)
+        _migrate_academic_year(conn)
+        _migrate_calendar_plan_type(conn)
         seed_syllabus(conn)
         seed_subject_blueprint(conn)
         conn.commit()

@@ -406,8 +406,25 @@ CREATE TABLE IF NOT EXISTS academic_calendar_event (
     event_type TEXT NOT NULL,  -- 'holiday' | 'exam'
     label TEXT NOT NULL,
     exam_key TEXT,
+    -- Which exam_plan_type this occurrence belongs to (e.g. "Unit Test"),
+    -- so the Exam Plan UI can show "2 of 4 dated" per type. NULL for
+    -- holidays and for an exam date added outside the plan flow.
+    plan_type TEXT,
     start_date TEXT NOT NULL,
     end_date TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_academic_calendar_account ON academic_calendar_event(account_id, start_date);
+
+-- How many of each exam type ("Unit Test", "Quarterly Exam", ...) a school
+-- plans to run this year — the count a teacher commits to before knowing
+-- the exact dates. Actual dated occurrences live in
+-- academic_calendar_event (event_type='exam', plan_type=this type's name).
+CREATE TABLE IF NOT EXISTS exam_plan_type (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    count_per_year INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    UNIQUE(account_id, name)
+);
