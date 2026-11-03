@@ -926,8 +926,13 @@ def render_subject_plan_page(
                 content += '<div class="science-lab-chapter">'
                 content += f'<div class="slc-title">{lab_ch["emoji"] if lab_ch.get("emoji") else ""} {_esc(lab_ch["title"])}</div>'
                 content += '<div class="science-lab-links">'
-                if lab_ch["lab"]["experiments"]:
-                    content += f'<a class="science-lab-link" href="{_esc(lab_ch["lab"]["url"])}" target="_blank" rel="noopener">\U0001f9ea ప్రయోగం చేయండి / Try the lab</a>'
+                # The digital lab page exists for every cataloged chapter —
+                # `experiments` is just optional metadata the catalog hasn't
+                # filled in for every chapter yet (e.g. Chemical Reactions
+                # and Equations, Acids/Bases/Salts both have a working lab
+                # page with experiments=null), so it's not a signal that the
+                # lab itself is missing. lab["url"] is always present.
+                content += f'<a class="science-lab-link" href="{_esc(lab_ch["lab"]["url"])}" target="_blank" rel="noopener">\U0001f9ea ప్రయోగం చేయండి / Try the lab</a>'
                 if lab_ch["games"]["list"]:
                     content += f'<a class="science-lab-link" href="{_esc(lab_ch["games"]["url"])}" target="_blank" rel="noopener">\U0001f3ae ఆటలు ఆడండి / Play games</a>'
                 content += "</div></div>"
