@@ -364,6 +364,15 @@ export interface TtLeave {
   reason: string;
 }
 
+export interface TtCalendarEvent {
+  id: number;
+  event_type: "holiday" | "exam";
+  label: string;
+  exam_key: string | null;
+  start_date: string;
+  end_date: string;
+}
+
 export interface TtPendingNeed {
   leave_id: number;
   teacher_id: number;
@@ -405,6 +414,7 @@ export interface TtGeneratedSlot {
 export interface TtGenerateDayResult {
   date: string;
   day: string;
+  holiday?: string;
   resolved: TtGeneratedSlot[];
   unresolved: TtGeneratedSlot[];
 }

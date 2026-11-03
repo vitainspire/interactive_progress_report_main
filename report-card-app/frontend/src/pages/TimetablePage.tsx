@@ -6,6 +6,7 @@ import { CheckIcon, FolderIcon, PlusIcon, PrinterIcon, TrashIcon } from "../comp
 import { TimetableImportPanel } from "../components/TimetableImportPanel";
 import type {
   TtBreak,
+  TtCalendarEvent,
   TtClass,
   TtClassSubject,
   TtGenerateDayResult,
@@ -27,7 +28,7 @@ import type {
   TtTimetableEntry,
 } from "../types";
 
-type Tab = "classes" | "subjects" | "teachers" | "assignments" | "schedule" | "timetable" | "leave";
+type Tab = "classes" | "subjects" | "teachers" | "assignments" | "schedule" | "timetable" | "leave" | "calendar";
 
 const SETUP_TABS: { id: Tab; label: string }[] = [
   { id: "schedule", label: "Schedule" },
@@ -40,6 +41,7 @@ const SETUP_TABS: { id: Tab; label: string }[] = [
 const PRIMARY_TABS: { id: Tab; label: string }[] = [
   { id: "timetable", label: "Timetable" },
   { id: "leave", label: "Leave" },
+  { id: "calendar", label: "Calendar" },
 ];
 
 const SETUP_TAB_IDS = new Set<Tab>(SETUP_TABS.map((t) => t.id));
@@ -1381,7 +1383,11 @@ function QuickSubstitutionPanel({
 
       {result && (
         <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--border)" }}>
-          {result.resolved.length === 0 && result.unresolved.length === 0 ? (
+          {result.holiday ? (
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              {result.date} is a holiday ({result.holiday}) on this school's calendar — no substitutes needed.
+            </p>
+          ) : result.resolved.length === 0 && result.unresolved.length === 0 ? (
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
               No periods needed covering for {result.date}.
             </p>
@@ -2070,6 +2076,129 @@ function LeaveTab({
   );
 }
 
+function CalendarTab({
+  events,
+  onAdd,
+  onDelete,
+}: {
+  events: TtCalendarEvent[];
+  onAdd: (eventType: "holiday" | "exam", label: string, examKey: string, startDate: string, endDate: string) => Promise<void>;
+  onDelete: (id: number) => void;
+}) {
+  const [eventType, setEventType] = useState<"holiday" | "exam">("holiday");
+  const [label, setLabel] = useState("");
+  const [examKey, setExamKey] = useState("");
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(todayStr);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!label.trim() || (eventType === "exam" && !examKey.trim())) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onAdd(eventType, label.trim(), examKey.trim(), startDate, endDate);
+      setLabel("");
+      setExamKey("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add this calendar entry");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function formatRange(ev: TtCalendarEvent): string {
+    return ev.start_date === ev.end_date ? ev.start_date : `${ev.start_date} – ${ev.end_date}`;
+  }
+
+  return (
+    <Panel
+      title="Academic calendar"
+      hint="Holidays and real exam dates for this school — used to skip holidays when finding substitutes, and to show parents a real exam date instead of just an exam name."
+    >
+      <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
+        <div className="w-36">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Type
+          </label>
+          <select
+            value={eventType}
+            onChange={(e) => setEventType(e.target.value as "holiday" | "exam")}
+            className="w-full rounded-md border px-3 py-2 text-sm font-medium"
+            style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }}
+          >
+            <option value="holiday">Holiday</option>
+            <option value="exam">Exam date</option>
+          </select>
+        </div>
+        <div className="w-44">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            {eventType === "holiday" ? "Holiday name" : "Exam name"}
+          </label>
+          <input
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder={eventType === "holiday" ? "e.g. Diwali" : "e.g. SA-1"}
+            required
+          />
+        </div>
+        {eventType === "exam" && (
+          <div className="w-28">
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Exam code
+            </label>
+            <input type="text" value={examKey} onChange={(e) => setExamKey(e.target.value)} placeholder="e.g. SA-1" required />
+          </div>
+        )}
+        <div className="w-40">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            From
+          </label>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+        </div>
+        <div className="w-40">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            To
+          </label>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+        </div>
+        <button type="submit" disabled={busy} className="accent-fill flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+          <PlusIcon size={14} />
+          Add
+        </button>
+      </form>
+      {eventType === "exam" && (
+        <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+          The exam code must match an exam already used on a marks sheet (e.g. "FA-1", "SA-1") for the date to show up on a parent's report.
+        </p>
+      )}
+      {error && <p className="mt-2 text-xs" style={{ color: "var(--accent-mark)" }}>{error}</p>}
+
+      <div className="mt-4 divide-y" style={{ borderColor: "var(--border)" }}>
+        {events.length === 0 && (
+          <p className="py-2 text-sm" style={{ color: "var(--text-muted)" }}>
+            No holidays or exam dates added yet.
+          </p>
+        )}
+        {events.map((ev) => (
+          <Row key={ev.id} onDelete={() => onDelete(ev.id)}>
+            <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              {ev.event_type === "holiday" ? "🎉" : "📝"} {ev.label}
+              {ev.exam_key ? ` (${ev.exam_key})` : ""}
+            </span>
+            <span className="ml-2 text-xs" style={{ color: "var(--text-muted)" }}>
+              {formatRange(ev)}
+            </span>
+          </Row>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
 function SchoolAddressField() {
   const { user, setSchoolAddress } = useAuth();
   const [value, setValue] = useState(user?.school_address ?? "");
@@ -2426,6 +2555,7 @@ export function TimetablePage() {
   const [config, setConfig] = useState<TtSchoolConfig | null>(null);
   const [leaves, setLeaves] = useState<TtLeave[]>([]);
   const [pendingNeeds, setPendingNeeds] = useState<TtPendingNeed[] | null>(null);
+  const [calendarEvents, setCalendarEvents] = useState<TtCalendarEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [hasTimetable, setHasTimetable] = useState<boolean | null>(null);
   const [setupOpen, setSetupOpen] = useState(true);
@@ -2449,6 +2579,26 @@ export function TimetablePage() {
       .get<TtPendingNeed[]>("/timetable/leaves/pending")
       .then(setPendingNeeds)
       .catch(() => setPendingNeeds([]));
+  }
+
+  function refreshCalendarEvents() {
+    api.get<TtCalendarEvent[]>("/calendar/events").then(setCalendarEvents).catch(() => {});
+  }
+
+  async function addCalendarEvent(eventType: "holiday" | "exam", label: string, examKey: string, startDate: string, endDate: string) {
+    await api.post("/calendar/events", {
+      event_type: eventType,
+      label,
+      exam_key: eventType === "exam" ? examKey : null,
+      start_date: startDate,
+      end_date: endDate,
+    });
+    refreshCalendarEvents();
+  }
+
+  async function deleteCalendarEvent(id: number) {
+    await api.del(`/calendar/events/${id}`);
+    setCalendarEvents((prev) => prev.filter((e) => e.id !== id));
   }
 
   useEffect(() => {
@@ -2477,6 +2627,7 @@ export function TimetablePage() {
       .catch(() => setHasTimetable(false));
     refreshLeaves();
     refreshPendingNeeds();
+    refreshCalendarEvents();
   }, []);
 
   async function addClass(grade: string, section: string) {
@@ -2737,6 +2888,9 @@ export function TimetablePage() {
             onConfirmNeed={confirmNeed}
             onRefreshPending={refreshPendingNeeds}
           />
+        )}
+        {loaded && tab === "calendar" && (
+          <CalendarTab events={calendarEvents} onAdd={addCalendarEvent} onDelete={deleteCalendarEvent} />
         )}
       </div>
     </section>

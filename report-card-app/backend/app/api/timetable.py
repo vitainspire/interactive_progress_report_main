@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from app.core.deps import get_current_user, get_current_user_from_header_or_query
+from app.db import calendar as calendar_repo
 from app.db import timetable as repo
 from app.db.database import session
 from app.integrations import sms, timetable_extraction
@@ -953,6 +954,15 @@ def generate_day_substitutions(req: GenerateDayRequest, current_user=Depends(get
         raise HTTPException(422, "date must be in YYYY-MM-DD format")
     day = _WEEKDAY_CODES[date_cls.fromisoformat(req.date).weekday()]
     with session() as conn:
+        # The weekly working-days pattern alone can't express a one-off
+        # holiday falling on an otherwise-normal day (e.g. a festival on a
+        # Monday) — this account's own calendar (see app/db/calendar.py) is
+        # what actually knows that. No substitutes needed on a day school
+        # isn't in session at all.
+        holiday = calendar_repo.get_holiday_on(conn, current_user["id"], req.date)
+        if holiday:
+            return {"date": req.date, "day": day, "holiday": holiday["label"], "resolved": [], "unresolved": []}
+
         all_teacher_ids = {t["id"] for t in repo.list_teachers(conn, current_user["id"])}
         for tid in req.whole_day_absent_teacher_ids:
             if tid not in all_teacher_ids:
@@ -1049,6 +1059,9 @@ def get_pending_substitution_needs(current_user=Depends(get_current_user)):
             d = start
             while d <= end:
                 date_str = d.isoformat()
+                if calendar_repo.get_holiday_on(conn, current_user["id"], date_str):
+                    d += timedelta(days=1)
+                    continue  # school isn't in session — nothing to cover
                 weekday = _WEEKDAY_CODES[d.weekday()]
                 for entry in ctx["entries_by_teacher_day"].get((leave["teacher_id"], weekday), []):
                     if (entry["class_id"], date_str, entry["period"]) in ctx["existing_substitutions"]:

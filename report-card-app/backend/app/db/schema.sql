@@ -391,3 +391,23 @@ CREATE TABLE IF NOT EXISTS tt_leave (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tt_leave_teacher ON tt_leave(teacher_id);
+
+-- A school's own holidays and real exam dates — scoped to the whole
+-- account (one calendar per school), not per batch/class, since a
+-- school's holidays and public-exam windows are the same across every
+-- class. 'exam' rows carry exam_key (e.g. "FA-2") so they can be matched
+-- against a batch's own exam_order — 'holiday' rows don't need one.
+-- Deliberately not a generic "events" table — only the two kinds this app
+-- actually syncs against something (substitute-finding, exam-timing
+-- display), not a sprawling school-events calendar.
+CREATE TABLE IF NOT EXISTS academic_calendar_event (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL,  -- 'holiday' | 'exam'
+    label TEXT NOT NULL,
+    exam_key TEXT,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_academic_calendar_account ON academic_calendar_event(account_id, start_date);

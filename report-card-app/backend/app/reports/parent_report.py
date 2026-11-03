@@ -26,10 +26,12 @@ from __future__ import annotations
 import html
 import math
 import re
+from datetime import date as date_cls
 from urllib.parse import quote
 
 import psycopg
 
+from app.db import calendar as calendar_repo
 from app.integrations import science_lab
 from app.reports import exam_focus, study_plan
 from app.reports.analysis import build_analysis
@@ -860,7 +862,17 @@ def render_subject_plan_page(
     content += '<div class="eyebrow">ప్రిపరేషన్ ప్లాన్ / Prep plan</div>'
     content += f'<h1>{_esc(subject_name)}</h1>'
     if focus["exam"]:
-        content += f'<p>రాబోయే {_esc(focus["exam"])} పరీక్ష కోసం / For the upcoming {_esc(focus["exam"])} exam</p>'
+        # A real date here (this account's own academic calendar, see
+        # app/db/calendar.py) replaces the otherwise date-less exam name —
+        # purely a display addition, never changes which exam this logic
+        # treats as "next" (that's still exam_focus.py's own sequence
+        # position, driven by which exams already have marks entered).
+        exam_date_row = calendar_repo.get_exam_date(conn, account_id, focus["exam"])
+        date_bit = ""
+        if exam_date_row:
+            d = date_cls.fromisoformat(exam_date_row["start_date"])
+            date_bit = f" ({d.strftime('%B')} {d.day})"
+        content += f'<p>రాబోయే {_esc(focus["exam"])} పరీక్ష కోసం{date_bit} / For the upcoming {_esc(focus["exam"])} exam{date_bit}</p>'
     content += "</div>"
 
     if focus["covered_chapters"]:
