@@ -20,10 +20,17 @@ function pad2(n: number): string {
 /** A visual month grid — Sun..Sat columns, every day a cell, events shown
  * directly on the date(s) they cover. Reads straight off the same event
  * list the List view uses; no separate data source. */
+/** Sunday is always a weekly off day; a 5-day-week school also treats
+ * Saturday as one. Column index doubles as the JS weekday index (0=Sun)
+ * since each week row is always built Sun..Sat in order. */
+function isWeeklyOff(columnIndex: number, weekPattern: "5-day" | "6-day"): boolean {
+  return columnIndex === 0 || (weekPattern === "5-day" && columnIndex === 6);
+}
+
 function MonthGrid({
-  year, month, events, onDayClick,
+  year, month, events, weekPattern, onDayClick,
 }: {
-  year: number; month: number; events: TtCalendarEvent[]; onDayClick: (dateStr: string) => void;
+  year: number; month: number; events: TtCalendarEvent[]; weekPattern: "5-day" | "6-day"; onDayClick: (dateStr: string) => void;
 }) {
   const firstWeekday = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -45,8 +52,12 @@ function MonthGrid({
     <table className="w-full border-collapse text-sm">
       <thead>
         <tr>
-          {WEEKDAY_LABELS.map((d) => (
-            <th key={d} className="pb-2 text-center text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+          {WEEKDAY_LABELS.map((d, i) => (
+            <th
+              key={d}
+              className="pb-2 text-center text-[11px] font-bold uppercase tracking-wide"
+              style={{ color: isWeeklyOff(i, weekPattern) ? "var(--accent-mark)" : "var(--text-muted)" }}
+            >
               {d}
             </th>
           ))}
@@ -59,7 +70,7 @@ function MonthGrid({
               <td
                 key={di}
                 className={`h-24 w-[14.28%] align-top border p-1 ${day !== null ? "cursor-pointer transition-colors hover:bg-[var(--accent-soft)]" : ""}`}
-                style={{ borderColor: "var(--border)" }}
+                style={{ borderColor: "var(--border)", background: day !== null && isWeeklyOff(di, weekPattern) ? "var(--page-plane)" : undefined }}
                 onClick={day !== null ? () => onDayClick(`${year}-${pad2(month + 1)}-${pad2(day)}`) : undefined}
               >
                 {day !== null && (
@@ -340,7 +351,7 @@ function DayEventRow({
 
   if (!editing) {
     return (
-      <div className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5" style={{ background: "var(--surface-2)" }}>
+      <div className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5" style={{ background: "var(--page-plane)" }}>
         <span className="text-sm" style={{ color: "var(--text-primary)" }}>
           {event.event_type === "holiday" ? "🎉" : "📝"} {event.label}
         </span>
@@ -357,7 +368,7 @@ function DayEventRow({
   }
 
   return (
-    <div className="space-y-1.5 rounded-lg p-2" style={{ background: "var(--surface-2)" }}>
+    <div className="space-y-1.5 rounded-lg p-2" style={{ background: "var(--page-plane)" }}>
       <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} className="w-full text-sm" />
       <div className="flex items-center gap-2">
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs" />
@@ -722,7 +733,7 @@ export function CalendarPage() {
             </div>
 
             {showAddHoliday && (
-              <form onSubmit={addHoliday} className="mt-3 flex flex-wrap items-end gap-2 rounded-lg p-3" style={{ background: "var(--surface-2)" }}>
+              <form onSubmit={addHoliday} className="mt-3 flex flex-wrap items-end gap-2 rounded-lg p-3" style={{ background: "var(--page-plane)" }}>
                 <div className="w-44">
                   <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
                     Holiday name
@@ -761,7 +772,13 @@ export function CalendarPage() {
                   </button>
                 </div>
                 <div className="mt-2 overflow-x-auto">
-                  <MonthGrid year={cursor.getFullYear()} month={cursor.getMonth()} events={overview.events} onDayClick={setSelectedDate} />
+                  <MonthGrid
+                    year={cursor.getFullYear()}
+                    month={cursor.getMonth()}
+                    events={overview.events}
+                    weekPattern={overview.academic_year.week_pattern}
+                    onDayClick={setSelectedDate}
+                  />
                 </div>
               </div>
             ) : (
