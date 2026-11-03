@@ -49,6 +49,12 @@ PUBLIC_APP_BASE_URL = os.environ.get("REPORTCARD_APP_PUBLIC_BASE_URL", "http://l
 # link that opens the frontend's /reset-password route.
 FRONTEND_BASE_URL = os.environ.get("REPORTCARD_APP_FRONTEND_BASE_URL", "http://localhost:5175").rstrip("/")
 
+# The Smart Science Lab catalog is a shared microservice (not owned by this
+# app, not something to vendor a copy of) — see app/integrations/science_lab.py.
+SCIENCE_LAB_INDEX_URL = os.environ.get(
+    "SCIENCE_LAB_INDEX_URL", "https://interactive-labs.onrender.com/shared/catalogs-index.json"
+)
+
 # Phone numbers from the sheet may just be a plain 10-digit number with no
 # country code — this is prefixed on when normalizing to E.164 for
 # WhatsApp/SMS. Change via env if most of your schools aren't in India.

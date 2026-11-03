@@ -5,7 +5,7 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api import auth, batches, integrations, public, reference_documents, timetable
+from app.api import auth, batches, integrations, public, reference_documents, science_lab, timetable
 from app.core.config import CORS_ORIGINS
 from app.db.database import close_pool, init_db, session
 
@@ -34,6 +34,7 @@ app.include_router(batches.router, prefix="/api")
 app.include_router(integrations.router, prefix="/api")
 app.include_router(public.router, prefix="/api")
 app.include_router(reference_documents.router, prefix="/api")
+app.include_router(science_lab.router, prefix="/api")
 app.include_router(timetable.router, prefix="/api")
 
 # Decorative, non-sensitive assets only (e.g. per-subject background images
