@@ -305,6 +305,7 @@ html.landing-html,body.landing-body-root{height:auto;overflow:visible;background
    to, only ever for Physical Science chapters it actually has content for
    (see app/integrations/science_lab.py) — opens in a new tab since it's a
    different site entirely, not part of this report. */
+.subject-plan-lab-intro{font-size:.8em;color:var(--muted);margin-top:.2em}
 .science-lab-chapter{border-top:1px solid var(--line);padding-top:.8em;margin-top:.8em}
 .science-lab-chapter:first-child{border-top:none;padding-top:0;margin-top:0}
 .science-lab-chapter .slc-title{font-weight:700;font-size:.92em;color:var(--ink)}
@@ -888,12 +889,27 @@ def render_subject_plan_page(
     # app/integrations/science_lab.py) — looked up by chapter TITLE, never
     # by number, since this app's own chapter numbering doesn't match that
     # catalog's. Silently adds nothing for any other subject, or if none of
-    # this subject's current chapters happen to be in the catalog yet.
+    # the chosen chapters happen to be in the catalog yet.
+    #
+    # Personalized by this student's own real performance in the subject
+    # (facts.classification, already computed above from their actual
+    # marks — not a guess): a student who's actually struggling here
+    # ("low"/"fail") gets every cataloged chapter for the whole subject to
+    # practice with, not just the narrow current-exam slice everyone else
+    # sees — since for them, revising anything already taught is worth
+    # more than waiting for the "right" chapter. A student doing fine keeps
+    # seeing just the current-exam chapters, same as before.
     if normalize_subject_key(subject_name) == "PHYSICAL SCIENCE":
-        lab_chapters = [c for c in (science_lab.find_chapter_by_title(name) for name in focus["covered_chapters"]) if c]
+        needs_extra_help = facts.classification in ("low", "fail")
+        chapter_names = [c["chapter_name"] for c in chapters] if needs_extra_help else focus["covered_chapters"]
+        lab_chapters = [c for c in (science_lab.find_chapter_by_title(name) for name in chapter_names) if c]
         if lab_chapters:
             content += '<div class="summary-card subject-plan-card">'
-            content += '<div class="section-heading">\U0001f52c ప్రయత్నించి చూడండి / Try it yourself</div>'
+            if needs_extra_help:
+                content += '<div class="section-heading">\U0001f52c ప్రయత్నించి చూడండి / Try it yourself</div>'
+                content += '<p class="subject-plan-lab-intro">ఈ సబ్జెక్టులో మరింత సాధన కోసం / Extra practice for this subject</p>'
+            else:
+                content += '<div class="section-heading">\U0001f52c ప్రయత్నించి చూడండి / Try it yourself</div>'
             for lab_ch in lab_chapters:
                 content += '<div class="science-lab-chapter">'
                 content += f'<div class="slc-title">{lab_ch["emoji"] if lab_ch.get("emoji") else ""} {_esc(lab_ch["title"])}</div>'
