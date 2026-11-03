@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { useAuth } from "./auth/AuthContext";
 import { BatchPage } from "./pages/BatchPage";
+import { CalendarPage } from "./pages/CalendarPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="integrations" element={<IntegrationsPage />} />
         <Route path="school-profile" element={<SchoolProfilePage />} />
         <Route path="reference-documents" element={<ReferenceDocumentsPage />} />
+        <Route path="calendar" element={<CalendarPage />} />
       </Route>
     </Routes>
   );

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { DocumentIcon, LogoutIcon, PlugIcon, SchoolIcon } from "./Icons";
+import { CalendarIcon, DocumentIcon, LogoutIcon, PlugIcon, SchoolIcon } from "./Icons";
 import type { ReferenceDocument } from "../types";
 
 function initials(name: string): string {
@@ -92,6 +92,14 @@ export function Layout() {
                 >
                   <DocumentIcon size={15} />
                   Syllabus/blueprint review{pendingDocCount > 0 ? ` (${pendingDocCount})` : ""}
+                </Link>
+                <Link
+                  to="/calendar"
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors duration-200 hover:bg-[var(--accent-soft)]"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  <CalendarIcon size={15} />
+                  Academic calendar
                 </Link>
                 <button
                   onClick={() => {
