@@ -28,6 +28,9 @@ import re
 
 import psycopg
 
+from app.db import calendar as calendar_repo
+from app.reports import exam_focus
+
 from app.reports.numfmt import fmt_num
 
 GRADE_POINTS = {"A1": 10, "A2": 9, "B1": 8, "B2": 7, "C1": 6, "C2": 5, "D1": 4, "D2": 3}
@@ -406,6 +409,28 @@ def render_subject_analysis(
     exam_format, easy_tips = get_exam_info(conn, account_id, class_level, subject_name)
     blueprint = get_blueprint(conn, account_id, class_level, subject_name)
 
+    # Exam Readiness: which real chapters the class's NEXT exam is likely to
+    # cover, with a real date if this account has set one in the Academic
+    # Calendar — deferred import to avoid a circular import (study_plan.py
+    # itself imports normalize_subject_key from this module). `exam_order`
+    # at the batch level only ever contains exams with marks already
+    # entered (same convention exam_focus.py documents for a single
+    # student's completed_exam_keys), so it stands in directly for "what
+    # this whole class has already sat."
+    from app.reports import study_plan as _study_plan
+
+    chapters = _study_plan.get_chapters(conn, account_id, class_level, subject_name)
+    completed_keys = [e["key"] for e in exam_defs]
+    readiness = exam_focus.build_exam_focus(chapters, blueprint, completed_keys, settings.total_fa_exams, settings.total_sa_exams)
+    readiness_date = None
+    if readiness and readiness["exam"]:
+        exam_date_row = calendar_repo.get_exam_date(conn, account_id, readiness["exam"])
+        if exam_date_row:
+            from datetime import date as _date
+
+            d = _date.fromisoformat(exam_date_row["start_date"])
+            readiness_date = f"{d.strftime('%B')} {d.day}"
+
     X = compute_exam_stats(all_students, exam_defs, settings, subject_name)
     if not X:
         return None
@@ -547,6 +572,14 @@ def render_subject_analysis(
     hot = {b["topic_name"] for b in blueprint[:3]}
     mx_bp = max([b["marks"] + (b["choice_marks"] or 0) for b in blueprint], default=1)
     h += f'<div class="sec"><h4>🌱 Rising Stars కోసం కార్యాచరణ ప్రణాళిక <small>{len(rise_all)} మంది{f", వీరిలో D2 {fail_n}" if fail_n else ""}; AP SSC బ్లూప్రింట్ ఆధారంగా</small></h4>'
+    if readiness and readiness["covered_chapters"]:
+        date_bit = f" ({_esc(readiness_date)})" if readiness_date else ""
+        h += (
+            '<div class="sub" style="margin-top:0;color:var(--c)">'
+            f'📅 తదుపరి పరీక్ష: {_esc(readiness["exam"])}{date_bit} — ఈ పాఠాలు ఉండవచ్చు: '
+            f'{", ".join(_esc(c) for c in readiness["covered_chapters"])}'
+            "</div>"
+        )
     if blueprint:
         h += '<div class="sub" style="margin-top:0">చాప్టర్ల వారీ వెయిటేజ్ (మార్కులు): ముదురు రంగు ఉన్నవి ముందు చదివించండి</div><div class="bp">'
         for b in blueprint:
