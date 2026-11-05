@@ -65,32 +65,72 @@ GET /report/{token}   (token resolved via sharing.py, no login)
    ┌───────┴─────────────────────────────┐
    ▼                                     ▼
 parent_report.py                 chat_canned.py / chat.py
-(pure data render)                       │
-                              ┌───────────┴────────────┐
-                              ▼                        ▼
-                     CASE: one of 5          CASE: free-form question
-                     preset questions                  │
-                              │                         ▼
-                              ▼              chat.py → OpenRouter (OPENROUTER_MODEL)
-                     answered instantly,     — grounded only in chat_context.py's
-                     chat_canned.py,            build of this one student's data
-                     no LLM call                       │
-                                                        ▼
-                                              traced via langsmith (@traceable,
-                                              tagged with account_id)
-
-  Separately, lazy-loaded 6th card:
-                              │
-                              ▼
-                     study_plan.py: weakest_subject()
-                              │
-                     ├─ CASE: none found           → card stays hidden
-                     ├─ CASE: found, but no         → card stays hidden
-                     │   syllabus_chapter rows
-                     └─ CASE: found + syllabus exists → chat.generate_text()
-                                                         → OpenRouter, names real
-                                                           chapters, cached in
-                                                           study_plan_cache
+(pure data render,                       │
+ one card per subject)        ┌───────────┴────────────┐
+           │                  ▼                        ▼
+           │         CASE: one of 5          CASE: free-form question
+           │         preset questions                  │
+           │                  │                         ▼
+           │                  ▼              chat.py → OpenRouter (OPENROUTER_MODEL)
+           │         answered instantly,     — grounded only in chat_context.py's
+           │         chat_canned.py,            build of this one student's data
+           │         no LLM call                       │
+           │                                            ▼
+           │                                  traced via langsmith (@traceable,
+           │                                  tagged with account_id)
+           │
+           │  Separately, lazy-loaded 6th card on the main view:
+           │                  │
+           │                  ▼
+           │         study_plan.py: weakest_subject()
+           │                  │
+           │         ├─ CASE: no weak subject found  → card stays hidden
+           │         └─ CASE: found                   → chat.generate_text()
+           │                                            → OpenRouter, names real
+           │                                              chapters (from D's data,
+           │                                              global default if this
+           │                                              account hasn't confirmed
+           │                                              its own), cached in
+           │                                              study_plan_cache
+           ▼
+  "📘 View prep plan" link on each subject card
+           │
+           ▼
+  GET /report/{token}/subject/{subject}/plan
+           │
+           ▼
+  exam_focus.build_exam_focus() — pure arithmetic, no AI:
+  which chapters the student's NEXT exam likely covers (D's chapter data,
+  global default if unconfirmed) + the exam blueprint's highest-marks topics
+           │
+           ├─ CASE: subject == Physical Science
+           │          │
+           │          ▼
+           │   science_lab.find_chapter_by_title() for each covered chapter
+           │   (or every cataloged chapter if this student is "low"/"fail"
+           │   in the subject — real classification, not a guess)
+           │          │
+           │          ├─ CASE: chapter not in the external catalog → nothing added
+           │          └─ CASE: found → "Try the lab" / "Play games" buttons,
+           │                            opening interactive-labs.onrender.com
+           │
+           └─ CASE: calendar_repo.get_exam_date() finds a real date for this
+                      exam (see F) → lazily fetches one more card:
+                       │
+                       ▼
+              GET /report/{token}/subject/{subject}/day-plan
+                       │
+              ├─ CASE: no exam date set in F        → {"available": false}
+              ├─ CASE: no study days left            → {"available": false}
+              └─ CASE: date set, days remain          → calendar.working_dates_between()
+                                                          (Sundays/holidays excluded)
+                                                          → study_plan.generate_exam_day_plan()
+                                                          → OpenRouter, assigns real
+                                                            chapters per real date,
+                                                            cached in
+                                                            exam_day_plan_cache keyed
+                                                            on the exact date list (so
+                                                            it regenerates once a day)
 ```
 
 ## D. Reference-document pipeline (syllabus/blueprint)
@@ -112,9 +152,12 @@ PDF/image from the Drive folder (see A)
               teacher clicks Confirm
                        │
                        ▼
-              written into syllabus_chapter / subject_blueprint
-              (live tables) → feeds C's study plan + the Subject
-              Analysis report's blueprint action plan
+              written into syllabus_chapter / subject_blueprint, THIS
+              account's own account_id (live tables, never account_id
+              NULL) → feeds C's study plan + exam_focus, and G's Exam
+              Readiness — all three try this account's own rows first,
+              falling back to the account_id IS NULL global default
+              dataset only when nothing of its own has been confirmed
 ```
 
 ## E. Timetable & substitution
@@ -140,6 +183,9 @@ PDF/image from the Drive folder (see A)
                          ▼
           GET /leaves/pending — cross-references leave × tt_timetable_entry
                          │
+                         ├─ CASE: calendar_repo.get_holiday_on() finds a
+                         │   holiday on this date (see F) → day skipped
+                         │   entirely, no substitutions generated
                          ▼
           find_substitute_candidates() — ranks by free-at-that-period
           AND qualified-for-that-subject
@@ -153,9 +199,64 @@ PDF/image from the Drive folder (see A)
        to the substitute teacher         → printable noticeboard PDF/HTML
 ```
 
+## F. Academic Calendar
+
+```
+PUT /calendar/year          (academic year start/end, 5-day/6-day week)
+POST /calendar/exam-types   (e.g. "Unit Test" ×4 this year)
+POST /calendar/events       (a holiday, or a dated exam occurrence —
+                              optionally tagged with a plan_type)
+           │
+           ▼
+  academic_calendar_event / exam_plan_type (Postgres, account-scoped)
+           │
+           ├─ feeds C: calendar_repo.get_exam_date() shows a real date next
+           │   to the exam name on the prep-plan page, and gates whether the
+           │   AI day-by-day plan has anything to build from
+           ├─ feeds E: calendar_repo.get_holiday_on() skips substitute
+           │   generation on a declared holiday
+           └─ feeds GET /calendar/overview: calendar.compute_working_capacity()
+               — pure arithmetic over the academic year range, the weekly
+               pattern, and declared holidays. working_hours is only ever a
+               real number when this account has also set a real school-day
+               length in the Timetable tool — never a guessed default.
+
+  Clicking a date on the frontend's month grid (CalendarPage.tsx) opens an
+  editor for everything on that date — same POST/PUT/DELETE /calendar/events
+  endpoints, scoped to that one date.
+```
+
+## G. Teacher-facing Exam Readiness (Subject Analysis report)
+
+```
+GET /batches/{id}/subject-analysis?subject={name}
+           │
+           ▼
+  subject_analysis.render_subject_analysis() — same report as before
+  (donuts, Shining/Rising Stars, grade distribution, blueprint action plan)
+           │
+           ▼
+  NEW: exam_focus.build_exam_focus() using this batch's own exam_order as
+  "completed exams" (same convention as C — a batch's exam_order only ever
+  contains exams with marks already entered, so it stands in for the WHOLE
+  CLASS's position in the exam sequence, not just one student's)
+           │
+           ├─ CASE: nothing confirmed/next exam already finished → nothing
+           │    added, no change from before
+           └─ CASE: real chapters found → "📅 Next exam" callout inserted
+                above the existing Rising Stars action plan, with a real
+                date from F if one's been set — deliberately does NOT
+                re-derive a weak-student list (Rising Stars already is one)
+```
+
 ## The common thread
 
 Nothing AI-touched is ever auto-trusted into production data — document
-extraction, timetable imports, and the study plan are all either
-reviewed-before-confirmed, grounded strictly in one student's own data, or
-simply hidden when there's nothing real to say.
+extraction, timetable imports, the study plan, and the day-by-day exam plan
+are all either reviewed-before-confirmed, grounded strictly in one student's
+(or one class's) own real data, or simply hidden when there's nothing real
+to say. The same rule applies to deterministic data too, not just AI: the
+Academic Calendar's working-hours figure is `null` rather than a guessed
+default, and the Smart Science Lab link is omitted rather than shown
+against the wrong chapter when this app's own chapter numbering doesn't
+match the external catalog's.

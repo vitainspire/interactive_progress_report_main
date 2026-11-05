@@ -100,6 +100,10 @@ password-reset link), `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (an address at
 a domain verified in Resend — see app/integrations/email.py; forgot-
 password silently can't send email until these are set).
 
+Optional, has a working default — `SCIENCE_LAB_INDEX_URL` (the Smart
+Science Lab discovery index; only needs setting if that shared service's
+URL ever changes or you point this app at a different instance of it).
+
 Optional — LLM call tracing via LangSmith (see "LangSmith tracing" below):
 `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`. Safe to
 leave unset entirely; every traced call just runs normally with no
