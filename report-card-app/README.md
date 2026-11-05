@@ -197,6 +197,42 @@ fall back to the global default — **never to a different specific school's
 uploaded data** — when the account hasn't uploaded and confirmed anything of
 its own.
 
+## Setting up a fresh database
+
+**No manual SQL is ever required** — not in Supabase's SQL editor, not
+anywhere — for a brand-new deployment, for a fresh `backend/.env` pointed
+at an empty database, or for Lambda's own cold start. Point `DATABASE_URL`
+at **any** empty Postgres instance (a new Supabase project, AWS RDS, a
+local Postgres, a Postgres Docker container — this app uses no extensions,
+just plain SQL and `GENERATED ALWAYS AS IDENTITY` columns, so any of these
+work identically) and start the backend once. `init_db()`
+(`app/db/database.py`), called automatically on every startup by FastAPI's
+`lifespan` hook, does everything in one shot:
+
+1. Reads `app/db/schema.sql` and runs every `CREATE TABLE IF NOT EXISTS` in
+   it — this is the single source of truth for the schema; it's not
+   reproduced here so there's only one copy to ever go stale.
+2. Runs every historical migration function listed at the bottom of
+   `init_db()` (column additions, index creation, primary-key changes) —
+   each one checks before changing anything, so running them against an
+   already-migrated database (or a brand-new one with nothing to migrate
+   yet) is always a safe no-op.
+3. Seeds the built-in global default syllabus/exam-blueprint dataset — the
+   real AP SSC Class 10 chapters and marks-weightage for all 7 subjects
+   (`syllabus_seed.py` / `subject_blueprint_seed.py`) — but only into empty
+   tables, so a school's own confirmed upload is never overwritten.
+
+After that, the first school account is created through the **Sign Up**
+page in the running frontend — there's no admin/root SQL insert needed
+there either. This is exactly the same mechanism that makes the Lambda
+cold-start migration path work (see
+[`docs/AWS_LAMBDA_DEPLOYMENT.md`](docs/AWS_LAMBDA_DEPLOYMENT.md)): "hosting
+this fresh somewhere new" and "Lambda waking up after being idle" both run
+through this one function, not two different setups to keep in sync.
+
+The only genuine footgun in this process is editing `schema.sql` itself —
+see the semicolon-in-comment note under "Running locally" below.
+
 ## Running locally
 
 **Backend** (from `backend/`):
@@ -206,7 +242,8 @@ venv\Scripts\pip install -r requirements.txt
 venv\Scripts\python -m uvicorn app.main:app --port 8010
 ```
 Needs a `.env` file (gitignored) with at least `DATABASE_URL` pointing at a
-Postgres instance; see
+Postgres instance — it can be completely empty on first run, see "Setting
+up a fresh database" above for what happens automatically; see
 [`docs/AWS_LAMBDA_DEPLOYMENT.md`](docs/AWS_LAMBDA_DEPLOYMENT.md) for the
 full environment-variable list (WhatsApp/SMS/OpenRouter/etc. are all
 optional — each integration silently no-ops when its own env vars aren't
